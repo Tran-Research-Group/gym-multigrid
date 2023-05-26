@@ -5,7 +5,7 @@ description = "Muti-agent gymnasium gridworld environments"
 authors = ["Your Name <you@example.com>"]
 license = "Apache-2.0"
 readme = "README.md"
-packages = [{include = "trg_multigrid"}]
+packages = [{include = "gym_multigrid"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
