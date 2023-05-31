@@ -1,5 +1,10 @@
-from gym_multigrid.multigrid import *
+from gym_multigrid.multigrid import MultiGridEnv
+from gym_multigrid.world import CollectWorld
+from gym_multigrid.agent import CollectActions, Agent
+from gym_multigrid.object import Ball
+from gym_multigrid.grid import Grid
 import random
+import numpy as np
 
 class CollectGameEnv(MultiGridEnv):
     """
@@ -40,7 +45,7 @@ class CollectGameEnv(MultiGridEnv):
             for i in range(number):
                 self.place_obj(Ball(self.world, index, reward))
 
-        # Randomize the player start position and orientation
+        # Randomize the player start position
         for a in self.agents:
             self.place_agent(a)
     
@@ -136,6 +141,8 @@ class CollectGameEnv(MultiGridEnv):
             if next_cell is not None:
                 if next_cell.type == 'ball':
                     dummy_pickup(dummy_grid, next_pos, next_cell)
+                    dummy_grid.set(*next_pos, self.agents[0])
+                    dummy_grid.set(*self.agents[0].pos, None)
             elif next_cell is None or next_cell.can_overlap():
                 dummy_grid.set(*next_pos, self.agents[0])
                 dummy_grid.set(*self.agents[0].pos, None)
@@ -170,11 +177,6 @@ class CollectGameEnv(MultiGridEnv):
             dummy_move(dummy_grid, next_cell, next_pos)
         
         return phi_v(s, dummy_grid)
-
-class CollectGame4HEnv10x10N2(CollectGameEnv):
-    def __init__(self):
-        super().__init__(size=10, num_balls=[5], agents_index = [1,2],
-                        balls_index=[0], balls_reward=[1], zero_sum=True)
 
 class CollectGame3Obj2Agent(CollectGameEnv):
     def __init__(self):
@@ -275,19 +277,6 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                 elif obj.type == 'wall':
                     phi_obs[0, i, j] = 1
         return phi_obs
-
-    ''' moved above
-    def phi_v(self, s, snew):
-        phi = np.zeros((self.phi_dim(),))
-        for i in range(self.grid.width):
-            for j in range(self.grid.height):
-                obj = self.grid.get(i, j)
-                if obj.type == 'agent':
-                    if s[i,j,0] == 2:
-                        color = s[i,j,1]
-                        phi[color] = 1
-        return phi
-    '''
 
     def gaussian(self, idx):
         phi_obs = np.zeros((self.grid.width, self.grid.height), dtype='float32')
