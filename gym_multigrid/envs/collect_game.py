@@ -28,7 +28,7 @@ class CollectGameEnv(MultiGridEnv):
         for i in agents_index:
             agents.append(Agent(self.world, i, view_size=view_size))
 
-        super().__init__(grid_size=size, width=width, height=height, max_steps= 100, 
+        super().__init__(grid_size=size, width=width, height=height, max_steps= 100, objects_set=self.world,
                          see_through_walls=False, agents=agents, partial_obs=partial_obs, 
                          agent_view_size=view_size, actions_set=actions_set, render_mode="rgb_array")
 
@@ -70,11 +70,11 @@ class CollectGameEnv(MultiGridEnv):
                 self.grid.set(*fwd_pos, None)
                 self.collected_balls += 1
                 if ball_idx == 0:
-                    self._reward(i, rewards, fwd_cell.reward * 1.5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 elif ball_idx == 1:
-                    self._reward(i, rewards, fwd_cell.reward * 5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 elif ball_idx == 2:
-                    self._reward(i, rewards, fwd_cell.reward * 5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 self.info[self.keys[3*i + ball_idx]] += 1
 
     def move_agent(self, rewards, i, next_cell, next_pos):
@@ -128,7 +128,7 @@ class CollectGameEnv(MultiGridEnv):
             truncated = True
         
         obs = self.grid.encode(self.world)
-        return obs, rewards[0], done, truncated, self.info
+        return obs, rewards, done, truncated, self.info
     
     def simulate(self, action):
         # need to simulate what happens without changing current env
