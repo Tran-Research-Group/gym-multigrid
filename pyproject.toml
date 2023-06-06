@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "trg-multigrid"
+name = "gym-multigrid"
 version = "0.1.0"
 description = "Muti-agent gymnasium gridworld environments"
 authors = ["Your Name <you@example.com>"]
