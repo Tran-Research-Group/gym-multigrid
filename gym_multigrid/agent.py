@@ -27,13 +27,12 @@ class Actions:
     done = 7
 
 class CollectActions:
-    available=['still', 'north', 'east', 'south', 'west']
+    available=['north', 'east', 'south', 'west']
 
-    still = 0
-    north = 1
-    east = 2
-    south = 3
-    west = 4
+    north = 0
+    east = 1
+    south = 2
+    west = 3
 
 class SmallActions:
     available=['still', 'left', 'right', 'forward']
