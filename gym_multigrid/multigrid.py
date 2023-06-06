@@ -122,14 +122,15 @@ class MultiGridEnv(gym.Env):
 
         # Map of object types to short string
         OBJECT_TO_STR = {
-            'wall': 'W',
+            'wall': 'x',
             'floor': 'F',
             'door': 'D',
             'key': 'K',
-            'ball': 'A',
+            'ball': 'o',
             'box': 'B',
             'goal': 'G',
             'lava': 'V',
+            'agent': 'a'
         }
 
         # Short string for opened door
@@ -148,9 +149,9 @@ class MultiGridEnv(gym.Env):
         for j in range(self.grid.height):
 
             for i in range(self.grid.width):
-                if i == self.agent_pos[0] and j == self.agent_pos[1]:
-                    str += 2 * AGENT_DIR_TO_STR[self.agent_dir]
-                    continue
+                #if i == self.agent_pos[0] and j == self.agent_pos[1]:
+                    #str += 2 * AGENT_DIR_TO_STR[self.agent_dir]
+                    #continue
 
                 c = self.grid.get(i, j)
 

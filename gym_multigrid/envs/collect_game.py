@@ -194,18 +194,19 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.grid.vert_wall(self.world, 0, 0)
         self.grid.vert_wall(self.world, width-1, 0)
 
-        partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
-        partition_size = (width // 2 + 1, height // 2 + 1)
+        #partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
+        #partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
         for ball in range(self.num_balls):
             if ball % 5 == 0:
-                top = partitions[ball // 5]
+                #top = partitions[ball // 5]
                 index = ball // 5
-            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
-        agent_pos = (1, height - 2)
+            self.place_obj(Ball(self.world, index, 1))#, top=top, size=partition_size)
+        #agent_pos = (1, height - 2)
         for a in self.agents:
-            self.place_agent(a, pos=agent_pos)
-            agent_pos = (agent_pos[0]+1, agent_pos[1])
+            #self.place_agent(a, pos=agent_pos)
+            #agent_pos = (agent_pos[0]+1, agent_pos[1])
+            self.place_agent(a)
     
     def get_obj_grid(self, ball_idx=[0, 1, 2]):
         # return width x height grid indicating ball locations
@@ -277,6 +278,27 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                 elif obj.type == 'wall':
                     phi_obs[0, i, j] = 1
         return phi_obs
+    
+    def toroid(self, idx):
+        # transform grid into toroidal, agent-centric obs
+        pos = (idx // self.grid.width, idx % self.grid.width)
+        depth = self.num_ball_types + 1
+        obs = np.zeros((self.grid.width, self.grid.height, depth), dtype='float32')
+        for i in range(self.grid.width):
+            for j in range(self.grid.height):
+                new_coords = [i - pos[0], j - pos[1]]
+                obj = self.grid.get(i, j)
+                if new_coords[0] < 0:
+                    new_coords[0] += self.grid.width
+                if new_coords[1] < 0:
+                    new_coords[1] += self.grid.height
+                if obj is None:
+                    continue
+                elif obj.type == 'wall':
+                    obs[new_coords[1], new_coords[0], depth - 1] = 1
+                elif obj.type == 'ball':
+                    obs[new_coords[1], new_coords[0], self.world.COLOR_TO_IDX[obj.color]] = 1
+        return obs
 
     def gaussian(self, idx):
         phi_obs = np.zeros((self.grid.width, self.grid.height), dtype='float32')
@@ -288,7 +310,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                     phi_obs[i, j] = 0
                 elif obj.type == 'ball':
                     phi_obs[i, j] = np.exp(-((((pos[0] - i)/self.grid.width)**2) + (((pos[1] - j)/self.grid.height)**2))/self.sigma)
-        return phi_obs
+        return phi_obs.T
 
     def phi(self):
         # phi(s, a, s')
