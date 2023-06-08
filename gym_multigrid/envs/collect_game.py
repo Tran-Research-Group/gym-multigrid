@@ -180,7 +180,7 @@ class CollectGameEnv(MultiGridEnv):
 
 class CollectGame3Obj2Agent(CollectGameEnv):
     def __init__(self):
-        super().__init__(size=10, num_balls=15, agents_index = [3,5],
+        super().__init__(size=10, num_balls=15, agents_index = [3],
                         balls_index=[0], balls_reward=[1], zero_sum=True, render_mode="rgb_array")
         self.num_ball_types = self.num_balls // 5
         self.sigma = 0.1
