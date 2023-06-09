@@ -78,12 +78,12 @@ class SimpleDQNAgent:
             states, actions, rewards, next_states = zip(*self.buffer[indices])
             states = torch.from_numpy(
                 np.vstack(states).reshape((self.batch_size, self.state_dim))
-            )
-            actions = torch.from_numpy(np.vstack(actions))
-            rewards = np.vstack(rewards)
+            ).to(self.device)
+            actions = torch.from_numpy(np.vstack(actions)).to(self.device)
+            rewards = torch.from_numpy(np.vstack(rewards)).to(self.device)
             next_states = torch.from_numpy(
                 np.vstack(next_states).reshape((self.batch_size, self.state_dim))
-            )
+            ).to(self.device)
             # compute q values
             qvals = (
                 self.q_network(states)

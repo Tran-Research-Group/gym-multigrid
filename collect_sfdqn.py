@@ -92,14 +92,14 @@ class IndSFDQNAgent:
             states, actions, phis, next_states = zip(*self.buffer[indices])
             states = torch.from_numpy(
                 np.vstack(states).reshape((self.batch_size, self.state_dim))
-            )
-            actions = torch.from_numpy(np.vstack(actions))
+            ).to(self.device)
+            actions = torch.from_numpy(np.vstack(actions)).to(self.device)
             phis = torch.from_numpy(
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
-            )
+            ).to(self.device)
             next_states = torch.from_numpy(
                 np.vstack(next_states).reshape((self.batch_size, self.state_dim))
-            )
+            ).to(self.device)
             # compute current values
             cur_psi1 = (
                 self.psi1(states)
