@@ -6,6 +6,7 @@ from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
 from .rendering import *
 from .window import Window
+
 from .agent import AgentPolicy
 import numpy as np
 import random
@@ -29,6 +30,7 @@ COLORS = {
 
 COLOR_NAMES = sorted(list(COLORS.keys()))
 
+
 class World:
     encode_dim = 6
     normalize_obs = 1
@@ -39,21 +41,22 @@ class World:
 
     # Map of object type to integers
     OBJECT_TO_IDX = {
-        'unseen': 0,
-        'empty': 1,
-        'wall': 2,
-        'floor': 3,
-        'door': 4,
-        'key': 5,
-        'ball': 6,
-        'box': 7,
-        'goal': 8,
-        'lava': 9,
-        'agent': 10,
-        'objgoal': 11,
-        'switch': 12
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "floor": 3,
+        "door": 4,
+        "key": 5,
+        "ball": 6,
+        "box": 7,
+        "goal": 8,
+        "lava": 9,
+        "agent": 10,
+        "objgoal": 11,
+        "switch": 12,
     }
     IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
+
 
 class CollectWorld:
     encode_dim = 3
@@ -63,40 +66,30 @@ class CollectWorld:
     IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
 
     OBJECT_TO_IDX = {
-        'empty': 0,
-        'wall': 1,
-        'ball': 2,
-        'agent': 3,
+        "empty": 0,
+        "wall": 1,
+        "ball": 2,
+        "agent": 3,
     }
     IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
 
 
 class SmallWorld:
     encode_dim = 3
-    normalize_obs = 1/3
+    normalize_obs = 1 / 3
 
-    COLOR_TO_IDX = {
-        'red': 0,
-        'green': 1,
-        'blue': 2,
-        'grey': 3
-    }
+    COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "grey": 3}
     IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
 
-    OBJECT_TO_IDX = {
-        'unseen': 0,
-        'empty': 1,
-        'wall': 2,
-        'agent': 3
-    }
+    OBJECT_TO_IDX = {"unseen": 0, "empty": 1, "wall": 2, "agent": 3}
     IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
 
 
 # Map of state names to integers
 STATE_TO_IDX = {
-    'open': 0,
-    'closed': 1,
-    'locked': 2,
+    "open": 0,
+    "closed": 1,
+    "locked": 2,
 }
 
 # Map of agent direction indices to vectors
@@ -111,8 +104,18 @@ DIR_TO_VEC = [
     np.array((0, -1)),
 ]
 
+
 class Actions:
-    available=['still', 'left', 'right', 'forward', 'pickup', 'drop', 'toggle', 'done']
+    available = [
+        "still",
+        "left",
+        "right",
+        "forward",
+        "pickup",
+        "drop",
+        "toggle",
+        "done",
+    ]
 
     still = 0
     left = 1
@@ -123,8 +126,9 @@ class Actions:
     toggle = 6
     done = 7
 
+
 class CollectActions:
-    available=['still', 'north', 'east', 'south', 'west']
+    available = ["still", "north", "east", "south", "west"]
 
     still = 0
     north = 1
@@ -132,22 +136,25 @@ class CollectActions:
     south = 3
     west = 4
 
+
 class SmallActions:
-    available=['still', 'left', 'right', 'forward']
+    available = ["still", "left", "right", "forward"]
 
     still = 0
     left = 1
     right = 2
     forward = 3
 
+
 class MineActions:
-    available=['still', 'left', 'right', 'forward', 'build']
+    available = ["still", "left", "right", "forward", "build"]
 
     still = 0
     left = 1
     right = 2
     forward = 3
     build = 4
+
 
 class WorldObj:
     """
@@ -189,10 +196,17 @@ class WorldObj:
 
     def encode(self, world, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim==3:
+        if world.encode_dim == 3:
             return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0)
         else:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, 0, 0)
+            return (
+                world.OBJECT_TO_IDX[self.type],
+                world.COLOR_TO_IDX[self.color],
+                0,
+                0,
+                0,
+                0,
+            )
 
     @staticmethod
     def decode(type_idx, color_idx, state):
@@ -204,11 +218,11 @@ class WorldObj:
 
 
 class ObjectGoal(WorldObj):
-    def __init__(self, world, index, target_type='ball', reward=1, color=None):
+    def __init__(self, world, index, target_type="ball", reward=1, color=None):
         if color is None:
-            super().__init__(world, 'objgoal', world.IDX_TO_COLOR[index])
+            super().__init__(world, "objgoal", world.IDX_TO_COLOR[index])
         else:
-            super().__init__(world, 'objgoal', world.IDX_TO_COLOR[color])
+            super().__init__(world, "objgoal", world.IDX_TO_COLOR[color])
         self.target_type = target_type
         self.index = index
         self.reward = reward
@@ -223,9 +237,9 @@ class ObjectGoal(WorldObj):
 class Goal(WorldObj):
     def __init__(self, world, index, reward=1, color=None):
         if color is None:
-            super().__init__(world, 'goal', world.IDX_TO_COLOR[index])
+            super().__init__(world, "goal", world.IDX_TO_COLOR[index])
         else:
-            super().__init__(world, 'goal', world.IDX_TO_COLOR[color])
+            super().__init__(world, "goal", world.IDX_TO_COLOR[color])
         self.index = index
         self.reward = reward
 
@@ -235,9 +249,10 @@ class Goal(WorldObj):
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
 
+
 class Switch(WorldObj):
     def __init__(self, world):
-        super().__init__(world, 'switch', world.IDX_TO_COLOR[0])
+        super().__init__(world, "switch", world.IDX_TO_COLOR[0])
 
     def can_overlap(self):
         return True
@@ -251,8 +266,8 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
 
-    def __init__(self, world, color='blue'):
-        super().__init__(world, 'floor', color)
+    def __init__(self, world, color="blue"):
+        super().__init__(world, "floor", color)
 
     def can_overlap(self):
         return True
@@ -262,17 +277,14 @@ class Floor(WorldObj):
         c = COLORS[self.color]
         r.setLineColor(100, 100, 100, 0)
         r.setColor(*c / 2)
-        r.drawPolygon([
-            (1, TILE_PIXELS),
-            (TILE_PIXELS, TILE_PIXELS),
-            (TILE_PIXELS, 1),
-            (1, 1)
-        ])
+        r.drawPolygon(
+            [(1, TILE_PIXELS), (TILE_PIXELS, TILE_PIXELS), (TILE_PIXELS, 1), (1, 1)]
+        )
 
 
 class Lava(WorldObj):
     def __init__(self, world):
-        super().__init__(world, 'lava', 'red')
+        super().__init__(world, "lava", "red")
 
     def can_overlap(self):
         return True
@@ -294,8 +306,8 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world, color='grey'):
-        super().__init__(world, 'wall', color)
+    def __init__(self, world, color="grey"):
+        super().__init__(world, "wall", color)
 
     def see_behind(self):
         return False
@@ -306,7 +318,7 @@ class Wall(WorldObj):
 
 class Door(WorldObj):
     def __init__(self, world, color, is_open=False, is_locked=False):
-        super().__init__(world, 'door', color)
+        super().__init__(world, "door", color)
         self.is_open = is_open
         self.is_locked = is_locked
 
@@ -340,7 +352,14 @@ class Door(WorldObj):
         elif not self.is_open:
             state = 1
 
-        return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], state, 0, 0, 0)
+        return (
+            world.OBJECT_TO_IDX[self.type],
+            world.COLOR_TO_IDX[self.color],
+            state,
+            0,
+            0,
+            0,
+        )
 
     def render(self, img):
         c = COLORS[self.color]
@@ -368,8 +387,8 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
-    def __init__(self, world, color='blue'):
-        super(Key, self).__init__(world, 'key', color)
+    def __init__(self, world, color="blue"):
+        super(Key, self).__init__(world, "key", color)
 
     def can_pickup(self):
         return True
@@ -391,13 +410,13 @@ class Key(WorldObj):
 
 class Ball(WorldObj):
     def __init__(self, world, index=0, reward=2):
-        super(Ball, self).__init__(world, 'ball', world.IDX_TO_COLOR[index])
+        super(Ball, self).__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
 
     def can_pickup(self):
         return True
-    
+
     def can_overlap(self):
         return True
 
@@ -407,7 +426,7 @@ class Ball(WorldObj):
 
 class Box(WorldObj):
     def __init__(self, world, color, contains=None):
-        super(Box, self).__init__(world, 'box', color)
+        super(Box, self).__init__(world, "box", color)
         self.contains = contains
 
     def can_pickup(self):
@@ -431,7 +450,7 @@ class Box(WorldObj):
 
 class Agent(WorldObj):
     def __init__(self, world, index=0, view_size=7, actions=Actions):
-        super(Agent, self).__init__(world, 'agent', world.IDX_TO_COLOR[index])
+        super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
         self.pos = None
         self.dir = None
         self.index = index
@@ -441,7 +460,9 @@ class Agent(WorldObj):
         self.started = True
         self.paused = False
         self.actions = actions
-        self.policy = AgentPolicy(action_space=spaces.Discrete(len(self.actions.available)))
+        self.policy = AgentPolicy(
+            action_space=spaces.Discrete(len(self.actions.available))
+        )
 
     def render(self, img):
         c = COLORS[self.color]
@@ -456,21 +477,51 @@ class Agent(WorldObj):
 
     def encode(self, world, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim==3:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], self.dir)
+        if world.encode_dim == 3:
+            return (
+                world.OBJECT_TO_IDX[self.type],
+                world.COLOR_TO_IDX[self.color],
+                self.dir,
+            )
         elif self.carrying:
             if current_agent:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], world.OBJECT_TO_IDX[self.carrying.type],
-                        world.COLOR_TO_IDX[self.carrying.color], self.dir, 1)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    world.OBJECT_TO_IDX[self.carrying.type],
+                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.dir,
+                    1,
+                )
             else:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], world.OBJECT_TO_IDX[self.carrying.type],
-                        world.COLOR_TO_IDX[self.carrying.color], self.dir, 0)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    world.OBJECT_TO_IDX[self.carrying.type],
+                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.dir,
+                    0,
+                )
 
         else:
             if current_agent:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, self.dir, 1)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    0,
+                    0,
+                    self.dir,
+                    1,
+                )
             else:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, self.dir, 0)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    0,
+                    0,
+                    self.dir,
+                    0,
+                )
 
     @property
     def dir_vec(self):
@@ -498,7 +549,7 @@ class Agent(WorldObj):
         """
 
         return self.pos + self.dir_vec
-    
+
     def west_pos(self):
         """
         Get the position of the cell to the left of the agent
@@ -557,7 +608,7 @@ class Agent(WorldObj):
 
         # Project the coordinates of the object relative to the top-left
         # corner onto the agent's own coordinate system
-        vx = (rx * lx + ry * ly)
+        vx = rx * lx + ry * ly
         vy = -(dx * lx + dy * ly)
 
         return vx, vy
@@ -654,6 +705,7 @@ class Grid:
 
     def copy(self):
         from copy import deepcopy
+
         return deepcopy(self)
 
     def set(self, i, j, v):
@@ -710,8 +762,7 @@ class Grid:
                 x = topX + i
                 y = topY + j
 
-                if x >= 0 and x < self.width and \
-                        y >= 0 and y < self.height:
+                if x >= 0 and x < self.width and y >= 0 and y < self.height:
                     v = self.get(x, y)
                 else:
                     v = Wall(world)
@@ -732,7 +783,9 @@ class Grid:
         if key in cls.tile_cache:
             return cls.tile_cache[key]
 
-        img = np.zeros(shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8)
+        img = np.zeros(
+            shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8
+        )
 
         # Draw the grid lines (top and left edges)
         fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
@@ -744,7 +797,9 @@ class Grid:
         # Highlight the cell  if needed
         if len(highlights) > 0:
             for h in highlights:
-                highlight_img(img, color=COLORS[world.IDX_TO_COLOR[h%len(world.IDX_TO_COLOR)]])
+                highlight_img(
+                    img, color=COLORS[world.IDX_TO_COLOR[h % len(world.IDX_TO_COLOR)]]
+                )
 
         # Downsample the image to perform supersampling/anti-aliasing
         img = downsample(img, subdivs)
@@ -777,7 +832,7 @@ class Grid:
                     world,
                     cell,
                     highlights=[] if highlight_masks is None else highlight_masks[i, j],
-                    tile_size=tile_size
+                    tile_size=tile_size,
                 )
 
                 ymin = j * tile_size
@@ -796,7 +851,7 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype='uint8')
+        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -804,7 +859,7 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX['empty']
+                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
                         if world.encode_dim > 3:
@@ -824,7 +879,7 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype='uint8')
+        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -832,7 +887,7 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX['empty']
+                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
                         if world.encode_dim > 3:
@@ -841,7 +896,9 @@ class Grid:
                             array[i, j, 5] = 0
 
                     else:
-                        array[i, j, :] = v.encode(world, current_agent=np.array_equal(agent_pos, (i, j)))
+                        array[i, j, :] = v.encode(
+                            world, current_agent=np.array_equal(agent_pos, (i, j))
+                        )
 
         return array
 
@@ -884,19 +941,28 @@ class Grid:
 
         return mask
 
+
 class MultiGridEnv(gym.Env):
     """
     2D grid world game environment
     """
 
-    metadata = {
-        'render_modes': ['human', 'rgb_array'],
-        'video.frames_per_second': 10
-    }
+    metadata = {"render_modes": ["human", "rgb_array"], "video.frames_per_second": 10}
 
-    def __init__(self, grid_size=None, width=None, height=None, max_steps=100, 
-                 see_through_walls=False, seed=2, agents=None, partial_obs=False,
-                 agent_view_size=7, actions_set=Actions, objects_set = CollectWorld, render_mode="rgb_array"
+    def __init__(
+        self,
+        grid_size=None,
+        width=None,
+        height=None,
+        max_steps=100,
+        see_through_walls=False,
+        seed=2,
+        agents=None,
+        partial_obs=False,
+        agent_view_size=7,
+        actions_set=Actions,
+        objects_set=CollectWorld,
+        render_mode="rgb_array",
     ):
         self.agents = agents
         self.render_mode = render_mode
@@ -915,14 +981,14 @@ class MultiGridEnv(gym.Env):
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions.available))
 
-        self.objects=objects_set
+        self.objects = objects_set
 
         if partial_obs:
             self.observation_space = spaces.Box(
                 low=0,
                 high=255,
                 shape=(agent_view_size, agent_view_size, self.objects.encode_dim),
-                dtype='uint8'
+                dtype="uint8",
             )
 
         else:
@@ -930,7 +996,7 @@ class MultiGridEnv(gym.Env):
                 low=0,
                 high=255,
                 shape=(width, height, self.objects.encode_dim),
-                dtype='uint8'
+                dtype="uint8",
             )
 
         self.ob_dim = np.prod(self.observation_space.shape)
@@ -955,7 +1021,6 @@ class MultiGridEnv(gym.Env):
         self.reset()
 
     def reset(self, seed=None):
-
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
@@ -977,8 +1042,13 @@ class MultiGridEnv(gym.Env):
         if self.partial_obs:
             obs = self.gen_obs()
         else:
-            obs = [self.grid.encode_for_agents(world=self.world, agent_pos=self.agents[i].pos) for i in range(len(self.agents))]
-        obs=[self.objects.normalize_obs*ob for ob in obs]
+            obs = [
+                self.grid.encode_for_agents(
+                    world=self.world, agent_pos=self.agents[i].pos
+                )
+                for i in range(len(self.agents))
+            ]
+        obs = [self.objects.normalize_obs * ob for ob in obs]
         return obs
 
     def seed(self, seed=1337):
@@ -999,31 +1069,25 @@ class MultiGridEnv(gym.Env):
 
         # Map of object types to short string
         OBJECT_TO_STR = {
-            'wall': 'W',
-            'floor': 'F',
-            'door': 'D',
-            'key': 'K',
-            'ball': 'A',
-            'box': 'B',
-            'goal': 'G',
-            'lava': 'V',
+            "wall": "W",
+            "floor": "F",
+            "door": "D",
+            "key": "K",
+            "ball": "A",
+            "box": "B",
+            "goal": "G",
+            "lava": "V",
         }
 
         # Short string for opened door
-        OPENDED_DOOR_IDS = '_'
+        OPENDED_DOOR_IDS = "_"
 
         # Map agent's direction to short string
-        AGENT_DIR_TO_STR = {
-            0: '>',
-            1: 'V',
-            2: '<',
-            3: '^'
-        }
+        AGENT_DIR_TO_STR = {0: ">", 1: "V", 2: "<", 3: "^"}
 
-        str = ''
+        str = ""
 
         for j in range(self.grid.height):
-
             for i in range(self.grid.width):
                 if i == self.agent_pos[0] and j == self.agent_pos[1]:
                     str += 2 * AGENT_DIR_TO_STR[self.agent_dir]
@@ -1032,22 +1096,22 @@ class MultiGridEnv(gym.Env):
                 c = self.grid.get(i, j)
 
                 if c == None:
-                    str += '  '
+                    str += "  "
                     continue
 
-                if c.type == 'door':
+                if c.type == "door":
                     if c.is_open:
-                        str += '__'
+                        str += "__"
                     elif c.is_locked:
-                        str += 'L' + c.color[0].upper()
+                        str += "L" + c.color[0].upper()
                     else:
-                        str += 'D' + c.color[0].upper()
+                        str += "D" + c.color[0].upper()
                     continue
 
                 str += OBJECT_TO_STR[c.type] + c.color[0].upper()
 
             if j < self.grid.height - 1:
-                str += '\n'
+                str += "\n"
 
         return str
 
@@ -1095,7 +1159,7 @@ class MultiGridEnv(gym.Env):
         Generate random boolean value
         """
 
-        return (self.np_random.randint(0, 2) == 0)
+        return self.np_random.randint(0, 2) == 0
 
     def _rand_elem(self, iterable):
         """
@@ -1137,7 +1201,7 @@ class MultiGridEnv(gym.Env):
 
         return (
             self.np_random.randint(xLow, xHigh),
-            self.np_random.randint(yLow, yHigh)
+            self.np_random.randint(yLow, yHigh),
         )
 
     def place_obj(self, obj, top=None, size=None, reject_fn=None, max_tries=math.inf):
@@ -1163,14 +1227,16 @@ class MultiGridEnv(gym.Env):
             # This is to handle with rare cases where rejection sampling
             # gets stuck in an infinite loop
             if num_tries > max_tries:
-                raise RecursionError('rejection sampling failed in place_obj')
+                raise RecursionError("rejection sampling failed in place_obj")
 
             num_tries += 1
 
-            pos = np.array((
-                self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
-                self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1))
-            ))
+            pos = np.array(
+                (
+                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
+                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
+                )
+            )
 
             # Don't place the object on top of another object
             if self.grid.get(*pos) != None:
@@ -1199,7 +1265,9 @@ class MultiGridEnv(gym.Env):
         obj.init_pos = (i, j)
         obj.pos = (i, j)
 
-    def place_agent(self, agent, pos=None, top=None, size=None, rand_dir=False, max_tries=math.inf):
+    def place_agent(
+        self, agent, pos=None, top=None, size=None, rand_dir=False, max_tries=math.inf
+    ):
         """
         Set the agent's starting point at an empty position in the grid
         """
@@ -1232,7 +1300,7 @@ class MultiGridEnv(gym.Env):
         vx, vy = coordinates
 
         obs = self.gen_obs()
-        obs_grid, _ = Grid.decode(obs['image'])
+        obs_grid, _ = Grid.decode(obs["image"])
         obs_cell = obs_grid.get(vx, vy)
         world_cell = self.grid.get(x, y)
 
@@ -1247,8 +1315,12 @@ class MultiGridEnv(gym.Env):
         done = False
 
         for i in order:
-
-            if self.agents[i].terminated or self.agents[i].paused or not self.agents[i].started or actions[i] == self.actions.still:
+            if (
+                self.agents[i].terminated
+                or self.agents[i].paused
+                or not self.agents[i].started
+                or actions[i] == self.actions.still
+            ):
                 continue
 
             # Get the position in front of the agent
@@ -1270,12 +1342,12 @@ class MultiGridEnv(gym.Env):
             # Move forward
             elif actions[i] == self.actions.forward:
                 if fwd_cell is not None:
-                    if fwd_cell.type == 'goal':
+                    if fwd_cell.type == "goal":
                         done = True
                         rewards = self._reward(i, rewards, 1)
-                    elif fwd_cell.type == 'switch':
+                    elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
-                    elif fwd_cell.type == 'ball':
+                    elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*fwd_pos, self.agents[i])
@@ -1283,7 +1355,7 @@ class MultiGridEnv(gym.Env):
                     self.agents[i].pos = fwd_pos
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
-            elif 'build' in self.actions.available and actions[i]==self.actions.build:
+            elif "build" in self.actions.available and actions[i] == self.actions.build:
                 self._handle_build(i, rewards, fwd_pos, fwd_cell)
 
             # Pick up an object
@@ -1312,9 +1384,14 @@ class MultiGridEnv(gym.Env):
         if self.partial_obs:
             obs = self.gen_obs()
         else:
-            obs = [self.grid.encode_for_agents(world=self.world, agent_pos=self.agents[i].pos) for i in range(len(actions))]
+            obs = [
+                self.grid.encode_for_agents(
+                    world=self.world, agent_pos=self.agents[i].pos
+                )
+                for i in range(len(actions))
+            ]
 
-        obs=[self.objects.normalize_obs*ob for ob in obs]
+        obs = [self.objects.normalize_obs * ob for ob in obs]
 
         return obs, rewards, done, {}
 
@@ -1329,7 +1406,6 @@ class MultiGridEnv(gym.Env):
         vis_masks = []
 
         for a in self.agents:
-
             topX, topY, botX, botY = a.get_view_exts()
 
             grid = self.grid.slice(self.objects, topX, topY, a.view_size, a.view_size)
@@ -1340,7 +1416,9 @@ class MultiGridEnv(gym.Env):
             # Process occluders and visibility
             # Note that this incurs some performance cost
             if not self.see_through_walls:
-                vis_mask = grid.process_vis(agent_pos=(a.view_size // 2, a.view_size - 1))
+                vis_mask = grid.process_vis(
+                    agent_pos=(a.view_size // 2, a.view_size - 1)
+                )
             else:
                 vis_mask = np.ones(shape=(grid.width, grid.height), dtype=np.bool)
 
@@ -1357,7 +1435,12 @@ class MultiGridEnv(gym.Env):
         grids, vis_masks = self.gen_obs_grid()
 
         # Encode the partially observable view into a numpy array
-        obs = [grid.encode_for_agents(self.objects, [grid.width // 2, grid.height - 1], vis_mask) for grid, vis_mask in zip(grids, vis_masks)]
+        obs = [
+            grid.encode_for_agents(
+                self.objects, [grid.width // 2, grid.height - 1], vis_mask
+            )
+            for grid, vis_mask in zip(grids, vis_masks)
+        ]
 
         return obs
 
@@ -1373,7 +1456,7 @@ class MultiGridEnv(gym.Env):
 
         return img
 
-    def render(self, mode='human', close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(self, mode="human", close=False, highlight=False, tile_size=TILE_PIXELS):
         """
         Render the whole-grid human view
         """
@@ -1383,24 +1466,26 @@ class MultiGridEnv(gym.Env):
                 self.window.close()
             return
 
-        if mode == 'human' and not self.window:
-            self.window = Window('gym_multigrid')
+        if mode == "human" and not self.window:
+            self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
         if highlight:
-
             # Compute which cells are visible to the agent
             _, vis_masks = self.gen_obs_grid()
 
-            highlight_masks = {(i, j): [] for i in range(self.width) for j in range(self.height)}
+            highlight_masks = {
+                (i, j): [] for i in range(self.width) for j in range(self.height)
+            }
 
             for i, a in enumerate(self.agents):
-
                 # Compute the world coordinates of the bottom-left corner
                 # of the agent's view area
                 f_vec = a.dir_vec
                 r_vec = a.right_vec
-                top_left = a.pos + f_vec * (a.view_size - 1) - r_vec * (a.view_size // 2)
+                top_left = (
+                    a.pos + f_vec * (a.view_size - 1) - r_vec * (a.view_size // 2)
+                )
 
                 # Mask of which cells to highlight
 
@@ -1426,10 +1511,10 @@ class MultiGridEnv(gym.Env):
         img = self.grid.render(
             self.objects,
             tile_size,
-            highlight_masks=highlight_masks if highlight else None
+            highlight_masks=highlight_masks if highlight else None,
         )
 
-        if mode == 'human':
+        if mode == "human":
             self.window.show_img(img)
 
         return img
