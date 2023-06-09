@@ -1,5 +1,11 @@
-from gym_multigrid.multigrid import *
+from gym_multigrid.multigrid import MultiGridEnv
+from gym_multigrid.world import CollectWorld
+from gym_multigrid.agent import CollectActions, Agent
+from gym_multigrid.object import Ball
+from gym_multigrid.grid import Grid
 import random
+import numpy as np
+
 
 
 class CollectGameEnv(MultiGridEnv):
@@ -47,6 +53,7 @@ class CollectGameEnv(MultiGridEnv):
             width=width,
             height=height,
             max_steps=100,
+            objects_set=self.world,
             see_through_walls=False,
             agents=agents,
             partial_obs=partial_obs,
@@ -70,7 +77,7 @@ class CollectGameEnv(MultiGridEnv):
             for i in range(number):
                 self.place_obj(Ball(self.world, index, reward))
 
-        # Randomize the player start position and orientation
+        # Randomize the player start position
         for a in self.agents:
             self.place_agent(a)
 
@@ -102,11 +109,11 @@ class CollectGameEnv(MultiGridEnv):
                 self.grid.set(*fwd_pos, None)
                 self.collected_balls += 1
                 if ball_idx == 0:
-                    self._reward(i, rewards, fwd_cell.reward * 1.5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 elif ball_idx == 1:
-                    self._reward(i, rewards, fwd_cell.reward * 5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 elif ball_idx == 2:
-                    self._reward(i, rewards, fwd_cell.reward * 5)
+                    self._reward(i, rewards, fwd_cell.reward)
                 self.info[self.keys[3 * i + ball_idx]] += 1
 
     def move_agent(self, rewards, i, next_cell, next_pos):
@@ -125,8 +132,6 @@ class CollectGameEnv(MultiGridEnv):
             self._reward(i, rewards, -0.01)
 
     def step(self, actions):
-        # rand_action = self.action_space.sample()
-        # actions = np.array([actions, rand_action])
         order = np.random.permutation(len(actions))
         rewards = np.zeros(len(actions))
         done = False
@@ -152,7 +157,6 @@ class CollectGameEnv(MultiGridEnv):
                 self.move_agent(rewards, i, next_cell, next_pos)
             elif actions[i] == self.actions.still:
                 self._reward(i, rewards, -0.01)
-        # obs, rewards, done, info = MultiGridEnv.step(self, actions)
         if self.collected_balls == self.num_balls:
             done = True
         if self.step_count >= self.max_steps:
@@ -160,7 +164,7 @@ class CollectGameEnv(MultiGridEnv):
             truncated = True
 
         obs = self.grid.encode(self.world)
-        return obs, rewards[0], done, truncated, self.info
+        return obs, rewards, done, truncated, self.info
 
     def simulate(self, action):
         # need to simulate what happens without changing current env
@@ -174,6 +178,8 @@ class CollectGameEnv(MultiGridEnv):
             if next_cell is not None:
                 if next_cell.type == "ball":
                     dummy_pickup(dummy_grid, next_pos, next_cell)
+                    dummy_grid.set(*next_pos, self.agents[0])
+                    dummy_grid.set(*self.agents[0].pos, None)
             elif next_cell is None or next_cell.can_overlap():
                 dummy_grid.set(*next_pos, self.agents[0])
                 dummy_grid.set(*self.agents[0].pos, None)
@@ -211,18 +217,6 @@ class CollectGameEnv(MultiGridEnv):
         return phi_v(s, dummy_grid)
 
 
-class CollectGame4HEnv10x10N2(CollectGameEnv):
-    def __init__(self):
-        super().__init__(
-            size=10,
-            num_balls=[5],
-            agents_index=[1, 2],
-            balls_index=[0],
-            balls_reward=[1],
-            zero_sum=True,
-        )
-
-
 class CollectGame3Obj2Agent(CollectGameEnv):
     def __init__(self):
         super().__init__(
@@ -246,18 +240,21 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.grid.vert_wall(self.world, 0, 0)
         self.grid.vert_wall(self.world, width - 1, 0)
 
-        partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
-        partition_size = (width // 2 + 1, height // 2 + 1)
+        # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
+        # partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
         for ball in range(self.num_balls):
             if ball % 5 == 0:
-                top = partitions[ball // 5]
+                # top = partitions[ball // 5]
                 index = ball // 5
-            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
-        agent_pos = (1, height - 2)
+            self.place_obj(
+                Ball(self.world, index, 1)
+            )  # , top=top, size=partition_size)
+        # agent_pos = (1, height - 2)
         for a in self.agents:
-            self.place_agent(a, pos=agent_pos)
-            agent_pos = (agent_pos[0] + 1, agent_pos[1])
+            # self.place_agent(a, pos=agent_pos)
+            # agent_pos = (agent_pos[0]+1, agent_pos[1])
+            self.place_agent(a)
 
     def get_obj_grid(self, ball_idx=[0, 1, 2]):
         # return width x height grid indicating ball locations
@@ -340,18 +337,28 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                     phi_obs[0, i, j] = 1
         return phi_obs
 
-    """ moved above
-    def phi_v(self, s, snew):
-        phi = np.zeros((self.phi_dim(),))
+    def toroid(self, idx):
+        # transform grid into toroidal, agent-centric obs
+        pos = (idx // self.grid.width, idx % self.grid.width)
+        depth = self.num_ball_types + 1
+        obs = np.zeros((self.grid.width, self.grid.height, depth), dtype="float32")
         for i in range(self.grid.width):
             for j in range(self.grid.height):
+                new_coords = [i - pos[0], j - pos[1]]
                 obj = self.grid.get(i, j)
-                if obj.type == 'agent':
-                    if s[i,j,0] == 2:
-                        color = s[i,j,1]
-                        phi[color] = 1
-        return phi
-    """
+                if new_coords[0] < 0:
+                    new_coords[0] += self.grid.width
+                if new_coords[1] < 0:
+                    new_coords[1] += self.grid.height
+                if obj is None:
+                    continue
+                elif obj.type == "wall":
+                    obs[new_coords[1], new_coords[0], depth - 1] = 1
+                elif obj.type == "ball":
+                    obs[
+                        new_coords[1], new_coords[0], self.world.COLOR_TO_IDX[obj.color]
+                    ] = 1
+        return obs
 
     def gaussian(self, idx):
         phi_obs = np.zeros((self.grid.width, self.grid.height), dtype="float32")
@@ -369,7 +376,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                         )
                         / self.sigma
                     )
-        return phi_obs
+        return phi_obs.T
 
     def phi(self):
         # phi(s, a, s')
