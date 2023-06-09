@@ -19,10 +19,11 @@ COLOR_NAMES = sorted(list(COLORS.keys()))
 
 # Map of state names to integers
 STATE_TO_IDX = {
-    'open': 0,
-    'closed': 1,
-    'locked': 2,
+    "open": 0,
+    "closed": 1,
+    "locked": 2,
 }
+
 
 class WorldObj:
     """
@@ -64,10 +65,17 @@ class WorldObj:
 
     def encode(self, world, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim==3:
+        if world.encode_dim == 3:
             return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0)
         else:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, 0, 0)
+            return (
+                world.OBJECT_TO_IDX[self.type],
+                world.COLOR_TO_IDX[self.color],
+                0,
+                0,
+                0,
+                0,
+            )
 
     @staticmethod
     def decode(type_idx, color_idx, state):
@@ -79,11 +87,11 @@ class WorldObj:
 
 
 class ObjectGoal(WorldObj):
-    def __init__(self, world, index, target_type='ball', reward=1, color=None):
+    def __init__(self, world, index, target_type="ball", reward=1, color=None):
         if color is None:
-            super().__init__(world, 'objgoal', world.IDX_TO_COLOR[index])
+            super().__init__(world, "objgoal", world.IDX_TO_COLOR[index])
         else:
-            super().__init__(world, 'objgoal', world.IDX_TO_COLOR[color])
+            super().__init__(world, "objgoal", world.IDX_TO_COLOR[color])
         self.target_type = target_type
         self.index = index
         self.reward = reward
@@ -98,9 +106,9 @@ class ObjectGoal(WorldObj):
 class Goal(WorldObj):
     def __init__(self, world, index, reward=1, color=None):
         if color is None:
-            super().__init__(world, 'goal', world.IDX_TO_COLOR[index])
+            super().__init__(world, "goal", world.IDX_TO_COLOR[index])
         else:
-            super().__init__(world, 'goal', world.IDX_TO_COLOR[color])
+            super().__init__(world, "goal", world.IDX_TO_COLOR[color])
         self.index = index
         self.reward = reward
 
@@ -110,9 +118,10 @@ class Goal(WorldObj):
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
 
+
 class Switch(WorldObj):
     def __init__(self, world):
-        super().__init__(world, 'switch', world.IDX_TO_COLOR[0])
+        super().__init__(world, "switch", world.IDX_TO_COLOR[0])
 
     def can_overlap(self):
         return True
@@ -126,8 +135,8 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
 
-    def __init__(self, world, color='blue'):
-        super().__init__(world, 'floor', color)
+    def __init__(self, world, color="blue"):
+        super().__init__(world, "floor", color)
 
     def can_overlap(self):
         return True
@@ -137,17 +146,14 @@ class Floor(WorldObj):
         c = COLORS[self.color]
         r.setLineColor(100, 100, 100, 0)
         r.setColor(*c / 2)
-        r.drawPolygon([
-            (1, TILE_PIXELS),
-            (TILE_PIXELS, TILE_PIXELS),
-            (TILE_PIXELS, 1),
-            (1, 1)
-        ])
+        r.drawPolygon(
+            [(1, TILE_PIXELS), (TILE_PIXELS, TILE_PIXELS), (TILE_PIXELS, 1), (1, 1)]
+        )
 
 
 class Lava(WorldObj):
     def __init__(self, world):
-        super().__init__(world, 'lava', 'red')
+        super().__init__(world, "lava", "red")
 
     def can_overlap(self):
         return True
@@ -169,8 +175,8 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world, color='grey'):
-        super().__init__(world, 'wall', color)
+    def __init__(self, world, color="grey"):
+        super().__init__(world, "wall", color)
 
     def see_behind(self):
         return False
@@ -181,7 +187,7 @@ class Wall(WorldObj):
 
 class Door(WorldObj):
     def __init__(self, world, color, is_open=False, is_locked=False):
-        super().__init__(world, 'door', color)
+        super().__init__(world, "door", color)
         self.is_open = is_open
         self.is_locked = is_locked
 
@@ -215,7 +221,14 @@ class Door(WorldObj):
         elif not self.is_open:
             state = 1
 
-        return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], state, 0, 0, 0)
+        return (
+            world.OBJECT_TO_IDX[self.type],
+            world.COLOR_TO_IDX[self.color],
+            state,
+            0,
+            0,
+            0,
+        )
 
     def render(self, img):
         c = COLORS[self.color]
@@ -243,8 +256,8 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
-    def __init__(self, world, color='blue'):
-        super(Key, self).__init__(world, 'key', color)
+    def __init__(self, world, color="blue"):
+        super(Key, self).__init__(world, "key", color)
 
     def can_pickup(self):
         return True
@@ -266,13 +279,13 @@ class Key(WorldObj):
 
 class Ball(WorldObj):
     def __init__(self, world, index=0, reward=2):
-        super(Ball, self).__init__(world, 'ball', world.IDX_TO_COLOR[index])
+        super(Ball, self).__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
 
     def can_pickup(self):
         return True
-    
+
     def can_overlap(self):
         return True
 
@@ -282,7 +295,7 @@ class Ball(WorldObj):
 
 class Box(WorldObj):
     def __init__(self, world, color, contains=None):
-        super(Box, self).__init__(world, 'box', color)
+        super(Box, self).__init__(world, "box", color)
         self.contains = contains
 
     def can_pickup(self):
