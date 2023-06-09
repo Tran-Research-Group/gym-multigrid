@@ -7,6 +7,7 @@ import random
 import numpy as np
 
 
+
 class CollectGameEnv(MultiGridEnv):
     """
     Environment in which the agents have to collect the balls
