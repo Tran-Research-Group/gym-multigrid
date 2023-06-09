@@ -2,6 +2,7 @@ import numpy as np
 from .rendering import *
 from .object import WorldObj, Wall, COLORS
 
+
 class Grid:
     """
     Represent a grid and operations on it
@@ -44,6 +45,7 @@ class Grid:
 
     def copy(self):
         from copy import deepcopy
+
         return deepcopy(self)
 
     def set(self, i, j, v):
@@ -100,8 +102,7 @@ class Grid:
                 x = topX + i
                 y = topY + j
 
-                if x >= 0 and x < self.width and \
-                        y >= 0 and y < self.height:
+                if x >= 0 and x < self.width and y >= 0 and y < self.height:
                     v = self.get(x, y)
                 else:
                     v = Wall(world)
@@ -122,7 +123,9 @@ class Grid:
         if key in cls.tile_cache:
             return cls.tile_cache[key]
 
-        img = np.zeros(shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8)
+        img = np.zeros(
+            shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8
+        )
 
         # Draw the grid lines (top and left edges)
         fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
@@ -134,7 +137,9 @@ class Grid:
         # Highlight the cell  if needed
         if len(highlights) > 0:
             for h in highlights:
-                highlight_img(img, color=COLORS[world.IDX_TO_COLOR[h%len(world.IDX_TO_COLOR)]])
+                highlight_img(
+                    img, color=COLORS[world.IDX_TO_COLOR[h % len(world.IDX_TO_COLOR)]]
+                )
 
         # Downsample the image to perform supersampling/anti-aliasing
         img = downsample(img, subdivs)
@@ -167,7 +172,7 @@ class Grid:
                     world,
                     cell,
                     highlights=[] if highlight_masks is None else highlight_masks[i, j],
-                    tile_size=tile_size
+                    tile_size=tile_size,
                 )
 
                 ymin = j * tile_size
@@ -186,7 +191,7 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype='uint8')
+        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -194,7 +199,7 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX['empty']
+                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
                         if world.encode_dim > 3:
@@ -214,7 +219,7 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype='uint8')
+        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -222,7 +227,7 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX['empty']
+                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
                         if world.encode_dim > 3:
@@ -231,7 +236,9 @@ class Grid:
                             array[i, j, 5] = 0
 
                     else:
-                        array[i, j, :] = v.encode(world, current_agent=np.array_equal(agent_pos, (i, j)))
+                        array[i, j, :] = v.encode(
+                            world, current_agent=np.array_equal(agent_pos, (i, j))
+                        )
 
         return array
 

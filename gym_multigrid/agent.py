@@ -14,8 +14,18 @@ DIR_TO_VEC = [
     np.array((0, -1)),
 ]
 
+
 class Actions:
-    available=['still', 'left', 'right', 'forward', 'pickup', 'drop', 'toggle', 'done']
+    available = [
+        "still",
+        "left",
+        "right",
+        "forward",
+        "pickup",
+        "drop",
+        "toggle",
+        "done",
+    ]
 
     still = 0
     left = 1
@@ -26,24 +36,27 @@ class Actions:
     toggle = 6
     done = 7
 
+
 class CollectActions:
-    available=['north', 'east', 'south', 'west']
+    available = ["north", "east", "south", "west"]
 
     north = 0
     east = 1
     south = 2
     west = 3
 
+
 class SmallActions:
-    available=['still', 'left', 'right', 'forward']
+    available = ["still", "left", "right", "forward"]
 
     still = 0
     left = 1
     right = 2
     forward = 3
 
+
 class MineActions:
-    available=['still', 'left', 'right', 'forward', 'build']
+    available = ["still", "left", "right", "forward", "build"]
 
     still = 0
     left = 1
@@ -51,9 +64,10 @@ class MineActions:
     forward = 3
     build = 4
 
+
 class Agent(WorldObj):
     def __init__(self, world, index=0, view_size=7, actions=Actions):
-        super(Agent, self).__init__(world, 'agent', world.IDX_TO_COLOR[index])
+        super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
         self.pos = None
         self.dir = None
         self.index = index
@@ -77,21 +91,51 @@ class Agent(WorldObj):
 
     def encode(self, world, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim==3:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], self.dir)
+        if world.encode_dim == 3:
+            return (
+                world.OBJECT_TO_IDX[self.type],
+                world.COLOR_TO_IDX[self.color],
+                self.dir,
+            )
         elif self.carrying:
             if current_agent:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], world.OBJECT_TO_IDX[self.carrying.type],
-                        world.COLOR_TO_IDX[self.carrying.color], self.dir, 1)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    world.OBJECT_TO_IDX[self.carrying.type],
+                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.dir,
+                    1,
+                )
             else:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], world.OBJECT_TO_IDX[self.carrying.type],
-                        world.COLOR_TO_IDX[self.carrying.color], self.dir, 0)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    world.OBJECT_TO_IDX[self.carrying.type],
+                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.dir,
+                    0,
+                )
 
         else:
             if current_agent:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, self.dir, 1)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    0,
+                    0,
+                    self.dir,
+                    1,
+                )
             else:
-                return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0, 0, self.dir, 0)
+                return (
+                    world.OBJECT_TO_IDX[self.type],
+                    world.COLOR_TO_IDX[self.color],
+                    0,
+                    0,
+                    self.dir,
+                    0,
+                )
 
     @property
     def dir_vec(self):
@@ -119,7 +163,7 @@ class Agent(WorldObj):
         """
 
         return self.pos + self.dir_vec
-    
+
     def west_pos(self):
         """
         Get the position of the cell to the left of the agent
@@ -178,7 +222,7 @@ class Agent(WorldObj):
 
         # Project the coordinates of the object relative to the top-left
         # corner onto the agent's own coordinate system
-        vx = (rx * lx + ry * ly)
+        vx = rx * lx + ry * ly
         vy = -(dx * lx + dy * ly)
 
         return vx, vy

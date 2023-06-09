@@ -4,6 +4,7 @@ import numpy as np
 # Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
 
+
 def downsample(img, factor):
     """
     Downsample an image along both dimensions by some factor
@@ -12,11 +13,14 @@ def downsample(img, factor):
     assert img.shape[0] % factor == 0
     assert img.shape[1] % factor == 0
 
-    img = img.reshape([img.shape[0]//factor, factor, img.shape[1]//factor, factor, 3])
+    img = img.reshape(
+        [img.shape[0] // factor, factor, img.shape[1] // factor, factor, 3]
+    )
     img = img.mean(axis=3)
     img = img.mean(axis=1)
 
     return img
+
 
 def fill_coords(img, fn, color):
     """
@@ -32,6 +36,7 @@ def fill_coords(img, fn, color):
 
     return img
 
+
 def rotate_fn(fin, cx, cy, theta):
     def fout(x, y):
         x = x - cx
@@ -43,6 +48,7 @@ def rotate_fn(fin, cx, cy, theta):
         return fin(x2, y2)
 
     return fout
+
 
 def point_in_line(x0, y0, x1, y1, r):
     p0 = np.array([x0, y0])
@@ -74,15 +80,20 @@ def point_in_line(x0, y0, x1, y1, r):
 
     return fn
 
+
 def point_in_circle(cx, cy, r):
     def fn(x, y):
-        return (x-cx)*(x-cx) + (y-cy)*(y-cy) <= r * r
+        return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r
+
     return fn
+
 
 def point_in_rect(xmin, xmax, ymin, ymax):
     def fn(x, y):
         return x >= xmin and x <= xmax and y >= ymin and y <= ymax
+
     return fn
+
 
 def point_in_triangle(a, b, c):
     a = np.array(a)
@@ -110,6 +121,7 @@ def point_in_triangle(a, b, c):
         return (u >= 0) and (v >= 0) and (u + v) < 1
 
     return fn
+
 
 def highlight_img(img, color=(255, 255, 255), alpha=0.30):
     """
