@@ -1,6 +1,7 @@
 import numpy as np
 from .rendering import *
-from .object import WorldObj, Wall, COLORS
+from .object import TWorldObj, WorldObj, Wall, COLORS
+from .world import TWorld
 
 
 class Grid:
@@ -11,16 +12,31 @@ class Grid:
     # Static cache of pre-renderer tiles
     tile_cache = {}
 
-    def __init__(self, width, height):
+    def __init__(self, width: int, height: int) -> None:
+        """
+        Initialize the grid at a given width and height
+
+        Parameters
+        ----------
+        width : int
+            The width of the grid
+        height : int
+            The height of the grid
+
+        Attributes
+        ----------
+        grid : list
+            The grid is represented as a flat list of cells, in row-major order.
+        """
         assert width >= 3
         assert height >= 3
 
-        self.width = width
-        self.height = height
+        self.width: int = width
+        self.height: int = height
 
-        self.grid = [None] * width * height
+        self.grid: list[WorldObj | tuple | None] | list[None] = [None] * width * height
 
-    def __contains__(self, key):
+    def __contains__(self, key: WorldObj | tuple):
         if isinstance(key, WorldObj):
             for e in self.grid:
                 if e is key:
@@ -35,12 +51,12 @@ class Grid:
                     return True
         return False
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Grid"):
         grid1 = self.encode()
         grid2 = other.encode()
         return np.array_equal(grid2, grid1)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "Grid"):
         return not self == other
 
     def copy(self):
@@ -48,17 +64,19 @@ class Grid:
 
         return deepcopy(self)
 
-    def set(self, i, j, v):
+    def set(self, i: int, j: int, v):
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         self.grid[j * self.width + i] = v
 
-    def get(self, i, j):
+    def get(self, i: int, j: int):
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
 
-    def horz_wall(self, world, x, y, length=None, obj_type=Wall):
+    def horz_wall(
+        self, world: TWorld, x: int, y: int, length=None, obj_type: TWorldObj = Wall
+    ) -> None:
         if length is None:
             length = self.width - x
         for i in range(0, length):

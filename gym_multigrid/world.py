@@ -1,6 +1,10 @@
+from typing import TypeVar
 import numpy as np
 from .rendering import *
 from .object import COLORS
+
+
+TWorld = TypeVar("TWorld", bound="World")
 
 
 class World:

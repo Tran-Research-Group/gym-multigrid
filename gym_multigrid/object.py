@@ -1,3 +1,4 @@
+from typing import TypeVar
 import numpy as np
 from .rendering import *
 
@@ -23,6 +24,9 @@ STATE_TO_IDX = {
     "closed": 1,
     "locked": 2,
 }
+
+
+TWorldObj = TypeVar("TWorldObj", bound="WorldObj")
 
 
 class WorldObj:
