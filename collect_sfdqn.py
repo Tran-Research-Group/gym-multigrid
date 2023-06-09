@@ -152,6 +152,8 @@ class IndSFDQNAgent:
 
 
 def main():
+    seed = 42
+    set_seed(seed=seed)
     register(
         id="multigrid-collect-more-v0",
         entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
@@ -159,18 +161,18 @@ def main():
     env = gym.make("multigrid-collect-more-v0")
     w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
     agent = IndSFDQNAgent(
-        env.grid.width * env.grid.height * 4,
-        env.ac_dim,
-        env.phi_dim(),
-        w,
-        0.00003,
-        0.9,
-        0.1,
+        state_dim=env.grid.width * env.grid.height * 4,
+        action_dim=env.ac_dim,
+        feat_dim=env.phi_dim(),
+        w=w,
+        lr=0.00003,
+        gamma=0.9,
+        epsilon=0.1,
     )
     frames = []
     episodes = 50000
     for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=seed)
         agent_pos = env.agents[0].pos
         idx = env.grid.width * agent_pos[0] + agent_pos[1]
         obs = env.toroid(idx)
@@ -236,6 +238,8 @@ def main():
     writer.close()
     save_frames_as_gif(frames, ep="ind-sfdqn-random")
     torch.save(agent.psi1, "psi1.torch")
+    torch.save(agent.psi2, "psi2.torch")
+    torch.save(agent.psi3, "psi3.torch")
 
 
 if __name__ == "__main__":

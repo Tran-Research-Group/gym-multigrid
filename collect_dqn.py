@@ -111,15 +111,17 @@ class SimpleDQNAgent:
 
 
 def main():
+    seed = 42
+    set_seed(seed=seed)
     register(
         id="multigrid-collect-more-v0",
         entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
     )
     env = gym.make("multigrid-collect-more-v0")
     agent = SimpleDQNAgent(
-        env.grid.width * env.grid.height * 4,
-        env.ac_dim,
-        1,
+        state_dim=env.grid.width * env.grid.height * 4,
+        action_dim=env.ac_dim,
+        feat_dim=1,
         lr=0.00001,
         gamma=0.9,
         epsilon=0.1,
@@ -127,7 +129,7 @@ def main():
     frames = []
     episodes = 50000
     for ep in tqdm(range(episodes), desc="Simple-DQN-training"):
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=seed)
         agent_pos = env.agents[0].pos
         idx = env.grid.width * agent_pos[0] + agent_pos[1]
         obs = env.toroid(idx)
