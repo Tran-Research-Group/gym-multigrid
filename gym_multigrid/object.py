@@ -4,30 +4,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.multigrid import MultiGridEnvT
 from .rendering import *
-from .world import WorldT
-
-# Map of color names to RGB values
-COLORS: dict[str, NDArray] = {
-    "red": np.array([228, 3, 3]),
-    "orange": np.array([255, 140, 0]),
-    "yellow": np.array([255, 237, 0]),
-    "green": np.array([0, 128, 38]),
-    "blue": np.array([0, 77, 255]),
-    "purple": np.array([117, 7, 135]),
-    "brown": np.array([120, 79, 23]),
-    "grey": np.array([100, 100, 100]),
-    "light_red": np.array([234, 153, 153]),
-    "light_blue": np.array([90, 170, 223]),
-}
-
-COLOR_NAMES: list[str] = sorted(list(COLORS.keys()))
-
-# Map of state names to integers
-STATE_TO_IDX: dict[str, int] = {
-    "open": 0,
-    "closed": 1,
-    "locked": 2,
-}
+from .world import WorldT, COLORS, COLOR_NAMES, STATE_TO_IDX
 
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
