@@ -1,5 +1,7 @@
 import sys
+from typing import Callable
 import numpy as np
+from numpy.typing import NDArray
 
 # Only ask users to install matplotlib if they actually need it
 try:
@@ -15,7 +17,7 @@ class Window:
     Window to draw a gridworld instance using Matplotlib
     """
 
-    def __init__(self, title):
+    def __init__(self, title: str) -> None:
         self.fig = None
 
         self.imshow_obj = None
@@ -38,7 +40,7 @@ class Window:
 
         self.fig.canvas.mpl_connect("close_event", close_handler)
 
-    def show_img(self, img):
+    def show_img(self, img: NDArray) -> None:
         """
         Show an image or update the image being shown
         """
@@ -54,14 +56,14 @@ class Window:
         # This is needed for interactive mode to work properly
         plt.pause(0.001)
 
-    def set_caption(self, text):
+    def set_caption(self, text: str) -> None:
         """
         Set/update the caption text below the image
         """
 
         plt.xlabel(text)
 
-    def reg_key_handler(self, key_handler):
+    def reg_key_handler(self, key_handler: Callable) -> None:
         """
         Register a keyboard event handler
         """
@@ -69,7 +71,7 @@ class Window:
         # Keyboard handler
         self.fig.canvas.mpl_connect("key_press_event", key_handler)
 
-    def show(self, block=True):
+    def show(self, block: bool = True) -> None:
         """
         Show the window, and start an event loop
         """
@@ -83,7 +85,7 @@ class Window:
         # In interactive mode, this call does not block
         plt.show()
 
-    def close(self):
+    def close(self) -> None:
         """
         Close the window
         """

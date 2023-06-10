@@ -1,4 +1,5 @@
 import math
+from typing import TypeVar
 import numpy as np
 import gymnasium as gym
 from gymnasium import error, spaces, utils
@@ -6,6 +7,8 @@ from gymnasium.utils import seeding
 from .rendering import *
 from .window import Window
 import random
+
+MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
 class MultiGridEnv(gym.Env):

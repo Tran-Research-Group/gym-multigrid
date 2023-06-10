@@ -1,11 +1,12 @@
 import math
 import numpy as np
+from numpy.typing import NDArray
 
 # Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
 
 
-def downsample(img, factor):
+def downsample(img: NDArray, factor: int):
     """
     Downsample an image along both dimensions by some factor
     """

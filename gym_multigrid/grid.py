@@ -1,7 +1,9 @@
+from typing import Callable
 import numpy as np
+from numpy.typing import NDArray
 from .rendering import *
-from .object import TWorldObj, WorldObj, Wall, COLORS
-from .world import TWorld
+from .object import Point, WorldObjT, WorldObj, Wall, COLORS
+from .world import WorldT
 
 
 class Grid:
@@ -36,7 +38,7 @@ class Grid:
 
         self.grid: list[WorldObj | tuple | None] | list[None] = [None] * width * height
 
-    def __contains__(self, key: WorldObj | tuple):
+    def __contains__(self, key: type[WorldObjT] | tuple) -> bool:
         if isinstance(key, WorldObj):
             for e in self.grid:
                 if e is key:
@@ -51,20 +53,20 @@ class Grid:
                     return True
         return False
 
-    def __eq__(self, other: "Grid"):
+    def __eq__(self, other: "Grid") -> bool:
         grid1 = self.encode()
         grid2 = other.encode()
         return np.array_equal(grid2, grid1)
 
-    def __ne__(self, other: "Grid"):
+    def __ne__(self, other: "Grid") -> bool:
         return not self == other
 
-    def copy(self):
+    def copy(self) -> "Grid":
         from copy import deepcopy
 
         return deepcopy(self)
 
-    def set(self, i: int, j: int, v):
+    def set(self, i: int, j: int, v) -> None:
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         self.grid[j * self.width + i] = v
@@ -75,26 +77,38 @@ class Grid:
         return self.grid[j * self.width + i]
 
     def horz_wall(
-        self, world: TWorld, x: int, y: int, length=None, obj_type: TWorldObj = Wall
+        self,
+        world: WorldT,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Callable[[WorldT], WorldObjT] = Wall,
     ) -> None:
         if length is None:
             length = self.width - x
         for i in range(0, length):
             self.set(x + i, y, obj_type(world))
 
-    def vert_wall(self, world, x, y, length=None, obj_type=Wall):
+    def vert_wall(
+        self,
+        world: WorldT,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Callable[[WorldT], WorldObjT] = Wall,
+    ) -> None:
         if length is None:
             length = self.height - y
         for j in range(0, length):
             self.set(x, y + j, obj_type(world))
 
-    def wall_rect(self, x, y, w, h):
+    def wall_rect(self, x: int, y: int, w: int, h: int) -> None:
         self.horz_wall(x, y, w)
         self.horz_wall(x, y + h - 1, w)
         self.vert_wall(x, y, h)
         self.vert_wall(x + w - 1, y, h)
 
-    def rotate_left(self):
+    def rotate_left(self) -> "Grid":
         """
         Rotate the grid to the left (counter-clockwise)
         """
@@ -108,7 +122,9 @@ class Grid:
 
         return grid
 
-    def slice(self, world, topX, topY, width, height):
+    def slice(
+        self, world: WorldT, topX: int, topY: int, width: int, height: int
+    ) -> "Grid":
         """
         Get a subset of the grid
         """
@@ -130,7 +146,14 @@ class Grid:
         return grid
 
     @classmethod
-    def render_tile(cls, world, obj, highlights=[], tile_size=TILE_PIXELS, subdivs=3):
+    def render_tile(
+        cls,
+        world: WorldT,
+        obj: WorldObjT | None,
+        highlights: list[bool] = [],
+        tile_size: int = TILE_PIXELS,
+        subdivs: int = 3,
+    ) -> NDArray:
         """
         Render a tile and cache the result
         """
@@ -167,7 +190,12 @@ class Grid:
 
         return img
 
-    def render(self, world, tile_size, highlight_masks=None):
+    def render(
+        self,
+        world: WorldT,
+        tile_size: int,
+        highlight_masks: NDArray | None = None,
+    ) -> NDArray:
         """
         Render this grid at a given scale
         :param r: target renderer object
@@ -185,6 +213,8 @@ class Grid:
             for i in range(0, self.width):
                 cell = self.get(i, j)
 
+                assert isinstance(cell, WorldObj) or cell is None
+
                 # agent_here = np.array_equal(agent_pos, (i, j))
                 tile_img = Grid.render_tile(
                     world,
@@ -201,7 +231,7 @@ class Grid:
 
         return img
 
-    def encode(self, world, vis_mask=None):
+    def encode(self, world: WorldT, vis_mask: NDArray | None = None) -> NDArray:
         """
         Produce a compact numpy encoding of the grid
         """
@@ -230,7 +260,9 @@ class Grid:
 
         return array
 
-    def encode_for_agents(self, world, agent_pos, vis_mask=None):
+    def encode_for_agents(
+        self, world: WorldT, agent_pos: Point, vis_mask: NDArray | None = None
+    ):
         """
         Produce a compact numpy encoding of the grid
         """

@@ -4,7 +4,7 @@ from .rendering import *
 from .object import COLORS
 
 
-TWorld = TypeVar("TWorld", bound="World")
+WorldT = TypeVar("WorldT", bound="World")
 
 
 class World:
@@ -12,7 +12,7 @@ class World:
     normalize_obs = 1
 
     # Used to map colors to integers
-    COLOR_TO_IDX: "dict[str, int]" = {key: i for i, key in enumerate(COLORS.keys())}
+    COLOR_TO_IDX: dict[str, int] = {key: i for i, key in enumerate(COLORS.keys())}
     IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
 
     # Map of object type to integers
@@ -31,7 +31,9 @@ class World:
         "objgoal": 11,
         "switch": 12,
     }
-    IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
+    IDX_TO_OBJECT: dict[int, str] = dict(
+        zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys())
+    )
 
 
 class CollectWorld:
