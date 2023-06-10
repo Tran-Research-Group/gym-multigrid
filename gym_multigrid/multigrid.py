@@ -4,6 +4,9 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
+
+from gym_multigrid.agent import ActionsT
+from gym_multigrid.world import WorldT
 from .rendering import *
 from .window import Window
 import random
@@ -20,17 +23,17 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
-        grid_size=None,
-        width=None,
-        height=None,
-        max_steps=100,
-        see_through_walls=False,
+        grid_size: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        max_steps: int = 100,
+        see_through_walls: bool = False,
         seed=2,
         agents=None,
-        partial_obs=False,
-        agent_view_size=7,
-        actions_set=None,
-        objects_set=None,
+        partial_obs: bool = False,
+        agent_view_size: int = 7,
+        actions_set: ActionsT = None,
+        objects_set: WorldT = None,
         render_mode="rgb_array",
     ):
         self.agents = agents
@@ -89,7 +92,7 @@ class MultiGridEnv(gym.Env):
         # Initialize the state
         self.reset()
 
-    def reset(self, seed=None):
+    def reset(self, seed: int | None = None):
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
