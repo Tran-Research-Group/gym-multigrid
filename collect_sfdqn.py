@@ -1,3 +1,6 @@
+import json
+import multiprocessing as mp
+
 import gymnasium as gym
 from gymnasium.envs.registration import register
 from gym_multigrid.utils import set_seed, save_frames_as_gif
@@ -6,9 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter()
+from torch.utils.tensorboard.writer import SummaryWriter
 
 
 class NNet(nn.Module):
@@ -34,7 +35,7 @@ class NNet(nn.Module):
 
 class IndSFDQNAgent:
     def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
         self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
         self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
@@ -93,6 +94,7 @@ class IndSFDQNAgent:
             states = torch.from_numpy(
                 np.vstack(states).reshape((self.batch_size, self.state_dim))
             ).to(self.device)
+
             actions = torch.from_numpy(np.vstack(actions)).to(self.device)
             phis = torch.from_numpy(
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
@@ -106,7 +108,7 @@ class IndSFDQNAgent:
                 .squeeze(-1)
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
-            )
+            ).to(self.device)
             cur_psi2 = (
                 self.psi2(states)
                 .squeeze(-1)
@@ -152,94 +154,135 @@ class IndSFDQNAgent:
 
 
 def main():
-    seed = 42
-    set_seed(seed=seed)
-    register(
-        id="multigrid-collect-more-v0",
-        entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
-    )
-    env = gym.make("multigrid-collect-more-v0")
-    w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
-    agent = IndSFDQNAgent(
-        state_dim=env.grid.width * env.grid.height * 4,
-        action_dim=env.ac_dim,
-        feat_dim=env.phi_dim(),
-        w=w,
-        lr=0.00003,
-        gamma=0.9,
-        epsilon=0.1,
-    )
-    frames = []
-    episodes = 50000
-    for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
-        obs, _ = env.reset(seed=seed)
-        agent_pos = env.agents[0].pos
-        idx = env.grid.width * agent_pos[0] + agent_pos[1]
-        obs = env.toroid(idx)
-        # use this code to compare toroidal obs with standard env obs
-        # plt.imshow(20*obs[:,:,0] + 50*obs[:,:,1] + 100*obs[:,:,2] + 70*obs[:,:,3])
-        # plt.savefig('toroid.png')
-        # print(str(env))
-        done = False
-        ep_rew = 0
-        rew_a = 0
-        running_loss = 0
-        for t in range(100):
-            # use this code for live rendering
-            # env.render(mode='human', highlight=True if env.partial_obs else False)
-            # time.sleep(0.1)
-            # frames.append(env.render(mode="rgb_array"))
+    lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
+    alg: str = "sfdqn"
+    num_replicates: int = 3
 
-            # get agent action
-            actions = []
-            action = agent.select_action(obs.flatten())
-            actions.append(action)
+    tensor_board_dir: str = f"runs/{alg}_"
+    seed_log_path: str = f"logs/seed_{alg}_.json"
+    model_dir: str = f"models/"
 
-            # use this for random partner
-            # action_p = env.action_space.sample()
-            # actions.append(action_p)
+    mp.set_start_method("spawn")
 
-            # step env with selected action
-            obs_next, rew, done, truncated, info = env.step(actions)
+    with mp.Pool(processes=len(lrs)) as pool:
+        pool.starmap(
+            run_replicates,
+            [
+                (num_replicates, lr, tensor_board_dir, seed_log_path, model_dir)
+                for lr in lrs
+            ],
+        )
 
+
+def run_replicates(
+    num_replicates: int,
+    lr: float,
+    tensor_board_dir: str,
+    seed_log_path: str,
+    model_dir: str,
+) -> None:
+    seeds = np.random.randint(low=0, high=10000, size=(num_replicates,))
+
+    with open(seed_log_path.replace(".json", f"lr_{lr}.json"), "w") as f:
+        json.dump({"seeds": seeds.tolist()}, f)
+
+    for i in range(num_replicates):
+        path_suffix: str = f"lr_{lr}_rep_{i}"
+
+        writer = SummaryWriter(tensor_board_dir + path_suffix)
+        seed: int = seeds[i]
+        set_seed(seed=seed)
+        register(
+            id="multigrid-collect-more-v0",
+            entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
+        )
+        env = gym.make("multigrid-collect-more-v0")
+        w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
+        agent = IndSFDQNAgent(
+            state_dim=env.grid.width * env.grid.height * 4,
+            action_dim=env.ac_dim,
+            feat_dim=env.phi_dim(),
+            w=w,
+            lr=lr,
+            gamma=0.9,
+            epsilon=0.1,
+        )
+        frames = []
+        episodes = 50000
+        for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
+            obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
             idx = env.grid.width * agent_pos[0] + agent_pos[1]
-            obs_next = env.toroid(idx)
+            obs = env.toroid(idx)
+            # use this code to compare toroidal obs with standard env obs
+            # plt.imshow(20*obs[:,:,0] + 50*obs[:,:,1] + 100*obs[:,:,2] + 70*obs[:,:,3])
+            # plt.savefig('toroid.png')
+            # print(str(env))
+            done = False
+            ep_rew = 0
+            rew_a = 0
+            running_loss = 0
+            for t in range(100):
+                # use this code for live rendering
+                # env.render(mode='human', highlight=True if env.partial_obs else False)
+                # time.sleep(0.1)
+                # frames.append(env.render(mode="rgb_array"))
 
-            # shaped reward
-            rew_a += np.dot(w, agent.phi(obs, obs_next))
-            # standard env reward
-            ep_rew += rew
+                # get agent action
+                actions = []
+                action = agent.select_action(obs.flatten())
+                actions.append(action)
 
-            loss = agent.update(obs, action, obs_next)
-            loss = np.sum(loss)
-            running_loss += loss
+                # use this for random partner
+                # action_p = env.action_space.sample()
+                # actions.append(action_p)
 
-            # save gif of last episode for fun
-            if ep == episodes - 1:
-                frames.append(env.render())
-            if done:
-                break
-            obs = obs_next
+                # step env with selected action
+                obs_next, rew, done, truncated, info = env.step(actions)
 
-        # tensorboard logging
-        writer.add_scalar("training loss", running_loss / t, ep)
-        writer.add_scalar("reward", ep_rew, ep)
-        writer.add_scalar("shaped_reward", rew_a, ep)
-        writer.add_scalar("ep_length", t, ep)
-        writer.add_scalar("num_balls_collected", env.collected_balls, ep)
-        writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
-        writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
-        writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-        # writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-        # writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-        # writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+                agent_pos = env.agents[0].pos
+                idx = env.grid.width * agent_pos[0] + agent_pos[1]
+                obs_next = env.toroid(idx)
 
-    writer.close()
-    save_frames_as_gif(frames, ep="ind-sfdqn-random")
-    torch.save(agent.psi1, "psi1.torch")
-    torch.save(agent.psi2, "psi2.torch")
-    torch.save(agent.psi3, "psi3.torch")
+                # shaped reward
+                rew_a += np.dot(w, agent.phi(obs, obs_next))
+                # standard env reward
+                ep_rew += rew
+
+                loss = agent.update(obs, action, obs_next)
+                loss = np.sum(loss)
+                running_loss += loss
+
+                # save gif of last episode for fun
+                if ep == episodes - 1:
+                    frames.append(env.render())
+                if done:
+                    break
+                obs = obs_next
+
+            # tensorboard logging
+            writer.add_scalar("training loss", running_loss / t, ep)
+            writer.add_scalar("reward", ep_rew, ep)
+            writer.add_scalar("shaped_reward", rew_a, ep)
+            writer.add_scalar("ep_length", t, ep)
+            writer.add_scalar("num_balls_collected", env.collected_balls, ep)
+            writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
+            writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
+            writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
+            # writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
+            # writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
+            # writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+
+        writer.close()
+        save_frames_as_gif(
+            frames,
+            ep="ind-sfdqn-random",
+            path="./plots/",
+            filename="collect-" + path_suffix,
+        )
+        torch.save(agent.psi1, model_dir + f"{path_suffix}_psi1.torch")
+        torch.save(agent.psi2, model_dir + f"{path_suffix}_psi2.torch")
+        torch.save(agent.psi3, model_dir + f"{path_suffix}_psi3.torch")
 
 
 if __name__ == "__main__":
