@@ -35,7 +35,7 @@ class NNet(nn.Module):
 
 class IndSFDQNAgent:
     def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
         self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
         self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
@@ -91,6 +91,12 @@ class IndSFDQNAgent:
                 low=0, high=self.buffer_size, size=(self.batch_size,)
             )
             states, actions, phis, next_states = zip(*self.buffer[indices])
+
+            states = [s.cpu() for s in states]
+            actions = [a.cpu() for a in actions]
+            phis = [p.cpu() for p in phis]
+            next_states = [n.cpu() for n in next_states]
+
             states = torch.from_numpy(
                 np.vstack(states).reshape((self.batch_size, self.state_dim))
             ).to(self.device)
