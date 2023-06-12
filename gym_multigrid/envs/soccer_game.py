@@ -1,5 +1,9 @@
-from gym_multigrid.multigrid import *
-
+from gym_multigrid.multigrid import MultiGridEnv
+from gym_multigrid.world import World
+from gym_multigrid.agent import Actions, Agent
+from gym_multigrid.object import Ball, ObjectGoal
+from gym_multigrid.grid import Grid
+import numpy as np
 
 class SoccerGameEnv(MultiGridEnv):
     """
@@ -43,7 +47,7 @@ class SoccerGameEnv(MultiGridEnv):
         )
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)

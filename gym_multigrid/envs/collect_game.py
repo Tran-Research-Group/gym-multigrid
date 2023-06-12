@@ -63,7 +63,7 @@ class CollectGameEnv(MultiGridEnv):
         )
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
@@ -232,7 +232,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.sigma = 0.1
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
@@ -394,7 +394,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         super().__init__()
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
