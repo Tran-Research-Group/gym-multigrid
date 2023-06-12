@@ -224,7 +224,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         super().__init__(
             size=10,
             num_balls=15,
-            agents_index=[3],
+            agents_index=[3, 5],
             balls_index=[0],
             balls_reward=[1],
             zero_sum=True,
