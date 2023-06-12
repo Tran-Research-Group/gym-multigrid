@@ -11,12 +11,13 @@ class Grid:
     # Static cache of pre-renderer tiles
     tile_cache = {}
 
-    def __init__(self, width, height):
+    def __init__(self, width, height, world):
         assert width >= 3
         assert height >= 3
 
         self.width = width
         self.height = height
+        self.world = world
 
         self.grid = [None] * width * height
 
@@ -58,17 +59,17 @@ class Grid:
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
 
-    def horz_wall(self, world, x, y, length=None, obj_type=Wall):
+    def horz_wall(self, x, y, length=None, obj_type=Wall):
         if length is None:
             length = self.width - x
         for i in range(0, length):
-            self.set(x + i, y, obj_type(world))
+            self.set(x + i, y, obj_type(self.world))
 
-    def vert_wall(self, world, x, y, length=None, obj_type=Wall):
+    def vert_wall(self, x, y, length=None, obj_type=Wall):
         if length is None:
             length = self.height - y
         for j in range(0, length):
-            self.set(x, y + j, obj_type(world))
+            self.set(x, y + j, obj_type(self.world))
 
     def wall_rect(self, x, y, w, h):
         self.horz_wall(x, y, w)
@@ -90,7 +91,7 @@ class Grid:
 
         return grid
 
-    def slice(self, world, topX, topY, width, height):
+    def slice(self, topX, topY, width, height):
         """
         Get a subset of the grid
         """
@@ -105,7 +106,7 @@ class Grid:
                 if x >= 0 and x < self.width and y >= 0 and y < self.height:
                     v = self.get(x, y)
                 else:
-                    v = Wall(world)
+                    v = Wall(self.world)
 
                 grid.set(i, j, v)
 
@@ -149,7 +150,7 @@ class Grid:
 
         return img
 
-    def render(self, world, tile_size, highlight_masks=None):
+    def render(self, tile_size, highlight_masks=None):
         """
         Render this grid at a given scale
         :param r: target renderer object
@@ -169,7 +170,7 @@ class Grid:
 
                 # agent_here = np.array_equal(agent_pos, (i, j))
                 tile_img = Grid.render_tile(
-                    world,
+                    self.world,
                     cell,
                     highlights=[] if highlight_masks is None else highlight_masks[i, j],
                     tile_size=tile_size,
@@ -183,7 +184,7 @@ class Grid:
 
         return img
 
-    def encode(self, world, vis_mask=None):
+    def encode(self, vis_mask=None):
         """
         Produce a compact numpy encoding of the grid
         """
@@ -191,7 +192,7 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
+        array = np.zeros((self.width, self.height, self.world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -199,27 +200,27 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
+                        array[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
-                        if world.encode_dim > 3:
+                        if self.world.encode_dim > 3:
                             array[i, j, 3] = 0
                             array[i, j, 4] = 0
                             array[i, j, 5] = 0
 
                     else:
-                        array[i, j, :] = v.encode(world)
+                        array[i, j, :] = v.encode(self.world)
 
         return array
 
-    def encode_for_agents(self, world, agent_pos, vis_mask=None):
+    def encode_for_agents(self, agent_pos, vis_mask=None):
         """
         Produce a compact numpy encoding of the grid
         """
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, world.encode_dim), dtype="uint8")
+        array = np.zeros((self.width, self.height, self.world.encode_dim), dtype="uint8")
 
         for i in range(self.width):
             for j in range(self.height):
@@ -227,17 +228,17 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = world.OBJECT_TO_IDX["empty"]
+                        array[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
                         array[i, j, 1] = 0
                         array[i, j, 2] = 0
-                        if world.encode_dim > 3:
+                        if self.world.encode_dim > 3:
                             array[i, j, 3] = 0
                             array[i, j, 4] = 0
                             array[i, j, 5] = 0
 
                     else:
                         array[i, j, :] = v.encode(
-                            world, current_agent=np.array_equal(agent_pos, (i, j))
+                            self.world, current_agent=np.array_equal(agent_pos, (i, j))
                         )
 
         return array
