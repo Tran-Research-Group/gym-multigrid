@@ -3,6 +3,8 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
+
+from gym_multigrid.grid import Grid
 from .rendering import *
 from .window import Window
 import random
@@ -83,8 +85,8 @@ class MultiGridEnv(gym.Env):
         # Initialize the RNG
         self.seed(seed=seed)
 
-        # Initialize the state
-        self.reset()
+        # Define the empty grid. _gen_grid is supposed to fill this up
+        self.grid = Grid(width, height, objects_set)
 
     def reset(self, seed=None):
         # Generate a new random grid at the start of each episode
