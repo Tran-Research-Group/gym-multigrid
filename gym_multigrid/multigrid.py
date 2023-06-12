@@ -86,10 +86,9 @@ class MultiGridEnv(gym.Env):
         self.see_through_walls = see_through_walls
 
         # Initialize the RNG
-        self.seed(seed=seed)
 
         # Define the empty grid. _gen_grid is supposed to fill this up
-        self.grid = Grid(width, height, objects_set)
+        self.grid = Grid(width, height, world)
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -122,11 +121,6 @@ class MultiGridEnv(gym.Env):
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
         return obs
-
-    def seed(self, seed=1337):
-        # Seed the random number generator
-        self.np_random, _ = seeding.np_random(seed)
-        return [seed]
 
     @property
     def steps_remaining(self):
