@@ -1,3 +1,4 @@
+from typing import TypeVar
 import numpy as np
 from .rendering import *
 from .object import WorldObj, COLORS
@@ -13,6 +14,8 @@ DIR_TO_VEC = [
     # Up (negative Y)
     np.array((0, -1)),
 ]
+
+ActionsT = TypeVar("ActionsT", bound="Actions")
 
 
 class Actions:
