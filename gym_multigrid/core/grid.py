@@ -238,7 +238,7 @@ class Grid:
 
                     else:
                         array[i, j, :] = v.encode(
-                            self.world, current_agent=np.array_equal(agent_pos, (i, j))
+                            current_agent=np.array_equal(agent_pos, (i, j))
                         )
 
         return array

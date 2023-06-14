@@ -50,7 +50,7 @@ class MultiGridEnv(gym.Env):
         self.actions = actions_set
 
         # Actions are discrete integer values
-        self.action_space = spaces.Discrete(len(self.actions.available))
+        self.action_space = spaces.Discrete(len(self.actions))
 
         self.world = world
 
@@ -115,7 +115,7 @@ class MultiGridEnv(gym.Env):
         else:
             obs = [
                 self.grid.encode_for_agents(
-                    world=self.world, agent_pos=self.agents[i].pos
+                    agent_pos=self.agents[i].pos
                 )
                 for i in range(len(self.agents))
             ]

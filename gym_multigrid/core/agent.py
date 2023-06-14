@@ -20,17 +20,6 @@ ActionsT = TypeVar("ActionsT", bound="Actions")
 
 
 class Actions(enum.IntEnum):
-    available = [
-        "still",
-        "left",
-        "right",
-        "forward",
-        "pickup",
-        "drop",
-        "toggle",
-        "done",
-    ]
-
     still = 0
     left = 1
     right = 2
@@ -42,8 +31,6 @@ class Actions(enum.IntEnum):
 
 
 class CollectActions(enum.IntEnum):
-    available = ["north", "east", "south", "west"]
-
     north = 0
     east = 1
     south = 2
@@ -51,8 +38,6 @@ class CollectActions(enum.IntEnum):
 
 
 class SmallActions(enum.IntEnum):
-    available = ["still", "left", "right", "forward"]
-
     still = 0
     left = 1
     right = 2
@@ -60,8 +45,6 @@ class SmallActions(enum.IntEnum):
 
 
 class MineActions(enum.IntEnum):
-    available = ["still", "left", "right", "forward", "build"]
-
     still = 0
     left = 1
     right = 2
@@ -81,6 +64,7 @@ class Agent(WorldObj):
         self.started = True
         self.paused = False
         self.actions = actions
+        self.world = world
 
     def render(self, img):
         c = COLORS[self.color]
@@ -93,30 +77,30 @@ class Agent(WorldObj):
         tri_fn = rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * self.dir)
         fill_coords(img, tri_fn, c)
 
-    def encode(self, world, current_agent=False):
+    def encode(self, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim == 3:
+        if self.world.encode_dim == 3:
             return (
-                world.OBJECT_TO_IDX[self.type],
-                world.COLOR_TO_IDX[self.color],
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
                 self.dir,
             )
         elif self.carrying:
             if current_agent:
                 return (
-                    world.OBJECT_TO_IDX[self.type],
-                    world.COLOR_TO_IDX[self.color],
-                    world.OBJECT_TO_IDX[self.carrying.type],
-                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.world.OBJECT_TO_IDX[self.type],
+                    self.world.COLOR_TO_IDX[self.color],
+                    self.world.OBJECT_TO_IDX[self.carrying.type],
+                    self.world.COLOR_TO_IDX[self.carrying.color],
                     self.dir,
                     1,
                 )
             else:
                 return (
-                    world.OBJECT_TO_IDX[self.type],
-                    world.COLOR_TO_IDX[self.color],
-                    world.OBJECT_TO_IDX[self.carrying.type],
-                    world.COLOR_TO_IDX[self.carrying.color],
+                    self.world.OBJECT_TO_IDX[self.type],
+                    self.world.COLOR_TO_IDX[self.color],
+                    self.world.OBJECT_TO_IDX[self.carrying.type],
+                    self.world.COLOR_TO_IDX[self.carrying.color],
                     self.dir,
                     0,
                 )
@@ -124,8 +108,8 @@ class Agent(WorldObj):
         else:
             if current_agent:
                 return (
-                    world.OBJECT_TO_IDX[self.type],
-                    world.COLOR_TO_IDX[self.color],
+                    self.world.OBJECT_TO_IDX[self.type],
+                    self.world.COLOR_TO_IDX[self.color],
                     0,
                     0,
                     self.dir,
@@ -133,8 +117,8 @@ class Agent(WorldObj):
                 )
             else:
                 return (
-                    world.OBJECT_TO_IDX[self.type],
-                    world.COLOR_TO_IDX[self.color],
+                    self.world.OBJECT_TO_IDX[self.type],
+                    self.world.COLOR_TO_IDX[self.color],
                     0,
                     0,
                     self.dir,
