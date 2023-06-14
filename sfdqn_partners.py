@@ -150,6 +150,9 @@ class IndSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
+def load_partner(filename):
+    partner = torch.load(filename)
+    return partner
 
 def main():
     seed = 42
@@ -169,6 +172,8 @@ def main():
         gamma=0.9,
         epsilon=0.1,
     )
+    partner = load_partner(filename='')
+    partner.eval()
     frames = []
     episodes = 50000
     for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
@@ -196,7 +201,10 @@ def main():
             actions.append(action)
 
             # use this for random partner
-            action_p = env.action_space.sample()
+            # action_p = env.action_space.sample()
+            # actions.append(action_p)
+
+            action_p = torch.argmax(partner(torch.from_numpy(obs.flatten()).to(agent.device))).item()
             actions.append(action_p)
 
             # step env with selected action
