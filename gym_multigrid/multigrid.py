@@ -1,10 +1,16 @@
 import math
+from typing import Literal
 import numpy as np
 import gymnasium as gym
 from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
-from .rendering import *
-from .window import Window
+
+
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.world import World, WorldT
+from .core.agent import ActionsT
+from .utils.rendering import *
+from .utils.window import Window
 import random
 
 
@@ -17,18 +23,17 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
-        grid_size=None,
-        width=None,
-        height=None,
-        max_steps=100,
-        see_through_walls=False,
-        seed=2,
+        grid_size: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        max_steps: int = 100,
+        see_through_walls: bool = False,
         agents=None,
-        partial_obs=False,
-        agent_view_size=7,
-        actions_set=None,
-        objects_set=None,
-        render_mode="rgb_array",
+        partial_obs: bool = False,
+        agent_view_size: int = 7,
+        actions_set=ActionsT,
+        world: WorldT = World(),
+        render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         self.agents = agents
         self.render_mode = render_mode
@@ -47,13 +52,13 @@ class MultiGridEnv(gym.Env):
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions.available))
 
-        self.objects = objects_set
+        self.world = world
 
         if partial_obs:
             self.observation_space = spaces.Box(
                 low=0,
                 high=255,
-                shape=(agent_view_size, agent_view_size, self.objects.encode_dim),
+                shape=(agent_view_size, agent_view_size, self.world.encode_dim),
                 dtype="uint8",
             )
 
@@ -61,7 +66,7 @@ class MultiGridEnv(gym.Env):
             self.observation_space = spaces.Box(
                 low=0,
                 high=255,
-                shape=(width, height, self.objects.encode_dim),
+                shape=(width, height, self.world.encode_dim),
                 dtype="uint8",
             )
 
@@ -81,12 +86,12 @@ class MultiGridEnv(gym.Env):
         self.see_through_walls = see_through_walls
 
         # Initialize the RNG
-        self.seed(seed=seed)
 
-        # Initialize the state
-        self.reset()
+        # Define the empty grid. _gen_grid is supposed to fill this up
+        self.grid = Grid(width, height, world)
 
     def reset(self, seed=None):
+        super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
@@ -114,13 +119,8 @@ class MultiGridEnv(gym.Env):
                 )
                 for i in range(len(self.agents))
             ]
-        obs = [self.objects.normalize_obs * ob for ob in obs]
+        obs = [self.world.normalize_obs * ob for ob in obs]
         return obs
-
-    def seed(self, seed=1337):
-        # Seed the random number generator
-        self.np_random, _ = seeding.np_random(seed)
-        return [seed]
 
     @property
     def steps_remaining(self):
@@ -183,6 +183,7 @@ class MultiGridEnv(gym.Env):
         return str
 
     def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
@@ -451,7 +452,7 @@ class MultiGridEnv(gym.Env):
                 for i in range(len(actions))
             ]
 
-        obs = [self.objects.normalize_obs * ob for ob in obs]
+        obs = [self.world.normalize_obs * ob for ob in obs]
 
         return obs, rewards, done, {}
 
@@ -468,7 +469,7 @@ class MultiGridEnv(gym.Env):
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
 
-            grid = self.grid.slice(self.objects, topX, topY, a.view_size, a.view_size)
+            grid = self.grid.slice(self.world, topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
                 grid = grid.rotate_left()
@@ -497,7 +498,7 @@ class MultiGridEnv(gym.Env):
         # Encode the partially observable view into a numpy array
         obs = [
             grid.encode_for_agents(
-                self.objects, [grid.width // 2, grid.height - 1], vis_mask
+                self.world, [grid.width // 2, grid.height - 1], vis_mask
             )
             for grid, vis_mask in zip(grids, vis_masks)
         ]
@@ -512,7 +513,7 @@ class MultiGridEnv(gym.Env):
         grid, vis_mask = self.grid.decode(obs)
 
         # Render the whole grid
-        img = grid.render(self.objects, tile_size, highlight_mask=vis_mask)
+        img = grid.render(self.world, tile_size, highlight_mask=vis_mask)
 
         return img
 
@@ -569,7 +570,7 @@ class MultiGridEnv(gym.Env):
 
         # Render the whole grid
         img = self.grid.render(
-            self.objects,
+            self.world,
             tile_size,
             highlight_masks=highlight_masks if highlight else None,
         )

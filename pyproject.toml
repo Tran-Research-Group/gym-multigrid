@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "trg-multigrid"
+name = "gym-multigrid"
 version = "0.1.0"
 description = "Muti-agent gymnasium gridworld environments"
-authors = ["Your Name <you@example.com>"]
+authors = ["Mikihisa Yuasa <myuasa2@illinois.edu>", "Rupal Nigam"]
 license = "Apache-2.0"
 readme = "README.md"
 packages = [{include = "gym_multigrid"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.10, <3.11"
 gymnasium = "^0.26"
 matplotlib = "^3.7.1"
 numpy = "^1.24.3"
@@ -19,6 +19,9 @@ tqdm = "^4.65.0"
 tensorboard = "^2.13.0"
 torch-tb-profiler = "^0.4.1"
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.3.1"
 
 [build-system]
 requires = ["poetry-core"]

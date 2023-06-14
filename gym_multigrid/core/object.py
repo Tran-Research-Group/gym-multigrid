@@ -1,5 +1,5 @@
 import numpy as np
-from .rendering import *
+from ..utils.rendering import *
 
 # Map of color names to RGB values
 COLORS = {
@@ -36,6 +36,7 @@ class WorldObj:
         self.type = type
         self.color = color
         self.contains = None
+        self.world = world
 
         # Initial position of the object
         self.init_pos = None
@@ -63,14 +64,14 @@ class WorldObj:
         """Method to trigger/toggle an action this object performs"""
         return False
 
-    def encode(self, world, current_agent=False):
+    def encode(self, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim == 3:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0)
+        if self.world.encode_dim == 3:
+            return (self.world.OBJECT_TO_IDX[self.type], self.world.COLOR_TO_IDX[self.color], 0)
         else:
             return (
-                world.OBJECT_TO_IDX[self.type],
-                world.COLOR_TO_IDX[self.color],
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
                 0,
                 0,
                 0,
@@ -210,7 +211,7 @@ class Door(WorldObj):
         self.is_open = not self.is_open
         return True
 
-    def encode(self, world, current_agent=False):
+    def encode(self, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
 
         # State, 0: open, 1: closed, 2: locked
@@ -222,8 +223,8 @@ class Door(WorldObj):
             state = 1
 
         return (
-            world.OBJECT_TO_IDX[self.type],
-            world.COLOR_TO_IDX[self.color],
+            self.world.OBJECT_TO_IDX[self.type],
+            self.world.COLOR_TO_IDX[self.color],
             state,
             0,
             0,
@@ -278,7 +279,7 @@ class Key(WorldObj):
 
 
 class Ball(WorldObj):
-    def __init__(self, world, index=0, reward=1):
+    def __init__(self, world, index=0, reward=2):
         super(Ball, self).__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward

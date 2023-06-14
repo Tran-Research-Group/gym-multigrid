@@ -1,8 +1,8 @@
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.world import CollectWorld
-from gym_multigrid.agent import CollectActions, Agent
-from gym_multigrid.object import Ball
-from gym_multigrid.grid import Grid
+from gym_multigrid.core.world import CollectWorld
+from gym_multigrid.core.agent import CollectActions, Agent
+from gym_multigrid.core.object import Ball
+from gym_multigrid.core.grid import Grid
 import random
 import numpy as np
 
@@ -62,7 +62,7 @@ class CollectGameEnv(MultiGridEnv):
         )
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
@@ -131,8 +131,6 @@ class CollectGameEnv(MultiGridEnv):
             self._reward(i, rewards, -0.01)
 
     def step(self, actions):
-        # rand_action = self.action_space.sample()
-        # actions = np.array([actions, rand_action])
         order = np.random.permutation(len(actions))
         rewards = np.zeros(len(actions))
         done = False
@@ -158,7 +156,6 @@ class CollectGameEnv(MultiGridEnv):
                 self.move_agent(rewards, i, next_cell, next_pos)
             elif actions[i] == self.actions.still:
                 self._reward(i, rewards, -0.01)
-        # obs, rewards, done, info = MultiGridEnv.step(self, actions)
         if self.collected_balls == self.num_balls:
             done = True
         if self.step_count >= self.max_steps:
@@ -234,7 +231,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.sigma = 0.1
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
@@ -396,7 +393,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         super().__init__()
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
