@@ -2,22 +2,10 @@ from typing import TypeVar
 import numpy as np
 import enum
 from ..utils.rendering import *
-from .object import WorldObj, COLORS
-
-# Map of agent direction indices to vectors
-DIR_TO_VEC = [
-    # Pointing right (positive X)
-    np.array((1, 0)),
-    # Down (positive Y)
-    np.array((0, 1)),
-    # Pointing left (negative X)
-    np.array((-1, 0)),
-    # Up (negative Y)
-    np.array((0, -1)),
-]
+from .object import WorldObj
+from .constants import COLORS, DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound="Actions")
-
 
 class Actions(enum.IntEnum):
     available = [

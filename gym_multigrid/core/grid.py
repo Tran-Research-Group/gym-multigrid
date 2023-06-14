@@ -1,6 +1,7 @@
 import numpy as np
 from ..utils.rendering import *
-from .object import WorldObj, Wall, COLORS
+from .object import WorldObj, Wall
+from .constants import COLORS, TILE_PIXELS
 
 
 class Grid:
