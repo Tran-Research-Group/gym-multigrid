@@ -1,8 +1,8 @@
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.world import World
-from gym_multigrid.agent import Actions, Agent
-from gym_multigrid.object import Ball, ObjectGoal
-from gym_multigrid.grid import Grid
+from gym_multigrid.core.world import World
+from gym_multigrid.core.agent import Actions, Agent
+from gym_multigrid.core.object import Ball, ObjectGoal
+from gym_multigrid.core.grid import Grid
 import numpy as np
 
 class SoccerGameEnv(MultiGridEnv):

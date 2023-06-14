@@ -1,6 +1,6 @@
 from typing import TypeVar
 import numpy as np
-from .rendering import *
+from ..utils.rendering import *
 from .object import COLORS
 
 WorldT = TypeVar("WorldT", bound="World")

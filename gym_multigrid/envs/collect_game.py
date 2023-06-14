@@ -1,8 +1,8 @@
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.world import CollectWorld
-from gym_multigrid.agent import CollectActions, Agent
-from gym_multigrid.object import Ball
-from gym_multigrid.grid import Grid
+from gym_multigrid.core.world import CollectWorld
+from gym_multigrid.core.agent import CollectActions, Agent
+from gym_multigrid.core.object import Ball
+from gym_multigrid.core.grid import Grid
 import random
 import numpy as np
 

@@ -8,7 +8,7 @@ from gymnasium.utils import seeding
 
 from gym_multigrid.grid import Grid
 from gym_multigrid.world import World, WorldT
-from .agent import ActionsT
+from .core.agent import ActionsT
 from .rendering import *
 from .window import Window
 import random
