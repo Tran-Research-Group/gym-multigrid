@@ -1,5 +1,5 @@
 import numpy as np
-from .rendering import *
+from ..utils.rendering import *
 
 # Map of color names to RGB values
 COLORS = {

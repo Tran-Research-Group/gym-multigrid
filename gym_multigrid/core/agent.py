@@ -1,6 +1,7 @@
 from typing import TypeVar
 import numpy as np
-from .rendering import *
+import enum
+from ..utils.rendering import *
 from .object import WorldObj, COLORS
 
 # Map of agent direction indices to vectors
@@ -18,7 +19,7 @@ DIR_TO_VEC = [
 ActionsT = TypeVar("ActionsT", bound="Actions")
 
 
-class Actions:
+class Actions(enum.IntEnum):
     available = [
         "still",
         "left",
@@ -40,7 +41,7 @@ class Actions:
     done = 7
 
 
-class CollectActions:
+class CollectActions(enum.IntEnum):
     available = ["north", "east", "south", "west"]
 
     north = 0
@@ -49,7 +50,7 @@ class CollectActions:
     west = 3
 
 
-class SmallActions:
+class SmallActions(enum.IntEnum):
     available = ["still", "left", "right", "forward"]
 
     still = 0
@@ -58,7 +59,7 @@ class SmallActions:
     forward = 3
 
 
-class MineActions:
+class MineActions(enum.IntEnum):
     available = ["still", "left", "right", "forward", "build"]
 
     still = 0

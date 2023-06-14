@@ -6,11 +6,11 @@ from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
 
 
-from gym_multigrid.grid import Grid
-from gym_multigrid.world import World, WorldT
-from .agent import ActionsT
-from .rendering import *
-from .window import Window
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.world import World, WorldT
+from .core.agent import ActionsT
+from .utils.rendering import *
+from .utils.window import Window
 import random
 
 
