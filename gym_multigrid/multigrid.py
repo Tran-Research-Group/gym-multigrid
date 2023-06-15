@@ -4,13 +4,12 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
-
-
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import World, WorldT
 from .core.agent import ActionsT
 from .utils.rendering import *
 from .utils.window import Window
+from .core.constants import *
 import random
 
 
@@ -50,7 +49,7 @@ class MultiGridEnv(gym.Env):
         self.actions = actions_set
 
         # Actions are discrete integer values
-        self.action_space = spaces.Discrete(len(self.actions.available))
+        self.action_space = spaces.Discrete(len(self.actions))
 
         self.world = world
 
@@ -114,9 +113,7 @@ class MultiGridEnv(gym.Env):
             obs = self.gen_obs()
         else:
             obs = [
-                self.grid.encode_for_agents(
-                    world=self.world, agent_pos=self.agents[i].pos
-                )
+                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
                 for i in range(len(self.agents))
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
@@ -132,25 +129,6 @@ class MultiGridEnv(gym.Env):
         A grid cell is represented by 2-character string, the first one for
         the object and the second one for the color.
         """
-
-        # Map of object types to short string
-        OBJECT_TO_STR = {
-            "wall": "x",
-            "floor": "F",
-            "door": "D",
-            "key": "K",
-            "ball": "o",
-            "box": "B",
-            "goal": "G",
-            "lava": "V",
-            "agent": "a",
-        }
-
-        # Short string for opened door
-        OPENED_DOOR_IDS = "_"
-
-        # Map agent's direction to short string
-        AGENT_DIR_TO_STR = {0: ">", 1: "V", 2: "<", 3: "^"}
 
         str = ""
 
