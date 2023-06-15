@@ -5,6 +5,7 @@ from gym_multigrid.core.object import Ball, ObjectGoal
 from gym_multigrid.core.grid import Grid
 import numpy as np
 
+
 class SoccerGameEnv(MultiGridEnv):
     """
     Environment in which the agents have to fetch the balls and drop them in their respective goals

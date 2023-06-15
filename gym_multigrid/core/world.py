@@ -1,5 +1,5 @@
 from typing import TypeVar
-from constants import *
+from .constants import *
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -33,7 +33,7 @@ class World:
 class CollectWorld:
     encode_dim = 3
     normalize_obs = 1
-    
+
     COLOR_TO_IDX = COLOR_TO_IDX
     IDX_TO_COLOR = IDX_TO_COLOR
 
