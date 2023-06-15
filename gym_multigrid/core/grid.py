@@ -193,7 +193,9 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, self.world.encode_dim), dtype="uint8")
+        array = np.zeros(
+            (self.width, self.height, self.world.encode_dim), dtype="uint8"
+        )
 
         for i in range(self.width):
             for j in range(self.height):
@@ -221,7 +223,9 @@ class Grid:
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
 
-        array = np.zeros((self.width, self.height, self.world.encode_dim), dtype="uint8")
+        array = np.zeros(
+            (self.width, self.height, self.world.encode_dim), dtype="uint8"
+        )
 
         for i in range(self.width):
             for j in range(self.height):
@@ -239,7 +243,7 @@ class Grid:
 
                     else:
                         array[i, j, :] = v.encode(
-                            self.world, current_agent=np.array_equal(agent_pos, (i, j))
+                            current_agent=np.array_equal(agent_pos, (i, j))
                         )
 
         return array

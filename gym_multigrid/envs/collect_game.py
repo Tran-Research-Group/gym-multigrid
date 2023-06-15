@@ -7,7 +7,6 @@ import random
 import numpy as np
 
 
-
 class CollectGameEnv(MultiGridEnv):
     """
     Environment in which the agents have to collect the balls
@@ -53,7 +52,7 @@ class CollectGameEnv(MultiGridEnv):
             width=width,
             height=height,
             max_steps=100,
-            objects_set=self.world,
+            world=self.world,
             see_through_walls=False,
             agents=agents,
             partial_obs=partial_obs,
@@ -92,7 +91,7 @@ class CollectGameEnv(MultiGridEnv):
             "agent2ball3": 0,
         }
         super().reset()
-        state = self.grid.encode(self.world)
+        state = self.grid.encode()
         return state, {}
 
     def _reward(self, i, rewards, reward=1):
@@ -163,7 +162,7 @@ class CollectGameEnv(MultiGridEnv):
             done = True
             truncated = True
 
-        obs = self.grid.encode(self.world)
+        obs = self.grid.encode()
         return obs, rewards, done, truncated, self.info
 
     def simulate(self, action):
@@ -235,10 +234,10 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(self.world, 0, 0)
-        self.grid.horz_wall(self.world, 0, height - 1)
-        self.grid.vert_wall(self.world, 0, 0)
-        self.grid.vert_wall(self.world, width - 1, 0)
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
 
         # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
         # partition_size = (width // 2 + 1, height // 2 + 1)

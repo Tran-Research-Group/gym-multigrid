@@ -2,6 +2,7 @@ import numpy as np
 from ..utils.rendering import *
 from .constants import COLORS
 
+
 class WorldObj:
     """
     Base class for grid world objects
@@ -44,7 +45,11 @@ class WorldObj:
     def encode(self, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
         if self.world.encode_dim == 3:
-            return (self.world.OBJECT_TO_IDX[self.type], self.world.COLOR_TO_IDX[self.color], 0)
+            return (
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
+                0,
+            )
         else:
             return (
                 self.world.OBJECT_TO_IDX[self.type],
