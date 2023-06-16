@@ -1388,6 +1388,26 @@ files = [
 ]
 
 [[package]]
+name = "tensorboard-reducer"
+version = "0.3.0"
+description = "Reduce multiple TensorBoard runs to new event (or CSV) files"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "tensorboard-reducer-0.3.0.tar.gz", hash = "sha256:69c7496b0b67f6e30f05796a8abb0899f18b060767cc5f0f69672992e792b2b5"},
+]
+
+[package.dependencies]
+numpy = ">=1.19"
+pandas = ">=1.0.0"
+tensorboard = ">=2.0"
+
+[package.extras]
+excel = ["openpyxl", "xlrd", "xlwt"]
+test = ["pytest", "pytest-cov", "torch (>=1.6)"]
+
+[[package]]
 name = "threadpoolctl"
 version = "3.1.0"
 description = "threadpoolctl"
@@ -1598,4 +1618,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.11"
-content-hash = "7e95f15f6607ceed4d4c1802172831d81f329eeebef82a4f276452339865c4b1"
+content-hash = "c767d887aa31a219cc01f1bfe04979dd0b37d6128a343c1c7a3b1d89f18931d3"
