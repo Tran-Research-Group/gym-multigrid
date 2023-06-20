@@ -429,3 +429,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
+class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__(agents_index=[3])
