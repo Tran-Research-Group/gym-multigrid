@@ -1,24 +1,32 @@
 import json
 import multiprocessing as mp
+from typing import TypeVar
 
 import gymnasium as gym
 from gymnasium.envs.registration import register
-from gym_multigrid.utils import set_seed, save_frames_as_gif
 import torch
+from torch import Tensor
+from torch.types import Number
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
 from torch.utils.tensorboard.writer import SummaryWriter
 
+from numpy.typing import NDArray
+
+from gym_multigrid.utils import set_seed, save_frames_as_gif
+
+ModuleT = TypeVar("ModuleT", bound=nn.Module)
+
 
 class NNet(nn.Module):
-    def __init__(self, input_size, action_dim, feature_dim):
+    def __init__(self, input_size: int, action_dim: int, feature_dim: int) -> None:
         super(NNet, self).__init__()
         self.input_size = input_size
         self.action_dim = action_dim
         self.feature_dim = feature_dim
-        layers = []
+        layers: list[ModuleT] = []
         layers.append(nn.Linear(input_size, 64))
         layers.append(nn.ReLU())
         layers.append(nn.Linear(64, 128))
@@ -27,9 +35,9 @@ class NNet(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = x.view(-1, self.input_size).float()
-        output = self.model(x)
+        output: Tensor = self.model(x)
         return output.view([output.shape[0], self.action_dim, self.feature_dim])
 
 
@@ -54,10 +62,10 @@ class IndSFDQNAgent:
         self.buffer = np.empty(self.batch_size, dtype=object)
         self.buffer_size = 0
 
-    def select_action(self, state):
+    def select_action(self, state) -> Number:
         # epsilon greedy
         if np.random.rand() < self.epsilon:
-            action = np.random.randint(self.action_dim)
+            action: Number = np.random.randint(self.action_dim)
         else:
             with torch.no_grad():
                 state = torch.from_numpy(state).to(self.device)
@@ -66,17 +74,17 @@ class IndSFDQNAgent:
                     + self.psi2(state) * self.w[1]
                     + self.psi3(state) * self.w[2]
                 )
-                action = torch.argmax(q_values).item()
+                action: Number = torch.argmax(q_values).item()
         return action
 
-    def phi(self, state, next_state):
+    def phi(self, state, next_state) -> NDArray:
         # how many of each type of object was picked up between s and s'
         ball1 = np.sum(state[:, :, 0]) - np.sum(next_state[:, :, 0])
         ball2 = np.sum(state[:, :, 1]) - np.sum(next_state[:, :, 1])
         ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
         return np.array([ball1, ball2, ball3])
 
-    def update(self, state, action, next_state):
+    def update(self, state, action, next_state) -> NDArray | 0:
         phi = self.phi(state, next_state)
         state = torch.from_numpy(state).to(self.device)
         action = torch.from_numpy(np.array([action])).to(self.device).view(-1)
@@ -139,9 +147,9 @@ class IndSFDQNAgent:
             self.buffer = np.empty(self.batch_size, dtype=object)
             self.buffer_size = 0
             # compute losses
-            loss1 = nn.MSELoss(reduction="sum")(cur_psi1, target1) / 2
-            loss2 = nn.MSELoss(reduction="sum")(cur_psi2, target2) / 2
-            loss3 = nn.MSELoss(reduction="sum")(cur_psi3, target3) / 2
+            loss1: Tensor = nn.MSELoss(reduction="sum")(cur_psi1, target1) / 2
+            loss2: Tensor = nn.MSELoss(reduction="sum")(cur_psi2, target2) / 2
+            loss3: Tensor = nn.MSELoss(reduction="sum")(cur_psi3, target3) / 2
 
             self.optim1.zero_grad()
             self.optim2.zero_grad()
