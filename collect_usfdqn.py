@@ -41,13 +41,16 @@ class NNet(nn.Module):
         return output.view([output.shape[0], self.action_dim, self.feature_dim])
 
 
-class IndSFDQNAgent:
-    def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
+class IndUSFDQNAgent:
+    def __init__(
+        self, state_dim, action_dim, feat_dim, w: NDArray, lr, gamma, epsilon, nz: int
+    ) -> None:
         self.device = torch.device("cuda")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
-        self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
-        self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
-        self.psi3 = NNet(state_dim, action_dim, 1).to(self.device)
+        self.input_size: int = state_dim + w.shape[0]
+        self.psi1 = NNet(self.input_size, action_dim, 1).to(self.device)
+        self.psi2 = NNet(self.input_size, action_dim, 1).to(self.device)
+        self.psi3 = NNet(self.input_size, action_dim, 1).to(self.device)
         self.optim1 = optim.Adam(self.psi1.parameters(), lr=lr)
         self.optim2 = optim.Adam(self.psi2.parameters(), lr=lr)
         self.optim3 = optim.Adam(self.psi3.parameters(), lr=lr)
@@ -55,6 +58,7 @@ class IndSFDQNAgent:
         self.w = torch.from_numpy(w)
         self.gamma = gamma
         self.epsilon = epsilon
+        self.nz = nz
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.feat_dim = feat_dim
@@ -62,7 +66,7 @@ class IndSFDQNAgent:
         self.buffer = np.empty(self.batch_size, dtype=object)
         self.buffer_size = 0
 
-    def select_action(self, state) -> Number:
+    def select_action(self, state, w: Tensor) -> Number:
         # epsilon greedy
         if np.random.rand() < self.epsilon:
             action: Number = np.random.randint(self.action_dim)
@@ -70,9 +74,9 @@ class IndSFDQNAgent:
             with torch.no_grad():
                 state = torch.from_numpy(state).to(self.device)
                 q_values = (
-                    self.psi1(state) * self.w[0]
-                    + self.psi2(state) * self.w[1]
-                    + self.psi3(state) * self.w[2]
+                    self.psi1(state) * w[0]
+                    + self.psi2(state) * w[1]
+                    + self.psi3(state) * w[2]
                 )
                 action: Number = torch.argmax(q_values).item()
         return action
@@ -84,7 +88,7 @@ class IndSFDQNAgent:
         ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
         return np.array([ball1, ball2, ball3])
 
-    def update(self, state, action, next_state) -> NDArray | Literal[0]:
+    def update(self, state, action, next_state, z_i: NDArray) -> NDArray | Literal[0]:
         phi = self.phi(state, next_state)
         state = torch.from_numpy(state).to(self.device)
         action = torch.from_numpy(np.array([action])).to(self.device).view(-1)
@@ -100,13 +104,15 @@ class IndSFDQNAgent:
             )
             states, actions, phis, next_states = zip(*self.buffer[indices])
 
-            states = [s.cpu() for s in states]
+            states = [torch.concat([s.cpu(), torch.from_numpy(z_i)]) for s in states]
             actions = [a.cpu() for a in actions]
             phis = [p.cpu() for p in phis]
-            next_states = [n.cpu() for n in next_states]
+            next_states = [
+                torch.concat([n.cpu(), torch.from_numpy(z_i)]) for n in next_states
+            ]
 
             states = torch.from_numpy(
-                np.vstack(states).reshape((self.batch_size, self.state_dim))
+                np.vstack(states).reshape((self.batch_size, self.input_size))
             ).to(self.device)
 
             actions = torch.from_numpy(np.vstack(actions)).to(self.device)
@@ -114,7 +120,7 @@ class IndSFDQNAgent:
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
             ).to(self.device)
             next_states = torch.from_numpy(
-                np.vstack(next_states).reshape((self.batch_size, self.state_dim))
+                np.vstack(next_states).reshape((self.batch_size, self.input_size))
             ).to(self.device)
             # compute current values
             cur_psi1 = (
@@ -166,6 +172,29 @@ class IndSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
+    def distribution(self, type: Literal["uniform"] = "uniform") -> NDArray:
+        """
+        Returns a sample from a distribution over the task given task vector w.
+
+        Parameters
+        ----------
+        type: Literal['uniform'] = 'uniform'
+            Type of distribution to sample from
+
+        Returns
+        -------
+        z: NDArray
+            Task from the distribution over tasks. The shape of z is (w.shape[0],).
+        """
+
+        match type:
+            case "uniform":
+                z = np.random.uniform(low=-1, high=1, size=(self.w.shape[0],))
+            case _:
+                raise ValueError(f"Unknown distribution type {type}")
+
+        return z
+
 
 def main():
     lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
@@ -212,7 +241,7 @@ def run_replicates(
         )
         env = gym.make("multigrid-collect-more-v0")
         w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
-        agent = IndSFDQNAgent(
+        agent = IndUSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 4,
             action_dim=env.ac_dim,
             feat_dim=env.phi_dim(),
@@ -220,6 +249,7 @@ def run_replicates(
             lr=lr,
             gamma=0.9,
             epsilon=0.1,
+            nz=5,
         )
         frames = []
         episodes = 50000
@@ -242,9 +272,10 @@ def run_replicates(
                 # time.sleep(0.1)
                 # frames.append(env.render(mode="rgb_array"))
 
+                zs: list[NDArray] = [agent.distribution() for _ in range(agent.nz)]
                 # get agent action
                 actions = []
-                action = agent.select_action(obs.flatten())
+                action = agent.select_action(obs.flatten(), agent.w)
                 actions.append(action)
 
                 # use this for random partner
@@ -263,9 +294,16 @@ def run_replicates(
                 # standard env reward
                 ep_rew += rew
 
-                loss = agent.update(obs, action, obs_next)
-                loss = np.sum(loss)
-                running_loss += loss
+                loss_sum = 0
+
+                for z_i in zs:
+                    losses = agent.update(obs, action, obs_next, z_i)
+                    loss_sum += np.sum(losses)
+
+                # loss = agent.update(obs, action, obs_next)
+                # loss = np.sum(loss)
+
+                running_loss += loss_sum / agent.nz
 
                 # save gif of last episode for fun
                 if ep == episodes - 1:
