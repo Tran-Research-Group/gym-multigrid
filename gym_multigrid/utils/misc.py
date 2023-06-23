@@ -29,6 +29,6 @@ def save_frames_as_gif(frames, path="./", filename="collect-", ep=0):
     def animate(i):
         patch.set_data(frames[i])
 
-    anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=50)
-    anim.save(path + filename, writer="imagemagick", fps=60)
+    anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=100)
+    anim.save(path + filename, writer="imagemagick", fps=10)
     plt.close()
