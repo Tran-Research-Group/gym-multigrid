@@ -1,14 +1,12 @@
 import gymnasium as gym
 from gymnasium.envs.registration import register
-from gym_multigrid.utils import set_seed, save_frames_as_gif
+from gym_multigrid.utils.misc import set_seed, save_frames_as_gif
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter()
 
 
 class NNet(nn.Module):
@@ -109,67 +107,94 @@ class SimpleDQNAgent:
             return loss.item()
         return 0
 
+def phi(state, next_state):
+    # how many of each type of object was picked up between s and s'
+    ball1 = np.sum(state[:, :, 0]) - np.sum(next_state[:, :, 0])
+    ball2 = np.sum(state[:, :, 1]) - np.sum(next_state[:, :, 1])
+    ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
+    return np.array([ball1, ball2, ball3])
 
 def main():
-    seed = 42
-    set_seed(seed=seed)
-    register(
-        id="multigrid-collect-more-v0",
-        entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
-    )
-    env = gym.make("multigrid-collect-more-v0")
-    agent = SimpleDQNAgent(
-        state_dim=env.grid.width * env.grid.height * 4,
-        action_dim=env.ac_dim,
-        feat_dim=1,
-        lr=0.00001,
-        gamma=0.9,
-        epsilon=0.1,
-    )
-    frames = []
-    episodes = 50000
-    for ep in tqdm(range(episodes), desc="Simple-DQN-training"):
-        obs, _ = env.reset(seed=seed)
-        agent_pos = env.agents[0].pos
-        idx = env.grid.width * agent_pos[0] + agent_pos[1]
-        obs = env.toroid(idx)
-        done = False
-        ep_rew = 0
-        running_loss = 0
-        for t in range(100):
-            # get agent action
-            actions = []
-            action = agent.select_action(obs.flatten())
-            actions.append(action)
-            # step env with selected action
-            obs_next, rew, done, truncated, info = env.step(actions)
+    types = ['red-random', 'orange-random', 'yellow-random']
+    weights = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    for idx, t in enumerate(types):
+        train_str = 'dqn-' + t
+        w = weights[idx]
+        seed = 42
+        set_seed(seed=seed)
+        writer = SummaryWriter(comment=train_str)
+        register(
+            id="multigrid-collect-more-v0",
+            entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
+        )
+        env = gym.make("multigrid-collect-more-v0")
+        agent = SimpleDQNAgent(
+            state_dim=env.grid.width * env.grid.height * 4,
+            action_dim=env.ac_dim,
+            feat_dim=1,
+            lr=0.00001,
+            gamma=0.9,
+            epsilon=0.1,
+        )
+        frames = []
+        episodes = 75000
+        for ep in tqdm(range(episodes), desc="Simple-DQN-training"):
+            obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
             idx = env.grid.width * agent_pos[0] + agent_pos[1]
-            obs_next = env.toroid(idx)
-            ep_rew += rew
-            loss = agent.update(obs, action, rew, obs_next)
-            running_loss += loss
-            if ep == episodes - 1:
-                frames.append(env.render())
-            if done:
-                break
-            obs = obs_next
-        if ep % 100 == 0:
-            agent.update_target_network()
-        writer.add_scalar("training loss", running_loss / t, ep)
-        writer.add_scalar("reward", ep_rew, ep)
-        writer.add_scalar("ep_length", t, ep)
-        writer.add_scalar("num_balls_collected", env.collected_balls, ep)
-        writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
-        writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
-        writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-        # writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-        # writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-        # writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+            obs = env.toroid(idx)
+            done = False
+            ep_rew = 0
+            ep_rew_a = 0
+            ep_rew_p = 0
+            s_rew = 0
+            running_loss = 0
+            for t in range(100):
+                # get agent action
+                actions = []
+                action = agent.select_action(obs.flatten())
+                actions.append(action)
+                action_p = env.action_space.sample()
+                actions.append(action_p)
+                # step env with selected action
+                obs_next, rew, done, truncated, info = env.step(actions)
+                agent_pos = env.agents[0].pos
+                idx = env.grid.width * agent_pos[0] + agent_pos[1]
+                obs_next = env.toroid(idx)
+                ep_rew += np.sum(rew)
+                s_rew += np.dot(w, phi(obs, obs_next))
+                ep_rew_a += rew[0]
+                ep_rew_p += rew[1]
+                loss = agent.update(obs, action, np.dot(w, phi(obs, obs_next)), obs_next)
+                running_loss += loss
+                if ep == episodes - 1:
+                    frames.append(env.render())
+                if done:
+                    break
+                obs = obs_next
+            if ep % 100 == 0:
+                agent.update_target_network()
+            writer.add_scalar("training loss", running_loss / t, ep)
+            writer.add_scalar("reward", ep_rew, ep)
+            writer.add_scalar("ep_length", t, ep)
+            writer.add_scalar("learner_reward", ep_rew_a, ep)
+            writer.add_scalar("partner_reward", ep_rew_p, ep)
+            writer.add_scalar("total_shaped_reward", s_rew, ep)
+            obj_arr = np.array([info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]])
+            agent_shaped_rew = np.dot(w, obj_arr)
+            writer.add_scalar("learner_shaped_reward", agent_shaped_rew, ep)
+            writer.add_scalar("num_balls_collected", env.collected_balls, ep)
+            writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
+            writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
+            writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
+            writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
+            writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
+            writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
 
-    writer.close()
-    save_frames_as_gif(frames, ep="dqn-random")
-    torch.save(agent.q_network, "dqn.torch")
+        writer.close()
+        save_frames_as_gif(frames, ep=train_str)
+        model_str = train_str + ".torch"
+        torch.save(agent.q_network, model_str)
 
 
 if __name__ == "__main__":
