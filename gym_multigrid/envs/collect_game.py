@@ -339,7 +339,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
     def toroid(self, idx):
         # transform grid into toroidal, agent-centric obs
         pos = (idx // self.grid.width, idx % self.grid.width)
-        depth = self.num_ball_types + 1
+        depth = self.num_ball_types + len(self.agents)
         obs = np.zeros((self.grid.width, self.grid.height, depth), dtype="float32")
         for i in range(self.grid.width):
             for j in range(self.grid.height):
@@ -357,6 +357,8 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                     obs[
                         new_coords[1], new_coords[0], self.world.COLOR_TO_IDX[obj.color]
                     ] = 1
+                elif obj.type == "agent" and not np.array_equal(obj.pos, pos):
+                    obs[new_coords[1], new_coords[0], depth - 2] = 1
         return obs
 
     def gaussian(self, idx):
@@ -429,3 +431,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
+class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__(agents_index=[3])
