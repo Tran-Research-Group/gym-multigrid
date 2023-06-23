@@ -148,6 +148,7 @@ class IndSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
+
 class SFPartnerAgent:
     def __init__(self, filename) -> None:
         self.psi1 = torch.load("models/" + filename + "_psi1.torch")
@@ -174,6 +175,7 @@ class SFPartnerAgent:
         )
         return torch.argmax(q_values).item()
 
+
 def main():
     seed = 42
     set_seed(seed=seed)
@@ -192,8 +194,8 @@ def main():
         gamma=0.9,
         epsilon=0.1,
     )
-    partner = SFPartnerAgent(filename='orange')
-    writer = SummaryWriter(comment='sf-orangerandp-nofactor')
+    partner = SFPartnerAgent(filename="orange")
+    writer = SummaryWriter(comment="sf-orangerandp-nofactor")
     frames = []
     episodes = 15000
     for ep in tqdm(range(episodes), desc="SF-orange-partner-training"):
@@ -201,10 +203,7 @@ def main():
         agent_pos = env.agents[0].pos
         idx = env.grid.width * agent_pos[0] + agent_pos[1]
         obs = env.toroid(idx)
-        # use this code to compare toroidal obs with standard env obs
-        # plt.imshow(20*obs[:,:,0] + 50*obs[:,:,1] + 100*obs[:,:,2] + 70*obs[:,:,3])
-        # plt.savefig('toroid.png')
-        # print(str(env))
+
         done = False
         ep_rew = 0
         ep_rew_a = 0
@@ -212,23 +211,11 @@ def main():
         s_rew = 0
         running_loss = 0
         for t in range(100):
-            # use this code for live rendering
-            # env.render(mode='human', highlight=True if env.partial_obs else False)
-            # time.sleep(0.1)
-            # frames.append(env.render(mode="rgb_array"))
-
             # get agent action
             actions = []
             action = agent.select_action(obs.flatten())
             actions.append(action)
             actions.append(partner.get_action(obs.flatten()))
-
-            # use this for random partner
-            # action_p = env.action_space.sample()
-            # actions.append(action_p)
-
-            #action_p = torch.argmax(partner(torch.from_numpy(obs.flatten()).to(agent.device))).item()
-            #actions.append(action_p)
 
             # step env with selected action
             obs_next, rew, done, truncated, info = env.step(actions)
@@ -261,16 +248,20 @@ def main():
         writer.add_scalar("learner_reward", ep_rew_a, ep)
         writer.add_scalar("partner_reward", ep_rew_p, ep)
         writer.add_scalar("total_shaped_reward", s_rew, ep)
-        writer.add_scalar("learner_shaped_reward", info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"], ep)
+        writer.add_scalar(
+            "learner_shaped_reward",
+            info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"],
+            ep,
+        )
         writer.add_scalar("partner_shaped_reward", info["agent2ball2"], ep)
         writer.add_scalar("ep_length", t, ep)
         writer.add_scalar("num_balls_collected", env.collected_balls, ep)
         writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
         writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
         writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-        writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-        writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-        writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+        writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
+        writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
+        writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
 
     writer.close()
     save_frames_as_gif(frames, path="./plots/", ep="sf-orangerandp-nofactor")

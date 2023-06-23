@@ -2,10 +2,9 @@ import gymnasium as gym
 from gymnasium.envs.registration import register
 from gym_multigrid.utils.misc import set_seed, save_frames_as_gif
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
+import matplotlib as plt
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -35,11 +34,13 @@ class SFPartnerAgent:
         )
         return torch.argmax(q_values).item()
 
-class SFGPIAgent():
+
+class SFGPIAgent:
     def __init__(self, pretrained, w) -> None:
         self.pretrained = pretrained
         self.w = w
-    
+        self.pol_idx = []
+
     def get_action(self, state):
         state = torch.from_numpy(state)
         qvals = []
@@ -51,7 +52,10 @@ class SFGPIAgent():
             )
             qvals.append(vals.detach().numpy())
         max_vals = np.max(qvals, axis=0)
-        return np.argmax(max_vals)
+        action = np.argmax(max_vals)
+        idx = np.unravel_index(qvals.argmax(), qvals.shape)[0]
+        self.pol_idx.append(idx)
+        return action
 
     def phi(self, state, next_state):
         # how many of each type of object was picked up between s and s'
@@ -59,6 +63,11 @@ class SFGPIAgent():
         ball2 = np.sum(state[:, :, 1]) - np.sum(next_state[:, :, 1])
         ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
         return np.array([ball1, ball2, ball3])
+
+    def plot_policy_usage(self, path, filename):
+        plt.hist(np.array(self.pol_idx))
+        plt.savefig(path + filename)
+
 
 def main():
     seed = 42
@@ -70,17 +79,25 @@ def main():
     env = gym.make("multigrid-collect-v0")
     w = np.array([1.0, 1.0, 1.0])  # red, orange, yellow
     pretrained = []
-    pretrained.append([torch.load("models/psi1-redrandp-nofactor.torch").eval(),
-                      torch.load("models/psi2-redrandp-nofactor.torch").eval(),
-                      torch.load("models/psi3-redrandp-nofactor.torch").eval()])
-    pretrained.append([torch.load("models/psi1-orangerandp-nofactor.torch").eval(),
-                         torch.load("models/psi2-orangerandp-nofactor.torch").eval(),
-                         torch.load("models/psi3-orangerandp-nofactor.torch").eval()])
+    pretrained.append(
+        [
+            torch.load("models/psi1-redrandp-nofactor.torch").eval(),
+            torch.load("models/psi2-redrandp-nofactor.torch").eval(),
+            torch.load("models/psi3-redrandp-nofactor.torch").eval(),
+        ]
+    )
+    pretrained.append(
+        [
+            torch.load("models/psi1-orangerandp-nofactor.torch").eval(),
+            torch.load("models/psi2-orangerandp-nofactor.torch").eval(),
+            torch.load("models/psi3-orangerandp-nofactor.torch").eval(),
+        ]
+    )
     agent = SFGPIAgent(pretrained=pretrained, w=w)
-    partner = SFPartnerAgent(filename='yellow')
-    writer = SummaryWriter(comment='sf-yellowrandp-gpizero')
+    partner = SFPartnerAgent(filename="yellow")
+    writer = SummaryWriter(comment="sf-yellowrandp-gpizero")
     frames = []
-    episodes = 1#5000
+    episodes = 1  # 5000
     for ep in tqdm(range(episodes), desc="SF-yellow-newpartner-training"):
         obs, _ = env.reset(seed=seed)
         agent_pos = env.agents[0].pos
@@ -127,18 +144,23 @@ def main():
         writer.add_scalar("learner_reward", ep_rew_a, ep)
         writer.add_scalar("partner_reward", ep_rew_p, ep)
         writer.add_scalar("total_shaped_reward", s_rew, ep)
-        writer.add_scalar("learner_shaped_reward", info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"], ep)
+        writer.add_scalar(
+            "learner_shaped_reward",
+            info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"],
+            ep,
+        )
         writer.add_scalar("partner_shaped_reward", info["agent2ball2"], ep)
         writer.add_scalar("ep_length", t, ep)
         writer.add_scalar("num_balls_collected", env.collected_balls, ep)
         writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
         writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
         writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-        writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-        writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-        writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+        writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
+        writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
+        writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
 
     writer.close()
+    agent.plot_policy_usage(path="./plots/", filename="gpi.png")
     save_frames_as_gif(frames, path="./plots/", ep="sf-gpi-yellow")
 
 

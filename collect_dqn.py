@@ -107,6 +107,7 @@ class SimpleDQNAgent:
             return loss.item()
         return 0
 
+
 def phi(state, next_state):
     # how many of each type of object was picked up between s and s'
     ball1 = np.sum(state[:, :, 0]) - np.sum(next_state[:, :, 0])
@@ -114,11 +115,12 @@ def phi(state, next_state):
     ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
     return np.array([ball1, ball2, ball3])
 
+
 def main():
-    types = ['red-random', 'orange-random', 'yellow-random']
+    types = ["red-random", "orange-random", "yellow-random"]
     weights = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
     for idx, t in enumerate(types):
-        train_str = 'dqn-' + t
+        train_str = "dqn-" + t
         w = weights[idx]
         seed = 42
         set_seed(seed=seed)
@@ -165,7 +167,9 @@ def main():
                 s_rew += np.dot(w, phi(obs, obs_next))
                 ep_rew_a += rew[0]
                 ep_rew_p += rew[1]
-                loss = agent.update(obs, action, np.dot(w, phi(obs, obs_next)), obs_next)
+                loss = agent.update(
+                    obs, action, np.dot(w, phi(obs, obs_next)), obs_next
+                )
                 running_loss += loss
                 if ep == episodes - 1:
                     frames.append(env.render())
@@ -180,16 +184,18 @@ def main():
             writer.add_scalar("learner_reward", ep_rew_a, ep)
             writer.add_scalar("partner_reward", ep_rew_p, ep)
             writer.add_scalar("total_shaped_reward", s_rew, ep)
-            obj_arr = np.array([info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]])
+            obj_arr = np.array(
+                [info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]]
+            )
             agent_shaped_rew = np.dot(w, obj_arr)
             writer.add_scalar("learner_shaped_reward", agent_shaped_rew, ep)
             writer.add_scalar("num_balls_collected", env.collected_balls, ep)
             writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
             writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
             writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-            writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-            writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-            writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+            writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
+            writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
+            writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
 
         writer.close()
         save_frames_as_gif(frames, ep=train_str)

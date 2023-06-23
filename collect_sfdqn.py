@@ -121,7 +121,7 @@ class IndSFDQNAgent:
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
             ).to(self.device)
-            
+
             # compute target values
             with torch.no_grad():
                 next_psi1 = torch.max(self.psi1(next_states), dim=1).values.squeeze(1)
@@ -249,7 +249,7 @@ def run_replicates(
 
                 # shaped reward
                 s_rew += np.dot(w, agent.phi(obs, obs_next))
-                
+
                 # standard env reward
                 ep_rew += np.sum(rew)
                 ep_rew_a += rew[0]
@@ -273,16 +273,18 @@ def run_replicates(
             writer.add_scalar("ep_length", t, ep)
             writer.add_scalar("learner_reward", ep_rew_a, ep)
             writer.add_scalar("partner_reward", ep_rew_p, ep)
-            obj_arr = np.array([info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]])
+            obj_arr = np.array(
+                [info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]]
+            )
             agent_shaped_rew = np.dot(w, obj_arr)
             writer.add_scalar("learner_shaped_reward", agent_shaped_rew, ep)
             writer.add_scalar("num_balls_collected", env.collected_balls, ep)
             writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
             writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
             writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-            writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-            writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-            writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+            writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
+            writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
+            writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
 
         writer.close()
         save_frames_as_gif(
