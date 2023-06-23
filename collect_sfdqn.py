@@ -3,7 +3,7 @@ import multiprocessing as mp
 
 import gymnasium as gym
 from gymnasium.envs.registration import register
-from gym_multigrid.utils import set_seed, save_frames_as_gif
+from gym_multigrid.utils.misc import set_seed, save_frames_as_gif
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,7 +35,7 @@ class NNet(nn.Module):
 
 class IndSFDQNAgent:
     def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
         self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
         self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
@@ -94,7 +94,6 @@ class IndSFDQNAgent:
             states = torch.from_numpy(
                 np.vstack(states).reshape((self.batch_size, self.state_dim))
             ).to(self.device)
-
             actions = torch.from_numpy(np.vstack(actions)).to(self.device)
             phis = torch.from_numpy(
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
@@ -102,6 +101,7 @@ class IndSFDQNAgent:
             next_states = torch.from_numpy(
                 np.vstack(next_states).reshape((self.batch_size, self.state_dim))
             ).to(self.device)
+
             # compute current values
             cur_psi1 = (
                 self.psi1(states)
@@ -114,13 +114,14 @@ class IndSFDQNAgent:
                 .squeeze(-1)
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
-            )
+            ).to(self.device)
             cur_psi3 = (
                 self.psi3(states)
                 .squeeze(-1)
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
-            )
+            ).to(self.device)
+            
             # compute target values
             with torch.no_grad():
                 next_psi1 = torch.max(self.psi1(next_states), dim=1).values.squeeze(1)
@@ -154,9 +155,9 @@ class IndSFDQNAgent:
 
 
 def main():
-    lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
-    alg: str = "sfdqn"
-    num_replicates: int = 3
+    lrs: list[float] = [3e-5]
+    alg: str = "sf-rand"
+    num_replicates: int = 1
 
     tensor_board_dir: str = f"runs/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
@@ -187,19 +188,19 @@ def run_replicates(
         json.dump({"seeds": seeds.tolist()}, f)
 
     for i in range(num_replicates):
-        path_suffix: str = f"lr_{lr}_rep_{i}"
+        path_suffix: str = f"lr_{lr}_rep_{i}_yellow"
 
         writer = SummaryWriter(tensor_board_dir + path_suffix)
         seed: int = seeds[i]
         set_seed(seed=seed)
         register(
-            id="multigrid-collect-more-v0",
+            id="multigrid-collect-v0",
             entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
         )
-        env = gym.make("multigrid-collect-more-v0")
-        w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
+        env = gym.make("multigrid-collect-v0")
+        w = np.array([0.0, 0.0, 1.0])  # red, orange, yellow
         agent = IndSFDQNAgent(
-            state_dim=env.grid.width * env.grid.height * 4,
+            state_dim=env.grid.width * env.grid.height * 5,
             action_dim=env.ac_dim,
             feat_dim=env.phi_dim(),
             w=w,
@@ -208,7 +209,7 @@ def run_replicates(
             epsilon=0.1,
         )
         frames = []
-        episodes = 50000
+        episodes = 15000
         for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
             obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
@@ -220,7 +221,9 @@ def run_replicates(
             # print(str(env))
             done = False
             ep_rew = 0
-            rew_a = 0
+            ep_rew_a = 0
+            ep_rew_p = 0
+            s_rew = 0
             running_loss = 0
             for t in range(100):
                 # use this code for live rendering
@@ -234,8 +237,8 @@ def run_replicates(
                 actions.append(action)
 
                 # use this for random partner
-                # action_p = env.action_space.sample()
-                # actions.append(action_p)
+                action_p = env.action_space.sample()
+                actions.append(action_p)
 
                 # step env with selected action
                 obs_next, rew, done, truncated, info = env.step(actions)
@@ -245,9 +248,12 @@ def run_replicates(
                 obs_next = env.toroid(idx)
 
                 # shaped reward
-                rew_a += np.dot(w, agent.phi(obs, obs_next))
+                s_rew += np.dot(w, agent.phi(obs, obs_next))
+                
                 # standard env reward
-                ep_rew += rew
+                ep_rew += np.sum(rew)
+                ep_rew_a += rew[0]
+                ep_rew_p += rew[1]
 
                 loss = agent.update(obs, action, obs_next)
                 loss = np.sum(loss)
@@ -262,21 +268,26 @@ def run_replicates(
 
             # tensorboard logging
             writer.add_scalar("training loss", running_loss / t, ep)
-            writer.add_scalar("reward", ep_rew, ep)
-            writer.add_scalar("shaped_reward", rew_a, ep)
+            writer.add_scalar("total_reward", ep_rew, ep)
+            writer.add_scalar("total_shaped_reward", s_rew, ep)
             writer.add_scalar("ep_length", t, ep)
+            writer.add_scalar("learner_reward", ep_rew_a, ep)
+            writer.add_scalar("partner_reward", ep_rew_p, ep)
+            obj_arr = np.array([info["agent1ball1"], info["agent1ball2"], info["agent1ball3"]])
+            agent_shaped_rew = np.dot(w, obj_arr)
+            writer.add_scalar("learner_shaped_reward", agent_shaped_rew, ep)
             writer.add_scalar("num_balls_collected", env.collected_balls, ep)
             writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
             writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
             writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-            # writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
-            # writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
-            # writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+            writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
+            writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
+            writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
 
         writer.close()
         save_frames_as_gif(
             frames,
-            ep="ind-sfdqn-random",
+            ep="sf-random",
             path="./plots/",
             filename="collect-" + path_suffix,
         )
