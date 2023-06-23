@@ -432,6 +432,49 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
 
+
 class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(agents_index=[3])
+
+
+class CollectGameQuadrants(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__()
+
+    def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
+
+        # Generate the surrounding walls
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
+
+        partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
+        partition_size = (width // 2 + 1, height // 2 + 1)
+        index = 0
+        for ball in range(self.num_balls):
+            if ball % 5 == 0:
+                top = partitions[ball // 5]
+                index = ball // 5
+            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
+        agent_pos = (1, height - 2)
+        for a in self.agents:
+            self.place_agent(a, pos=agent_pos)
+            agent_pos = (agent_pos[0] + 1, agent_pos[1])
+            self.place_agent(a)
+
+
+class CollectGameRooms(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__(size=11)
+
+    def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
+
+        # Generate the surrounding walls
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
