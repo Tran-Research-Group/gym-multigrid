@@ -548,7 +548,6 @@ class MultiGridEnv(gym.Env):
 
         # Render the whole grid
         img = self.grid.render(
-            self.world,
             tile_size,
             highlight_masks=highlight_masks if highlight else None,
         )
