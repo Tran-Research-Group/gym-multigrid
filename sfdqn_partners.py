@@ -1,14 +1,12 @@
 import gymnasium as gym
 from gymnasium.envs.registration import register
-from gym_multigrid.utils import set_seed, save_frames_as_gif
+from gym_multigrid.utils.misc import set_seed, save_frames_as_gif
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter()
 
 
 class NNet(nn.Module):
@@ -150,21 +148,43 @@ class IndSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
-def load_partner(filename):
-    partner = torch.load(filename)
-    return partner
+class SFPartnerAgent:
+    def __init__(self, filename) -> None:
+        self.psi1 = torch.load("models/" + filename + "_psi1.torch")
+        self.psi1.eval()
+        self.psi2 = torch.load("models/" + filename + "_psi2.torch")
+        self.psi2.eval()
+        self.psi3 = torch.load("models/" + filename + "_psi3.torch")
+        self.psi3.eval()
+        if filename == "red":
+            self.w = np.array([1.0, 0.0, 0.0])
+        elif filename == "orange":
+            self.w = np.array([0.0, 1.0, 0.0])
+        elif filename == "yellow":
+            self.w = np.array([0.0, 0.0, 1.0])
+        else:
+            assert False, "that partner policy does not exist"
+
+    def get_action(self, state):
+        state = torch.from_numpy(state)
+        q_values = (
+            self.psi1(state) * self.w[0]
+            + self.psi2(state) * self.w[1]
+            + self.psi3(state) * self.w[2]
+        )
+        return torch.argmax(q_values).item()
 
 def main():
     seed = 42
     set_seed(seed=seed)
     register(
-        id="multigrid-collect-more-v0",
+        id="multigrid-collect-v0",
         entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
     )
-    env = gym.make("multigrid-collect-more-v0")
-    w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
+    env = gym.make("multigrid-collect-v0")
+    w = np.array([1.0, 1.0, 1.0])  # red, orange, yellow
     agent = IndSFDQNAgent(
-        state_dim=env.grid.width * env.grid.height * 4,
+        state_dim=env.grid.width * env.grid.height * 5,
         action_dim=env.ac_dim,
         feat_dim=env.phi_dim(),
         w=w,
@@ -172,11 +192,11 @@ def main():
         gamma=0.9,
         epsilon=0.1,
     )
-    partner = load_partner(filename='')
-    partner.eval()
+    partner = SFPartnerAgent(filename='orange')
+    writer = SummaryWriter(comment='sf-orangerandp-nofactor')
     frames = []
-    episodes = 50000
-    for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
+    episodes = 15000
+    for ep in tqdm(range(episodes), desc="SF-orange-partner-training"):
         obs, _ = env.reset(seed=seed)
         agent_pos = env.agents[0].pos
         idx = env.grid.width * agent_pos[0] + agent_pos[1]
@@ -187,7 +207,9 @@ def main():
         # print(str(env))
         done = False
         ep_rew = 0
-        rew_a = 0
+        ep_rew_a = 0
+        ep_rew_p = 0
+        s_rew = 0
         running_loss = 0
         for t in range(100):
             # use this code for live rendering
@@ -199,13 +221,14 @@ def main():
             actions = []
             action = agent.select_action(obs.flatten())
             actions.append(action)
+            actions.append(partner.get_action(obs.flatten()))
 
             # use this for random partner
             # action_p = env.action_space.sample()
             # actions.append(action_p)
 
-            action_p = torch.argmax(partner(torch.from_numpy(obs.flatten()).to(agent.device))).item()
-            actions.append(action_p)
+            #action_p = torch.argmax(partner(torch.from_numpy(obs.flatten()).to(agent.device))).item()
+            #actions.append(action_p)
 
             # step env with selected action
             obs_next, rew, done, truncated, info = env.step(actions)
@@ -215,9 +238,11 @@ def main():
             obs_next = env.toroid(idx)
 
             # shaped reward
-            rew_a += np.dot(w, agent.phi(obs, obs_next))
+            s_rew += np.dot(w, agent.phi(obs, obs_next))
             # standard env reward
             ep_rew += np.sum(rew)
+            ep_rew_a += rew[0]
+            ep_rew_p += rew[1]
 
             loss = agent.update(obs, action, obs_next)
             loss = np.sum(loss)
@@ -233,7 +258,11 @@ def main():
         # tensorboard logging
         writer.add_scalar("training loss", running_loss / t, ep)
         writer.add_scalar("total_reward", ep_rew, ep)
-        writer.add_scalar("agent_shaped_reward", rew_a, ep)
+        writer.add_scalar("learner_reward", ep_rew_a, ep)
+        writer.add_scalar("partner_reward", ep_rew_p, ep)
+        writer.add_scalar("total_shaped_reward", s_rew, ep)
+        writer.add_scalar("learner_shaped_reward", info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"], ep)
+        writer.add_scalar("partner_shaped_reward", info["agent2ball2"], ep)
         writer.add_scalar("ep_length", t, ep)
         writer.add_scalar("num_balls_collected", env.collected_balls, ep)
         writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
@@ -244,10 +273,10 @@ def main():
         writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
 
     writer.close()
-    save_frames_as_gif(frames, ep="ind-sfdqn-random")
-    torch.save(agent.psi1, "psi1.torch")
-    torch.save(agent.psi2, "psi2.torch")
-    torch.save(agent.psi3, "psi3.torch")
+    save_frames_as_gif(frames, path="./plots/", ep="sf-orangerandp-nofactor")
+    torch.save(agent.psi1, "models/psi1-orangerandp-nofactor.torch")
+    torch.save(agent.psi2, "models/psi2-orangerandp-nofactor.torch")
+    torch.save(agent.psi3, "models/psi3-orangerandp-nofactor.torch")
 
 
 if __name__ == "__main__":
