@@ -157,11 +157,11 @@ class IndSFDQNAgent:
 def main():
     lrs: list[float] = [3e-5]
     alg: str = "sf-rand"
-    num_replicates: int = 1
+    num_replicates: int = 3
 
     tensor_board_dir: str = f"runs/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
-    model_dir: str = f"models/"
+    model_dir: str = f"sf-twohot-partner-models/"
 
     mp.set_start_method("spawn")
 
@@ -187,18 +187,20 @@ def run_replicates(
     with open(seed_log_path.replace(".json", f"lr_{lr}.json"), "w") as f:
         json.dump({"seeds": seeds.tolist()}, f)
 
+    colors = ['red', 'orange', 'yellow']
+    ws = [np.array([0.0, 1.0, 1.0]), np.array([1.0, 0.0, 1.0]), np.array([1.0, 1.0, 0.0])]
     for i in range(num_replicates):
-        path_suffix: str = f"lr_{lr}_rep_{i}_yellow"
+        path_suffix: str = f"lr_{lr}_{colors[i]}"
 
         writer = SummaryWriter(tensor_board_dir + path_suffix)
         seed: int = seeds[i]
         set_seed(seed=seed)
         register(
-            id="multigrid-collect-v0",
-            entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
+            id="multigrid-collect-rooms-v0",
+            entry_point="gym_multigrid.envs:CollectGameRooms",
         )
         env = gym.make("multigrid-collect-v0")
-        w = np.array([0.0, 0.0, 1.0])  # red, orange, yellow
+        w = ws[i]
         agent = IndSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 5,
             action_dim=env.ac_dim,
@@ -210,7 +212,7 @@ def run_replicates(
         )
         frames = []
         episodes = 15000
-        for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
+        for ep in tqdm(range(episodes), desc="SF-randpartner-training"):
             obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
             idx = env.grid.width * agent_pos[0] + agent_pos[1]
@@ -291,7 +293,7 @@ def run_replicates(
             frames,
             ep="sf-random",
             path="./plots/",
-            filename="collect-" + path_suffix,
+            filename="collect-twohot-" + path_suffix,
         )
         torch.save(agent.psi1, model_dir + f"{path_suffix}_psi1.torch")
         torch.save(agent.psi2, model_dir + f"{path_suffix}_psi2.torch")
