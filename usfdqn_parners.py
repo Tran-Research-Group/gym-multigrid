@@ -1,9 +1,11 @@
+from typing import Literal
 import gymnasium as gym
 from gymnasium.envs.registration import register
 from gym_multigrid.utils.misc import set_seed, save_frames_as_gif
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.types import Number
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
@@ -42,19 +44,31 @@ class IndSFDQNAgent:
         lr: float,
         gamma: float,
         epsilon: float,
+        nz: int,
     ) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
-        self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
-        self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
-        self.psi3 = NNet(state_dim, action_dim, 1).to(self.device)
+        self.input_size: int = state_dim + w.shape[0]
+        self.psi1 = NNet(self.input_size, action_dim, 1).to(self.device)
+        self.psi2 = NNet(self.input_size, action_dim, 1).to(self.device)
+        self.psi3 = NNet(self.input_size, action_dim, 1).to(self.device)
         self.optim1 = optim.Adam(self.psi1.parameters(), lr=lr)
         self.optim2 = optim.Adam(self.psi2.parameters(), lr=lr)
         self.optim3 = optim.Adam(self.psi3.parameters(), lr=lr)
 
+        joint_action_dim: int = action_dim * action_dim
+
+        self.psi_joint1 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
+        self.psi_joint2 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
+        self.psi_joint3 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
+        self.optim_joint1 = optim.Adam(self.psi_joint1.parameters(), lr=lr)
+        self.optim_joint2 = optim.Adam(self.psi_joint2.parameters(), lr=lr)
+        self.optim_joint3 = optim.Adam(self.psi_joint3.parameters(), lr=lr)
+
         self.w = torch.from_numpy(w)
         self.gamma: float = gamma
         self.epsilon: float = epsilon
+        self.nz = nz
         self.state_dim: int = state_dim
         self.action_dim: int = action_dim
         self.feat_dim: int = feat_dim
@@ -62,7 +76,7 @@ class IndSFDQNAgent:
         self.buffer: NDArray = np.empty(self.batch_size, dtype=object)
         self.buffer_size: int = 0
 
-    def select_action(self, state):
+    def select_action(self, state) -> Number:
         # epsilon greedy
         if np.random.rand() < self.epsilon:
             action = np.random.randint(self.action_dim)
@@ -77,6 +91,28 @@ class IndSFDQNAgent:
                 action = torch.argmax(q_values).item()
         return action
 
+    def gpi_action(self, state, zs: list[NDArray]) -> Number:
+        if np.random.rand() < self.epsilon:
+            action: Number = np.random.randint(self.action_dim)
+        else:
+            with torch.no_grad():
+                state = torch.from_numpy(state).to(self.device)
+                Q: list[Tensor] = []
+                for z_i in zs:
+                    z_i = torch.from_numpy(z_i).to(self.device)
+                    nn_input = torch.cat([state, z_i])
+                    q_values: Tensor = (
+                        self.psi1(nn_input) * self.w[0]
+                        + self.psi2(nn_input) * self.w[1]
+                        + self.psi3(nn_input) * self.w[2]
+                    )
+                    Q.append(q_values.flatten())
+
+                Q_tensor: Tensor = torch.stack(Q)
+                action: Number = torch.argmax(Q_tensor).item() % self.action_dim
+
+        return action
+
     def phi(self, state, next_state):
         # how many of each type of object was picked up between s and s'
         ball1 = np.sum(state[:, :, 0]) - np.sum(next_state[:, :, 0])
@@ -84,7 +120,7 @@ class IndSFDQNAgent:
         ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
         return np.array([ball1, ball2, ball3])
 
-    def update(self, state, action, next_state):
+    def update(self, state, action, next_state, z_i: NDArray) -> NDArray | Literal[0]:
         phi = self.phi(state, next_state)
         state = torch.from_numpy(state).to(self.device)
         action = torch.from_numpy(np.array([action])).to(self.device).view(-1)
@@ -99,20 +135,27 @@ class IndSFDQNAgent:
                 low=0, high=self.buffer_size, size=(self.batch_size,)
             )
             states, actions, phis, next_states = zip(*self.buffer[indices])
-            states = [s.cpu() for s in states]
+
+            states = [
+                torch.concat([s.cpu().flatten(), torch.from_numpy(z_i)]) for s in states
+            ]
             actions = [a.cpu() for a in actions]
             phis = [p.cpu() for p in phis]
-            next_states = [n.cpu() for n in next_states]
+            next_states = [
+                torch.concat([n.cpu().flatten(), torch.from_numpy(z_i)])
+                for n in next_states
+            ]
 
             states = torch.from_numpy(
-                np.vstack(states).reshape((self.batch_size, self.state_dim))
+                np.vstack(states).reshape((self.batch_size, self.input_size))
             ).to(self.device)
+
             actions = torch.from_numpy(np.vstack(actions)).to(self.device)
             phis = torch.from_numpy(
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
             ).to(self.device)
             next_states = torch.from_numpy(
-                np.vstack(next_states).reshape((self.batch_size, self.state_dim))
+                np.vstack(next_states).reshape((self.batch_size, self.input_size))
             ).to(self.device)
             # compute current values
             cur_psi1 = (
@@ -126,13 +169,13 @@ class IndSFDQNAgent:
                 .squeeze(-1)
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
-            ).to(self.device)
+            )
             cur_psi3 = (
                 self.psi3(states)
                 .squeeze(-1)
                 .gather(1, actions.unsqueeze(0).view(-1, 1))
                 .flatten()
-            ).to(self.device)
+            )
             # compute target values
             with torch.no_grad():
                 next_psi1 = torch.max(self.psi1(next_states), dim=1).values.squeeze(1)
@@ -242,7 +285,7 @@ def main():
             for t in range(100):
                 # get agent action
                 actions = []
-                action = agent.select_action(obs.flatten())
+                action = agent.gpi_action(obs.flatten())
                 actions.append(action)
                 actions.append(partner.get_action(obs.flatten()))
 
