@@ -34,7 +34,7 @@ class NNet(nn.Module):
         return output.view([output.shape[0], self.action_dim, self.feature_dim])
 
 
-class IndSFDQNAgent:
+class MaUsfDqnAgent:
     def __init__(
         self,
         state_dim: int,
@@ -58,6 +58,10 @@ class IndSFDQNAgent:
 
         joint_action_dim: int = action_dim * action_dim
 
+        # the output of the joint psi network is a action_dim x action_dim vector of q values
+        # e.g. if action_dim = 4, then the output is 16 q values for the joint action pairs.
+        # the first 4 q values are the q values for the first action of the learner.
+        # the second 4 q values are the q values for the second action of the learner, and so on.
         self.psi_joint1 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
         self.psi_joint2 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
         self.psi_joint3 = NNet(self.input_size, joint_action_dim, 1).to(self.device)
@@ -91,7 +95,9 @@ class IndSFDQNAgent:
                 action = torch.argmax(q_values).item()
         return action
 
-    def gpi_action(self, state, zs: list[NDArray]) -> Number:
+    def gpi_partner_action(
+        self, state, zs: list[NDArray], learner_action: Number
+    ) -> Number:
         if np.random.rand() < self.epsilon:
             action: Number = np.random.randint(self.action_dim)
         else:
@@ -102,9 +108,18 @@ class IndSFDQNAgent:
                     z_i = torch.from_numpy(z_i).to(self.device)
                     nn_input = torch.cat([state, z_i])
                     q_values: Tensor = (
-                        self.psi1(nn_input) * self.w[0]
-                        + self.psi2(nn_input) * self.w[1]
-                        + self.psi3(nn_input) * self.w[2]
+                        self.psi_joint1(nn_input)[
+                            learner_action * 4 : learner_action * 4 + 4
+                        ]
+                        * self.w[0]
+                        + self.psi_joint2(nn_input)[
+                            learner_action * 4 : learner_action * 4 + 4
+                        ]
+                        * self.w[1]
+                        + self.psi_joint3(nn_input)[
+                            learner_action * 4 : learner_action * 4 + 4
+                        ]
+                        * self.w[2]
                     )
                     Q.append(q_values.flatten())
 
@@ -207,8 +222,31 @@ class IndSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
+    def distribution(self, type: Literal["uniform"] = "uniform") -> NDArray:
+        """
+        Returns a sample from a distribution over the task given task vector w.
 
-class SFPartnerAgent:
+        Parameters
+        ----------
+        type: Literal['uniform'] = 'uniform'
+            Type of distribution to sample from
+
+        Returns
+        -------
+        z: NDArray
+            Task from the distribution over tasks. The shape of z is (w.shape[0],).
+        """
+
+        match type:
+            case "uniform":
+                z = np.random.uniform(low=-1, high=1, size=(self.w.shape[0],))
+            case _:
+                raise ValueError(f"Unknown distribution type {type}")
+
+        return z
+
+
+class SfLearnerAgent:
     def __init__(self, dirname: str, filename: str, type: str) -> None:
         self.psi1: NNet = torch.load(dirname + filename + "_psi1.torch")
         self.psi1.eval()
@@ -242,7 +280,7 @@ class SFPartnerAgent:
 
 
 def main():
-    colors = ["red", "orange", "yellow"]
+    colors = ["red"]
     for i in range(len(colors)):
         seed = 42
         set_seed(seed=seed)
@@ -253,7 +291,7 @@ def main():
         env = gym.make("multigrid-collect-rooms-v0")
         w = np.array([1.0, 1.0, 1.0])  # red, orange, yellow
         lr = 3e-5
-        agent = IndSFDQNAgent(
+        agent = MaUsfDqnAgent(
             state_dim=env.grid.width * env.grid.height * 5,
             action_dim=env.ac_dim,
             feat_dim=env.phi_dim(),
@@ -261,10 +299,11 @@ def main():
             lr=lr,
             gamma=0.9,
             epsilon=0.1,
+            nz=5,
         )
-        partner = SFPartnerAgent(
-            dirname="sf-twohot-partner-models/",
-            filename=f"lr_{lr}_{colors[i]}",
+        learner = SfLearnerAgent(
+            dirname="sf-learner-twohot-models/",
+            filename=f"{colors[i]}partner",
             type=f"twohot-{colors[i]}",
         )
         writer = SummaryWriter(comment=f"lr_{lr}_sflearner_{colors[i]}partner")
@@ -283,11 +322,13 @@ def main():
             s_rew = 0
             running_loss = 0
             for t in range(100):
+                zs: list[NDArray] = [agent.distribution() for _ in range(agent.nz)]
                 # get agent action
-                actions = []
-                action = agent.gpi_action(obs.flatten())
-                actions.append(action)
-                actions.append(partner.get_action(obs.flatten()))
+                learner_action = learner.get_action(obs.flatten())
+                partner_action = agent.gpi_partner_action(
+                    obs.flatten(), zs, learner_action
+                )
+                actions: list[Number] = [learner_action, partner_action]
 
                 # step env with selected action
                 obs_next, rew, done, truncated, info = env.step(actions)
