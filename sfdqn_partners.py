@@ -5,12 +5,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
+from torch import Tensor
+from torch.utils.tensorboard.writer import SummaryWriter
 
 
 class NNet(nn.Module):
-    def __init__(self, input_size, action_dim, feature_dim):
+    def __init__(self, input_size: int, action_dim: int, feature_dim: int):
         super(NNet, self).__init__()
         self.input_size = input_size
         self.action_dim = action_dim
@@ -24,14 +26,23 @@ class NNet(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = x.view(-1, self.input_size).float()
-        output = self.model(x)
+        output: Tensor = self.model(x)
         return output.view([output.shape[0], self.action_dim, self.feature_dim])
 
 
 class IndSFDQNAgent:
-    def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        feat_dim: int,
+        w: NDArray,
+        lr: float,
+        gamma: float,
+        epsilon: float,
+    ) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
         self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
@@ -42,14 +53,14 @@ class IndSFDQNAgent:
         self.optim3 = optim.Adam(self.psi3.parameters(), lr=lr)
 
         self.w = torch.from_numpy(w)
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.feat_dim = feat_dim
-        self.batch_size = 20
-        self.buffer = np.empty(self.batch_size, dtype=object)
-        self.buffer_size = 0
+        self.gamma: float = gamma
+        self.epsilon: float = epsilon
+        self.state_dim: int = state_dim
+        self.action_dim: int = action_dim
+        self.feat_dim: int = feat_dim
+        self.batch_size: int = 20
+        self.buffer: NDArray = np.empty(self.batch_size, dtype=object)
+        self.buffer_size: int = 0
 
     def select_action(self, state):
         # epsilon greedy
@@ -129,9 +140,9 @@ class IndSFDQNAgent:
             self.buffer = np.empty(self.batch_size, dtype=object)
             self.buffer_size = 0
             # compute losses
-            loss1 = nn.MSELoss(reduction="sum")(cur_psi1, target1) / 2
-            loss2 = nn.MSELoss(reduction="sum")(cur_psi2, target2) / 2
-            loss3 = nn.MSELoss(reduction="sum")(cur_psi3, target3) / 2
+            loss1: Tensor = nn.MSELoss(reduction="sum")(cur_psi1, target1) / 2
+            loss2: Tensor = nn.MSELoss(reduction="sum")(cur_psi2, target2) / 2
+            loss3: Tensor = nn.MSELoss(reduction="sum")(cur_psi3, target3) / 2
 
             self.optim1.zero_grad()
             self.optim2.zero_grad()
@@ -163,11 +174,11 @@ class SFPartnerAgent:
             self.w = np.array([0.0, 1.0, 0.0])
         elif filename == "yellow":
             self.w = np.array([0.0, 0.0, 1.0])
-        elif type == 'twohot-red':
+        elif type == "twohot-red":
             self.w = np.array([0.0, 1.0, 1.0])
-        elif type == 'twohot-orange':
+        elif type == "twohot-orange":
             self.w = np.array([1.0, 0.0, 1.0])
-        elif type == 'twohot-yellow':
+        elif type == "twohot-yellow":
             self.w = np.array([1.0, 1.0, 0.0])
         else:
             assert False, "that partner policy does not exist"
@@ -183,7 +194,7 @@ class SFPartnerAgent:
 
 
 def main():
-    colors = ['red', 'orange', 'yellow']
+    colors = ["red", "orange", "yellow"]
     for i in range(len(colors)):
         seed = 42
         set_seed(seed=seed)
@@ -203,7 +214,11 @@ def main():
             gamma=0.9,
             epsilon=0.1,
         )
-        partner = SFPartnerAgent(dirname="sf-twohot-partner-models/", filename=f"lr_{lr}_{colors[i]}", type=f'twohot-{colors[i]}')
+        partner = SFPartnerAgent(
+            dirname="sf-twohot-partner-models/",
+            filename=f"lr_{lr}_{colors[i]}",
+            type=f"twohot-{colors[i]}",
+        )
         writer = SummaryWriter(comment=f"lr_{lr}_sflearner_{colors[i]}partner")
         frames = []
         episodes = 15000
