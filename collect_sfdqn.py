@@ -199,7 +199,7 @@ def run_replicates(
             id="multigrid-collect-rooms-v0",
             entry_point="gym_multigrid.envs:CollectGameRooms",
         )
-        env = gym.make("multigrid-collect-v0")
+        env = gym.make("multigrid-collect-rooms-v0")
         w = ws[i]
         agent = IndSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 5,

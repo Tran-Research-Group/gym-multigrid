@@ -217,9 +217,9 @@ class CollectGameEnv(MultiGridEnv):
 
 
 class CollectGame3Obj2Agent(CollectGameEnv):
-    def __init__(self):
+    def __init__(self, size=10):
         super().__init__(
-            size=10,
+            size=size,
             num_balls=15,
             agents_index=[3, 5],
             balls_index=[0],
@@ -490,7 +490,7 @@ class CollectGameRooms(CollectGame3Obj2Agent):
                            (width // 2 + 1, width // 2 - 1)]
         for a in self.agents:
             location = self._rand_elem(possible_coords)
-            self.place_agent(pos=location)
+            self.place_agent(agent=a, pos=location)
 
         # place balls
         partitions = [(0, 0), (width // 2 + 1, width // 2 + 1), (width // 2 + 1, 0), (0, width // 2 + 1)]

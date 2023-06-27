@@ -188,14 +188,14 @@ class MultiGridEnv(gym.Env):
 
     def _rand_int(self, low, high):
         """
-        Generate random integer in [low,high[
+        Generate random integer in [low,high]
         """
 
         return random.randint(low, high)
 
     def _rand_float(self, low, high):
         """
-        Generate random float in [low,high[
+        Generate random float in [low,high]
         """
 
         return self.np_random.uniform(low, high)
@@ -213,7 +213,7 @@ class MultiGridEnv(gym.Env):
         """
 
         lst = list(iterable)
-        idx = self._rand_int(0, len(lst))
+        idx = self._rand_int(0, len(lst) - 1)
         return lst[idx]
 
     def _rand_subset(self, iterable, num_elems):

@@ -150,12 +150,12 @@ class IndSFDQNAgent:
 
 
 class SFPartnerAgent:
-    def __init__(self, filename) -> None:
-        self.psi1 = torch.load("models/" + filename + "_psi1.torch")
+    def __init__(self, dirname, filename, type) -> None:
+        self.psi1 = torch.load(dirname + filename + "_psi1.torch")
         self.psi1.eval()
-        self.psi2 = torch.load("models/" + filename + "_psi2.torch")
+        self.psi2 = torch.load(dirname + filename + "_psi2.torch")
         self.psi2.eval()
-        self.psi3 = torch.load("models/" + filename + "_psi3.torch")
+        self.psi3 = torch.load(dirname + filename + "_psi3.torch")
         self.psi3.eval()
         if filename == "red":
             self.w = np.array([1.0, 0.0, 0.0])
@@ -163,6 +163,12 @@ class SFPartnerAgent:
             self.w = np.array([0.0, 1.0, 0.0])
         elif filename == "yellow":
             self.w = np.array([0.0, 0.0, 1.0])
+        elif type == 'twohot-red':
+            self.w = np.array([0.0, 1.0, 1.0])
+        elif type == 'twohot-orange':
+            self.w = np.array([1.0, 0.0, 1.0])
+        elif type == 'twohot-yellow':
+            self.w = np.array([1.0, 1.0, 0.0])
         else:
             assert False, "that partner policy does not exist"
 
@@ -177,97 +183,101 @@ class SFPartnerAgent:
 
 
 def main():
-    seed = 42
-    set_seed(seed=seed)
-    register(
-        id="multigrid-collect-v0",
-        entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
-    )
-    env = gym.make("multigrid-collect-v0")
-    w = np.array([1.0, 1.0, 1.0])  # red, orange, yellow
-    agent = IndSFDQNAgent(
-        state_dim=env.grid.width * env.grid.height * 5,
-        action_dim=env.ac_dim,
-        feat_dim=env.phi_dim(),
-        w=w,
-        lr=0.00003,
-        gamma=0.9,
-        epsilon=0.1,
-    )
-    partner = SFPartnerAgent(filename="orange")
-    writer = SummaryWriter(comment="sf-orangerandp-nofactor")
-    frames = []
-    episodes = 15000
-    for ep in tqdm(range(episodes), desc="SF-orange-partner-training"):
-        obs, _ = env.reset(seed=seed)
-        agent_pos = env.agents[0].pos
-        idx = env.grid.width * agent_pos[0] + agent_pos[1]
-        obs = env.toroid(idx)
-
-        done = False
-        ep_rew = 0
-        ep_rew_a = 0
-        ep_rew_p = 0
-        s_rew = 0
-        running_loss = 0
-        for t in range(100):
-            # get agent action
-            actions = []
-            action = agent.select_action(obs.flatten())
-            actions.append(action)
-            actions.append(partner.get_action(obs.flatten()))
-
-            # step env with selected action
-            obs_next, rew, done, truncated, info = env.step(actions)
-
+    colors = ['red', 'orange', 'yellow']
+    for i in range(len(colors)):
+        seed = 42
+        set_seed(seed=seed)
+        register(
+            id="multigrid-collect-rooms-v0",
+            entry_point="gym_multigrid.envs:CollectGameRooms",
+        )
+        env = gym.make("multigrid-collect-rooms-v0")
+        w = np.array([1.0, 1.0, 1.0])  # red, orange, yellow
+        lr = 3e-5
+        agent = IndSFDQNAgent(
+            state_dim=env.grid.width * env.grid.height * 5,
+            action_dim=env.ac_dim,
+            feat_dim=env.phi_dim(),
+            w=w,
+            lr=lr,
+            gamma=0.9,
+            epsilon=0.1,
+        )
+        partner = SFPartnerAgent(dirname="sf-twohot-partner-models/", filename=f"lr_{lr}_{colors[i]}", type=f'twohot-{colors[i]}')
+        writer = SummaryWriter(comment=f"lr_{lr}_sflearner_{colors[i]}partner")
+        frames = []
+        episodes = 15000
+        for ep in tqdm(range(episodes), desc="SF-learner-training"):
+            obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
             idx = env.grid.width * agent_pos[0] + agent_pos[1]
-            obs_next = env.toroid(idx)
+            obs = env.toroid(idx)
 
-            # shaped reward
-            s_rew += np.dot(w, agent.phi(obs, obs_next))
-            # standard env reward
-            ep_rew += np.sum(rew)
-            ep_rew_a += rew[0]
-            ep_rew_p += rew[1]
+            done = False
+            ep_rew = 0
+            ep_rew_a = 0
+            ep_rew_p = 0
+            s_rew = 0
+            running_loss = 0
+            for t in range(100):
+                # get agent action
+                actions = []
+                action = agent.select_action(obs.flatten())
+                actions.append(action)
+                actions.append(partner.get_action(obs.flatten()))
 
-            loss = agent.update(obs, action, obs_next)
-            loss = np.sum(loss)
-            running_loss += loss
+                # step env with selected action
+                obs_next, rew, done, truncated, info = env.step(actions)
 
-            # save gif of last episode for fun
-            if ep == episodes - 1:
-                frames.append(env.render())
-            if done:
-                break
-            obs = obs_next
+                agent_pos = env.agents[0].pos
+                idx = env.grid.width * agent_pos[0] + agent_pos[1]
+                obs_next = env.toroid(idx)
 
-        # tensorboard logging
-        writer.add_scalar("training loss", running_loss / t, ep)
-        writer.add_scalar("total_reward", ep_rew, ep)
-        writer.add_scalar("learner_reward", ep_rew_a, ep)
-        writer.add_scalar("partner_reward", ep_rew_p, ep)
-        writer.add_scalar("total_shaped_reward", s_rew, ep)
-        writer.add_scalar(
-            "learner_shaped_reward",
-            info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"],
-            ep,
-        )
-        writer.add_scalar("partner_shaped_reward", info["agent2ball2"], ep)
-        writer.add_scalar("ep_length", t, ep)
-        writer.add_scalar("num_balls_collected", env.collected_balls, ep)
-        writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
-        writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
-        writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
-        writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
-        writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
-        writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
+                # shaped reward
+                s_rew += np.dot(w, agent.phi(obs, obs_next))
+                # standard env reward
+                ep_rew += np.sum(rew)
+                ep_rew_a += rew[0]
+                ep_rew_p += rew[1]
 
-    writer.close()
-    save_frames_as_gif(frames, path="./plots/", ep="sf-orangerandp-nofactor")
-    torch.save(agent.psi1, "models/psi1-orangerandp-nofactor.torch")
-    torch.save(agent.psi2, "models/psi2-orangerandp-nofactor.torch")
-    torch.save(agent.psi3, "models/psi3-orangerandp-nofactor.torch")
+                loss = agent.update(obs, action, obs_next)
+                loss = np.sum(loss)
+                running_loss += loss
+
+                # save gif of last episode for fun
+                if ep == episodes - 1:
+                    frames.append(env.render())
+                if done:
+                    break
+                obs = obs_next
+
+            # tensorboard logging
+            writer.add_scalar("training loss", running_loss / t, ep)
+            writer.add_scalar("total_reward", ep_rew, ep)
+            writer.add_scalar("learner_reward", ep_rew_a, ep)
+            writer.add_scalar("partner_reward", ep_rew_p, ep)
+            writer.add_scalar("total_shaped_reward", s_rew, ep)
+            writer.add_scalar(
+                "learner_shaped_reward",
+                info["agent1ball3"] + info["agent1ball2"] + info["agent1ball1"],
+                ep,
+            )
+            writer.add_scalar("partner_shaped_reward", info["agent2ball2"], ep)
+            writer.add_scalar("ep_length", t, ep)
+            writer.add_scalar("num_balls_collected", env.collected_balls, ep)
+            writer.add_scalar("num_agent1_ball1", info["agent1ball1"], ep)
+            writer.add_scalar("num_agent1_ball2", info["agent1ball2"], ep)
+            writer.add_scalar("num_agent1_ball3", info["agent1ball3"], ep)
+            writer.add_scalar("num_agent2_ball1", info["agent2ball1"], ep)
+            writer.add_scalar("num_agent2_ball2", info["agent2ball2"], ep)
+            writer.add_scalar("num_agent2_ball3", info["agent2ball3"], ep)
+
+        writer.close()
+        learner_type = f"{colors[i]}partner"
+        save_frames_as_gif(frames, path="./plots/", ep=learner_type)
+        torch.save(agent.psi1, f"sf-learner-twohot-models/{learner_type}_psi1.torch")
+        torch.save(agent.psi2, f"sf-learner-twohot-models/{learner_type}_psi2.torch")
+        torch.save(agent.psi3, f"sf-learner-twohot-models/{learner_type}_psi3.torch")
 
 
 if __name__ == "__main__":
