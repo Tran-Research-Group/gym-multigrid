@@ -161,12 +161,12 @@ class IndSFDQNAgent:
 
 
 class SFPartnerAgent:
-    def __init__(self, dirname, filename, type) -> None:
-        self.psi1 = torch.load(dirname + filename + "_psi1.torch")
+    def __init__(self, dirname: str, filename: str, type: str) -> None:
+        self.psi1: NNet = torch.load(dirname + filename + "_psi1.torch")
         self.psi1.eval()
-        self.psi2 = torch.load(dirname + filename + "_psi2.torch")
+        self.psi2: NNet = torch.load(dirname + filename + "_psi2.torch")
         self.psi2.eval()
-        self.psi3 = torch.load(dirname + filename + "_psi3.torch")
+        self.psi3: NNet = torch.load(dirname + filename + "_psi3.torch")
         self.psi3.eval()
         if filename == "red":
             self.w = np.array([1.0, 0.0, 0.0])
