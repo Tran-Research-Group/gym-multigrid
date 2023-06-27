@@ -108,20 +108,20 @@ class MaUsfDqnAgent:
                     z_i = torch.from_numpy(z_i).to(self.device)
                     nn_input = torch.cat([state, z_i])
                     q_values: Tensor = (
-                        self.psi_joint1(nn_input)[
+                        self.psi_joint1(nn_input).flatten()[
                             learner_action * 4 : learner_action * 4 + 4
                         ]
                         * self.w[0]
-                        + self.psi_joint2(nn_input)[
+                        + self.psi_joint2(nn_input).flatten()[
                             learner_action * 4 : learner_action * 4 + 4
                         ]
                         * self.w[1]
-                        + self.psi_joint3(nn_input)[
+                        + self.psi_joint3(nn_input).flatten()[
                             learner_action * 4 : learner_action * 4 + 4
                         ]
                         * self.w[2]
                     )
-                    Q.append(q_values.flatten())
+                    Q.append(q_values)
 
                 Q_tensor: Tensor = torch.stack(Q)
                 action: Number = torch.argmax(Q_tensor).item() % self.action_dim
@@ -135,26 +135,38 @@ class MaUsfDqnAgent:
         ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
         return np.array([ball1, ball2, ball3])
 
-    def update(self, state, action, next_state, z_i: NDArray) -> NDArray | Literal[0]:
+    def update(
+        self, state, joint_action, next_state, z_i: NDArray
+    ) -> NDArray | Literal[0]:
         phi = self.phi(state, next_state)
         state = torch.from_numpy(state).to(self.device)
-        action = torch.from_numpy(np.array([action])).to(self.device).view(-1)
+        learner_action = torch.from_numpy(np.array([joint_action[0]])).to(self.device)
+        partner_action = torch.from_numpy(np.array([joint_action[1]])).to(self.device)
         next_state = torch.from_numpy(next_state).to(self.device)
         phi = torch.from_numpy(phi).to(self.device)
         # add this transition to buffer
-        self.buffer[self.buffer_size] = (state, action, phi, next_state)
+        self.buffer[self.buffer_size] = (
+            state,
+            learner_action,
+            partner_action,
+            phi,
+            next_state,
+        )
         self.buffer_size += 1
         # once buffer is big enough do batch update
         if self.buffer_size == self.batch_size:
             indices = np.random.randint(
                 low=0, high=self.buffer_size, size=(self.batch_size,)
             )
-            states, actions, phis, next_states = zip(*self.buffer[indices])
+            states, learner_actions, partner_actions, phis, next_states = zip(
+                *self.buffer[indices]
+            )
 
             states = [
                 torch.concat([s.cpu().flatten(), torch.from_numpy(z_i)]) for s in states
             ]
-            actions = [a.cpu() for a in actions]
+            learner_actions = [a.cpu() for a in learner_actions]
+            partner_actions = [a.cpu() for a in partner_actions]
             phis = [p.cpu() for p in phis]
             next_states = [
                 torch.concat([n.cpu().flatten(), torch.from_numpy(z_i)])
@@ -165,7 +177,12 @@ class MaUsfDqnAgent:
                 np.vstack(states).reshape((self.batch_size, self.input_size))
             ).to(self.device)
 
-            actions = torch.from_numpy(np.vstack(actions)).to(self.device)
+            learner_actions = torch.from_numpy(np.vstack(learner_actions)).to(
+                self.device
+            )
+            partner_actions = torch.from_numpy(np.vstack(partner_actions)).to(
+                self.device
+            )
             phis = torch.from_numpy(
                 np.vstack(phis).reshape((self.batch_size, self.feat_dim))
             ).to(self.device)
@@ -176,29 +193,54 @@ class MaUsfDqnAgent:
             cur_psi1 = (
                 self.psi1(states)
                 .squeeze(-1)
-                .gather(1, actions.unsqueeze(0).view(-1, 1))
+                .gather(1, learner_actions.unsqueeze(0).view(-1, 1))
                 .flatten()
             ).to(self.device)
             cur_psi2 = (
                 self.psi2(states)
                 .squeeze(-1)
-                .gather(1, actions.unsqueeze(0).view(-1, 1))
+                .gather(1, learner_actions.unsqueeze(0).view(-1, 1))
                 .flatten()
             )
             cur_psi3 = (
                 self.psi3(states)
                 .squeeze(-1)
-                .gather(1, actions.unsqueeze(0).view(-1, 1))
+                .gather(1, learner_actions.unsqueeze(0).view(-1, 1))
                 .flatten()
             )
+
+            joint_actions: Tensor = learner_actions.unsqueeze(0).view(
+                -1, 1
+            ) * 4 + partner_actions.unsqueeze(0).view(-1, 1)
+
+            cur_psi_joint1 = (
+                self.psi_joint1(states).squeeze(-1).gather(1, joint_actions).flatten()
+            ).to(self.device)
+            cur_psi_joint2 = (
+                self.psi_joint2(states).squeeze(-1).gather(1, joint_actions).flatten()
+            ).to(self.device)
+            cur_psi_joint3 = (
+                self.psi_joint3(states).squeeze(-1).gather(1, joint_actions).flatten()
+            ).to(self.device)
+
             # compute target values
             with torch.no_grad():
                 next_psi1 = torch.max(self.psi1(next_states), dim=1).values.squeeze(1)
                 next_psi2 = torch.max(self.psi2(next_states), dim=1).values.squeeze(1)
                 next_psi3 = torch.max(self.psi3(next_states), dim=1).values.squeeze(1)
-            target1 = phis[:, 0] + self.gamma * next_psi1
-            target2 = phis[:, 1] + self.gamma * next_psi2
-            target3 = phis[:, 2] + self.gamma * next_psi3
+                next_psi_joint1 = torch.max(
+                    self.psi_joint1(next_states), dim=1
+                ).values.squeeze(1)
+                next_psi_joint2 = torch.max(
+                    self.psi_joint2(next_states), dim=1
+                ).values.squeeze(1)
+                next_psi_joint3 = torch.max(
+                    self.psi_joint3(next_states), dim=1
+                ).values.squeeze(1)
+
+            target1 = phis[:, 0] + self.gamma * next_psi_joint1
+            target2 = phis[:, 1] + self.gamma * next_psi_joint2
+            target3 = phis[:, 2] + self.gamma * next_psi_joint3
             # reset buffer
             self.buffer = np.empty(self.batch_size, dtype=object)
             self.buffer_size = 0
@@ -206,18 +248,36 @@ class MaUsfDqnAgent:
             loss1: Tensor = nn.MSELoss(reduction="sum")(cur_psi1, target1) / 2
             loss2: Tensor = nn.MSELoss(reduction="sum")(cur_psi2, target2) / 2
             loss3: Tensor = nn.MSELoss(reduction="sum")(cur_psi3, target3) / 2
+            loss_joint1: Tensor = (
+                nn.MSELoss(reduction="sum")(cur_psi_joint1, target1) / 2
+            )
+            loss_joint2: Tensor = (
+                nn.MSELoss(reduction="sum")(cur_psi_joint2, target2) / 2
+            )
+            loss_joint3: Tensor = (
+                nn.MSELoss(reduction="sum")(cur_psi_joint3, target3) / 2
+            )
 
             self.optim1.zero_grad()
             self.optim2.zero_grad()
             self.optim3.zero_grad()
+            self.optim_joint1.zero_grad()
+            self.optim_joint2.zero_grad()
+            self.optim_joint3.zero_grad()
 
             loss1.backward()
             loss2.backward()
             loss3.backward()
+            loss_joint1.backward()
+            loss_joint2.backward()
+            loss_joint3.backward()
 
             self.optim1.step()
             self.optim2.step()
             self.optim3.step()
+            self.optim_joint1.step()
+            self.optim_joint2.step()
+            self.optim_joint3.step()
 
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
@@ -328,10 +388,10 @@ def main():
                 partner_action = agent.gpi_partner_action(
                     obs.flatten(), zs, learner_action
                 )
-                actions: list[Number] = [learner_action, partner_action]
+                joint_action: list[Number] = [learner_action, partner_action]
 
                 # step env with selected action
-                obs_next, rew, done, truncated, info = env.step(actions)
+                obs_next, rew, done, truncated, info = env.step(joint_action)
 
                 agent_pos = env.agents[0].pos
                 idx = env.grid.width * agent_pos[0] + agent_pos[1]
@@ -344,9 +404,13 @@ def main():
                 ep_rew_a += rew[0]
                 ep_rew_p += rew[1]
 
-                loss = agent.update(obs, action, obs_next)
-                loss = np.sum(loss)
-                running_loss += loss
+                loss_sum = 0
+
+                for z_i in zs:
+                    losses = agent.update(obs, joint_action, obs_next, z_i)
+                    loss_sum += np.sum(losses)
+
+                running_loss += loss_sum / agent.nz
 
                 # save gif of last episode for fun
                 if ep == episodes - 1:
