@@ -66,7 +66,7 @@ class IndUSFDQNAgent:
         self.buffer = np.empty(self.batch_size, dtype=object)
         self.buffer_size = 0
 
-    def select_action(self, state, w: Tensor) -> Number:
+    def select_action(self, state) -> Number:
         # epsilon greedy
         if np.random.rand() < self.epsilon:
             action: Number = np.random.randint(self.action_dim)
@@ -74,11 +74,33 @@ class IndUSFDQNAgent:
             with torch.no_grad():
                 state = torch.from_numpy(state).to(self.device)
                 q_values = (
-                    self.psi1(state) * w[0]
-                    + self.psi2(state) * w[1]
-                    + self.psi3(state) * w[2]
+                    self.psi1(state) * self.w[0]
+                    + self.psi2(state) * self.w[1]
+                    + self.psi3(state) * self.w[2]
                 )
                 action: Number = torch.argmax(q_values).item()
+        return action
+
+    def gpi_action(self, state, zs: list[NDArray]) -> Number:
+        if np.random.rand() < self.epsilon:
+            action: Number = np.random.randint(self.action_dim)
+        else:
+            with torch.no_grad():
+                state = torch.from_numpy(state).to(self.device)
+                Q: list[Tensor] = []
+                for z_i in zs:
+                    z_i = torch.from_numpy(z_i).to(self.device)
+                    nn_input = torch.cat([state, z_i])
+                    q_values: Tensor = (
+                        self.psi1(nn_input) * self.w[0]
+                        + self.psi2(nn_input) * self.w[1]
+                        + self.psi3(nn_input) * self.w[2]
+                    )
+                    Q.append(q_values.flatten())
+
+                Q_tensor: Tensor = torch.stack(Q)
+                action: Number = torch.argmax(Q_tensor).item() % self.action_dim
+
         return action
 
     def phi(self, state, next_state) -> NDArray:
@@ -104,11 +126,14 @@ class IndUSFDQNAgent:
             )
             states, actions, phis, next_states = zip(*self.buffer[indices])
 
-            states = [torch.concat([s.cpu(), torch.from_numpy(z_i)]) for s in states]
+            states = [
+                torch.concat([s.cpu().flatten(), torch.from_numpy(z_i)]) for s in states
+            ]
             actions = [a.cpu() for a in actions]
             phis = [p.cpu() for p in phis]
             next_states = [
-                torch.concat([n.cpu(), torch.from_numpy(z_i)]) for n in next_states
+                torch.concat([n.cpu().flatten(), torch.from_numpy(z_i)])
+                for n in next_states
             ]
 
             states = torch.from_numpy(
@@ -198,12 +223,13 @@ class IndUSFDQNAgent:
 
 def main():
     lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
-    alg: str = "sfdqn"
+    alg: str = "usfdqn"
     num_replicates: int = 3
 
     tensor_board_dir: str = f"runs/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
     model_dir: str = f"models/"
+    start_replicate: int = 1
 
     mp.set_start_method("spawn")
 
@@ -211,7 +237,14 @@ def main():
         pool.starmap(
             run_replicates,
             [
-                (num_replicates, lr, tensor_board_dir, seed_log_path, model_dir)
+                (
+                    num_replicates,
+                    lr,
+                    tensor_board_dir,
+                    seed_log_path,
+                    model_dir,
+                    start_replicate,
+                )
                 for lr in lrs
             ],
         )
@@ -223,13 +256,14 @@ def run_replicates(
     tensor_board_dir: str,
     seed_log_path: str,
     model_dir: str,
+    start_replicate: int = 0,
 ) -> None:
     seeds = np.random.randint(low=0, high=10000, size=(num_replicates,))
 
     with open(seed_log_path.replace(".json", f"lr_{lr}.json"), "w") as f:
         json.dump({"seeds": seeds.tolist()}, f)
 
-    for i in range(num_replicates):
+    for i in range(start_replicate, num_replicates):
         path_suffix: str = f"lr_{lr}_rep_{i}"
 
         writer = SummaryWriter(tensor_board_dir + path_suffix)
@@ -253,7 +287,7 @@ def run_replicates(
         )
         frames = []
         episodes = 50000
-        for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
+        for ep in tqdm(range(episodes), desc="Ind-USFDQN-training"):
             obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
             idx = env.grid.width * agent_pos[0] + agent_pos[1]
@@ -275,7 +309,8 @@ def run_replicates(
                 zs: list[NDArray] = [agent.distribution() for _ in range(agent.nz)]
                 # get agent action
                 actions = []
-                action = agent.select_action(obs.flatten(), agent.w)
+
+                action = agent.gpi_action(obs.flatten(), zs)
                 actions.append(action)
 
                 # use this for random partner
