@@ -4,7 +4,7 @@ __pycache__/
 *.torch
 *.png
 *.npy
-runs/*
+#runs/*
 logs/*
 ppo_random_collect_tensorboard/*
 .DS_Store
