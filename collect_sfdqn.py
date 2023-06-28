@@ -168,13 +168,13 @@ class IndSFDQNAgent:
 
 
 def main():
-    lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
+    lrs: list[float] = [3e-5]
     alg: str = "sfdqn"
     num_replicates: int = 3
 
     tensor_board_dir: str = f"runs/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
-    model_dir: str = f"models/"
+    model_dir: str = f"models/{alg}/"
 
     mp.set_start_method("spawn")
 
@@ -211,7 +211,7 @@ def run_replicates(
             entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
         )
         env = gym.make("multigrid-collect-more-v0")
-        w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
+        w = np.array([1.0, 1.0, 0.0])  # red, orange, yellow
         agent = IndSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 4,
             action_dim=env.ac_dim,

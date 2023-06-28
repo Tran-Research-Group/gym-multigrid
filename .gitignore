@@ -1,7 +1,6 @@
 __pycache__/
 *.gif
 *.zip
-*.torch
 *.png
 *.npy
 ppo_random_collect_tensorboard/*
