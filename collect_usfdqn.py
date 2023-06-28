@@ -1,5 +1,6 @@
 import json
 import multiprocessing as mp
+import random
 from typing import Literal, TypeVar
 
 import gymnasium as gym
@@ -55,7 +56,6 @@ class IndUSFDQNAgent:
         self.optim2 = optim.Adam(self.psi2.parameters(), lr=lr)
         self.optim3 = optim.Adam(self.psi3.parameters(), lr=lr)
 
-        self.w = torch.from_numpy(w)
         self.gamma = gamma
         self.epsilon = epsilon
         self.nz = nz
@@ -66,25 +66,11 @@ class IndUSFDQNAgent:
         self.buffer = np.empty(self.batch_size, dtype=object)
         self.buffer_size = 0
 
-    def select_action(self, state) -> Number:
-        # epsilon greedy
+    def gpi_action(self, state, zs: list[NDArray], w_np: NDArray) -> Number:
         if np.random.rand() < self.epsilon:
             action: Number = np.random.randint(self.action_dim)
         else:
-            with torch.no_grad():
-                state = torch.from_numpy(state).to(self.device)
-                q_values = (
-                    self.psi1(state) * self.w[0]
-                    + self.psi2(state) * self.w[1]
-                    + self.psi3(state) * self.w[2]
-                )
-                action: Number = torch.argmax(q_values).item()
-        return action
-
-    def gpi_action(self, state, zs: list[NDArray]) -> Number:
-        if np.random.rand() < self.epsilon:
-            action: Number = np.random.randint(self.action_dim)
-        else:
+            w: Tensor = torch.from_numpy(w_np).to(self.device)
             with torch.no_grad():
                 state = torch.from_numpy(state).to(self.device)
                 Q: list[Tensor] = []
@@ -92,9 +78,9 @@ class IndUSFDQNAgent:
                     z_i = torch.from_numpy(z_i).to(self.device)
                     nn_input = torch.cat([state, z_i])
                     q_values: Tensor = (
-                        self.psi1(nn_input) * self.w[0]
-                        + self.psi2(nn_input) * self.w[1]
-                        + self.psi3(nn_input) * self.w[2]
+                        self.psi1(nn_input) * w[0]
+                        + self.psi2(nn_input) * w[1]
+                        + self.psi3(nn_input) * w[2]
                     )
                     Q.append(q_values.flatten())
 
@@ -197,7 +183,11 @@ class IndUSFDQNAgent:
             return np.array([loss1.item(), loss2.item(), loss3.item()])
         return 0
 
-    def distribution(self, type: Literal["uniform"] = "uniform") -> NDArray:
+    def distribution(
+        self,
+        w_np: NDArray,
+        type: Literal["uniform"] = "uniform",
+    ) -> NDArray:
         """
         Returns a sample from a distribution over the task given task vector w.
 
@@ -214,7 +204,7 @@ class IndUSFDQNAgent:
 
         match type:
             case "uniform":
-                z = np.random.uniform(low=-1, high=1, size=(self.w.shape[0],))
+                z = np.random.uniform(low=-1, high=1, size=(w_np.shape[0],))
             case _:
                 raise ValueError(f"Unknown distribution type {type}")
 
@@ -222,13 +212,13 @@ class IndUSFDQNAgent:
 
 
 def main():
-    lrs: list[float] = [1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5]
+    lrs: list[float] = [1e-5]
     alg: str = "usfdqn"
     num_replicates: int = 3
 
-    tensor_board_dir: str = f"runs/{alg}_"
+    tensor_board_dir: str = f"runs/{alg}/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
-    model_dir: str = f"models/"
+    model_dir: str = f"models/{alg}/"
     start_replicate: int = 1
 
     mp.set_start_method("spawn")
@@ -257,6 +247,7 @@ def run_replicates(
     seed_log_path: str,
     model_dir: str,
     start_replicate: int = 0,
+    gpi_eval_freq_ratio: float = 0.01,
 ) -> None:
     seeds = np.random.randint(low=0, high=10000, size=(num_replicates,))
 
@@ -274,12 +265,18 @@ def run_replicates(
             entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
         )
         env = gym.make("multigrid-collect-more-v0")
-        w = np.array([-1.0, 1.0, 0.0])  # red, orange, yellow
+
+        w_test: NDArray = np.array([-1.0, 1.0, 1.0])
+
+        ws: list[NDArray] = [
+            np.array([1.0, 1.0, 0.0]),
+            np.array([1.0, 0.0, 1.0]),
+        ]  # red, orange, yellow
         agent = IndUSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 4,
             action_dim=env.ac_dim,
             feat_dim=env.phi_dim(),
-            w=w,
+            w=w_test,
             lr=lr,
             gamma=0.9,
             epsilon=0.1,
@@ -287,6 +284,8 @@ def run_replicates(
         )
         frames = []
         episodes = 50000
+        gpi_eval_freq = int(episodes * gpi_eval_freq_ratio)
+
         for ep in tqdm(range(episodes), desc="Ind-USFDQN-training"):
             obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
@@ -300,17 +299,19 @@ def run_replicates(
             ep_rew = 0
             rew_a = 0
             running_loss = 0
-            for t in range(100):
+            episode_length: int = 100
+            for t in range(episode_length):
                 # use this code for live rendering
                 # env.render(mode='human', highlight=True if env.partial_obs else False)
                 # time.sleep(0.1)
                 # frames.append(env.render(mode="rgb_array"))
 
-                zs: list[NDArray] = [agent.distribution() for _ in range(agent.nz)]
+                w: NDArray = random.choice(ws)
+                zs: list[NDArray] = [agent.distribution(w) for _ in range(agent.nz)]
                 # get agent action
                 actions = []
 
-                action = agent.gpi_action(obs.flatten(), zs)
+                action = agent.gpi_action(obs.flatten(), zs, w)
                 actions.append(action)
 
                 # use this for random partner
@@ -359,6 +360,50 @@ def run_replicates(
             # writer.add_scalar('num_agent2_ball1', info['agent2ball1'], ep)
             # writer.add_scalar('num_agent2_ball2', info['agent2ball2'], ep)
             # writer.add_scalar('num_agent2_ball3', info['agent2ball3'], ep)
+
+            # Do gpi evaluation
+            if ep % gpi_eval_freq == 0:
+                obs, _ = env.reset(seed=seed)
+                agent_pos = env.agents[0].pos
+                idx = env.grid.width * agent_pos[0] + agent_pos[1]
+                obs = env.toroid(idx)
+                test_reward: float = 0
+                shaped_test_reward: float = 0
+                # use this code to compare toroidal obs with standard env obs
+                # plt.imshow(20*obs[:,:,0] + 50*obs[:,:,1] + 100*obs[:,:,2] + 70*obs[:,:,3])
+                # plt.savefig('toroid.png')
+                # print(str(env))
+                done = False
+
+                for t in range(episode_length):
+                    zs: list[NDArray] = ws
+                    # get agent action
+                    actions = []
+
+                    action = agent.gpi_action(obs.flatten(), zs, w_test)
+                    actions.append(action)
+
+                    # step env with selected action
+                    obs_next, rew, done, truncated, info = env.step(actions)
+
+                    agent_pos = env.agents[0].pos
+                    idx = env.grid.width * agent_pos[0] + agent_pos[1]
+                    obs_next = env.toroid(idx)
+
+                    # shaped reward
+                    shaped_test_reward += np.dot(w_test, agent.phi(obs, obs_next))
+                    # standard env reward
+                    test_reward += rew
+
+                    # save gif of last episode for fun
+                    if ep == episodes - 1:
+                        frames.append(env.render())
+                    if done:
+                        break
+                    obs = obs_next
+
+                writer.add_scalar("test_reward", test_reward, ep)
+                writer.add_scalar("shaped_test_reward", shaped_test_reward, ep)
 
         writer.close()
         save_frames_as_gif(
