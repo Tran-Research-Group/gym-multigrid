@@ -3,7 +3,6 @@ __pycache__/
 *.zip
 *.png
 *.npy
-models/*
 #runs/*
 logs/*
 ppo_random_collect_tensorboard/*

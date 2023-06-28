@@ -368,7 +368,7 @@ def main():
         )
         writer = SummaryWriter(comment=f"lr_{lr}_sflearner_{colors[i]}partner")
         frames = []
-        episodes = 15000
+        episodes = 100_000
         for ep in tqdm(range(episodes), desc="SF-learner-training"):
             obs, _ = env.reset(seed=seed)
             agent_pos = env.agents[0].pos
@@ -443,9 +443,9 @@ def main():
         writer.close()
         learner_type = f"{colors[i]}partner"
         save_frames_as_gif(frames, path="./plots/", ep=learner_type)
-        torch.save(agent.psi1, f"sf-learner-twohot-models/{learner_type}_psi1.torch")
-        torch.save(agent.psi2, f"sf-learner-twohot-models/{learner_type}_psi2.torch")
-        torch.save(agent.psi3, f"sf-learner-twohot-models/{learner_type}_psi3.torch")
+        torch.save(agent.psi1, f"models/mausf/{learner_type}_psi1.torch")
+        torch.save(agent.psi2, f"models/mausf/{learner_type}_psi2.torch")
+        torch.save(agent.psi3, f"models/mausf/{learner_type}_psi3.torch")
 
 
 if __name__ == "__main__":
