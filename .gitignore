@@ -1,9 +1,9 @@
 __pycache__/
 *.gif
 *.zip
-*.torch
 *.png
 *.npy
+models/*
 #runs/*
 logs/*
 ppo_random_collect_tensorboard/*
