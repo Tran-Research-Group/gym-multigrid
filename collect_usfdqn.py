@@ -214,12 +214,12 @@ class IndUSFDQNAgent:
 def main():
     lrs: list[float] = [1e-5]
     alg: str = "usfdqn"
-    num_replicates: int = 3
+    num_replicates: int = 1
 
     tensor_board_dir: str = f"runs/{alg}/{alg}_"
     seed_log_path: str = f"logs/seed_{alg}_.json"
     model_dir: str = f"models/{alg}/"
-    start_replicate: int = 1
+    start_replicate: int = 0
 
     mp.set_start_method("spawn")
 
