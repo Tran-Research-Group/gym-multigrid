@@ -43,7 +43,7 @@ class NNet(nn.Module):
 
 class IndSFDQNAgent:
     def __init__(self, state_dim, action_dim, feat_dim, w, lr, gamma, epsilon) -> None:
-        self.device = torch.device("cuda")
+        self.device = torch.device("cuda:1")
         # 1 psi network per feature dimension. probably a cleaner way to set this up
         self.psi1 = NNet(state_dim, action_dim, 1).to(self.device)
         self.psi2 = NNet(state_dim, action_dim, 1).to(self.device)
@@ -201,7 +201,9 @@ def run_replicates(
         json.dump({"seeds": seeds.tolist()}, f)
 
     for i in range(num_replicates):
-        path_suffix: str = f"lr_{lr}_rep_{i}"
+        w = np.array([1.0, 0.0, 1.0])  # red, orange, yellow
+
+        path_suffix: str = f"lr_{lr}_rep_{i}_w_{'_'.join([str(x) for x in w])}"
 
         writer = SummaryWriter(tensor_board_dir + path_suffix)
         seed: int = seeds[i]
@@ -211,7 +213,7 @@ def run_replicates(
             entry_point="gym_multigrid.envs:CollectGame3Obj2Agent",
         )
         env = gym.make("multigrid-collect-more-v0")
-        w = np.array([1.0, 1.0, 0.0])  # red, orange, yellow
+
         agent = IndSFDQNAgent(
             state_dim=env.grid.width * env.grid.height * 4,
             action_dim=env.ac_dim,
