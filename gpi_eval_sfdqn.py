@@ -71,12 +71,12 @@ def phi(state, next_state) -> NDArray:
 
 def main():
     models_dir: str = "models/sfdqn"
-    weights: list[tuple[int, ...]] = [(1, 1, 0), (1, 0, 1)]
-    lr: float = 1e-5
+    weights: list[tuple[float, ...]] = [(1.0, 1.0, 0.0), (1.0, 0.0, 1.0)]
+    lr: float = 3e-5
     rep_idx: int = 0
     num_features: int = 3
     model_filename: str = f"lr_{lr}_rep_{rep_idx}"
-    device = torch.device("cuda")
+    device = torch.device("cuda:1")
 
     tensor_board_path: str = f"runs/sfdqn/sfdqn_gpi_eval"
 
@@ -86,7 +86,11 @@ def main():
         Psi: list[NNet] = []
 
         for i in range(num_features):
-            Psi.append(torch.load(f"{models_dir}/{model_filename}_psi{i}.torch"))
+            Psi.append(
+                torch.load(
+                    f"{models_dir}/{model_filename}_w_{'_'.join([str(e) for e in weight])}_psi{i+1}.torch"
+                ).to(device)
+            )
 
         Psis.append(Psi)
 
@@ -100,7 +104,7 @@ def main():
 
     frames = []
     episodes = 50_000
-    for ep in tqdm(range(episodes), desc="Ind-SFDQN-training"):
+    for ep in tqdm(range(episodes), desc="GPI-SFDQN-eval"):
         obs, _ = env.reset()
         agent_pos = env.agents[0].pos
         idx = env.grid.width * agent_pos[0] + agent_pos[1]
