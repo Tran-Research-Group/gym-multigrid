@@ -18,6 +18,7 @@ torch = {url = "https://download.pytorch.org/whl/cu118/torch-2.0.0%2Bcu118-cp310
 tqdm = "^4.65.0"
 tensorboard = "^2.13.0"
 torch-tb-profiler = "^0.4.1"
+tensorboard-reducer = "^0.3.0"
 
 
 [tool.poetry.group.dev.dependencies]

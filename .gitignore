@@ -3,7 +3,5 @@ __pycache__/
 *.zip
 *.png
 *.npy
-#runs/*
-logs/*
 ppo_random_collect_tensorboard/*
 .DS_Store
