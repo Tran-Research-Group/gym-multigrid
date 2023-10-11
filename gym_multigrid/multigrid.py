@@ -43,6 +43,8 @@ class MultiGridEnv(gym.Env):
             assert width == None and height == None
             width = grid_size
             height = grid_size
+        else:
+            assert width != None and height != None
 
         # Action enumeration for this environment
         self.actions = actions_set
