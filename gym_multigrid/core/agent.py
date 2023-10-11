@@ -1,7 +1,10 @@
-from typing import TypeVar
+from typing import Type, TypeVar
 import numpy as np
 import enum
-from ..utils.rendering import *
+import math
+
+from gym_multigrid.core.world import WorldT
+from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from .object import WorldObj
 from .constants import COLORS, DIR_TO_VEC
 
@@ -42,7 +45,13 @@ class MineActions(enum.IntEnum):
 
 
 class Agent(WorldObj):
-    def __init__(self, world, index=0, view_size=7, actions=DefaultActions):
+    def __init__(
+        self,
+        world: WorldT,
+        index: int = 0,
+        view_size: int = 7,
+        actions: Type[ActionsT] = DefaultActions,
+    ):
         super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
         self.pos = None
         self.dir = None
