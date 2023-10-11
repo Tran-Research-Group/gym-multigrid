@@ -1,9 +1,11 @@
 from typing import Type, TypeVar
 import numpy as np
+from numpy.typing import NDArray
 import enum
 import math
 
 from gym_multigrid.core.world import WorldT
+from gym_multigrid.typing import Position
 from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from .object import WorldObj
 from .constants import COLORS, DIR_TO_VEC
@@ -51,10 +53,11 @@ class Agent(WorldObj):
         index: int = 0,
         view_size: int = 7,
         actions: Type[ActionsT] = DefaultActions,
+        dir_to_vec: list[NDArray] = DIR_TO_VEC,
     ):
         super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
-        self.pos = None
-        self.dir = None
+        self.pos: Position | None = None
+        self.dir: int | None = None
         self.index = index
         self.view_size = view_size
         self.carrying = None
@@ -63,6 +66,7 @@ class Agent(WorldObj):
         self.paused = False
         self.actions = actions
         self.world = world
+        self.dir_to_vec = dir_to_vec
 
     def render(self, img):
         c = COLORS[self.color]
@@ -72,6 +76,7 @@ class Agent(WorldObj):
             (0.12, 0.81),
         )
         # Rotate the agent based on its direction
+        assert self.dir is not None
         tri_fn = rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * self.dir)
         fill_coords(img, tri_fn, c)
 
@@ -130,8 +135,9 @@ class Agent(WorldObj):
         of forward movement.
         """
 
-        assert self.dir >= 0 and self.dir < 4
-        return DIR_TO_VEC[self.dir]
+        assert self.dir is not None
+        assert self.dir >= 0 and self.dir < len(self.dir_to_vec)
+        return self.dir_to_vec[self.dir]
 
     @property
     def right_vec(self):
@@ -193,6 +199,7 @@ class Agent(WorldObj):
         coordinates may be negative or outside of the agent's view size.
         """
 
+        assert self.pos is not None
         ax, ay = self.pos
         dx, dy = self.dir_vec
         rx, ry = self.right_vec
@@ -218,6 +225,8 @@ class Agent(WorldObj):
         Get the extents of the square set of tiles visible to the agent
         Note: the bottom extent indices are not included in the set
         """
+
+        assert self.pos is not None
 
         # Facing right
         if self.dir == 0:
