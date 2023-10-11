@@ -1,5 +1,5 @@
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.core.world import World
+from gym_multigrid.core.world import DefaultWorld
 from gym_multigrid.core.agent import Agent
 from gym_multigrid.core.object import Ball, ObjectGoal
 from gym_multigrid.core.grid import Grid
@@ -30,7 +30,7 @@ class SoccerGameEnv(MultiGridEnv):
         self.balls_index = balls_index
         self.zero_sum = zero_sum
 
-        self.world = World
+        self.world = DefaultWorld
 
         agents = []
         for i in agents_index:
