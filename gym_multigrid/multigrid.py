@@ -61,7 +61,10 @@ class MultiGridEnv(gym.Env):
 
         self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
 
-        self.ob_dim = np.prod(self.observation_space.shape)
+        if self.observation_space is spaces.Box:
+            self.ob_dim = np.prod(self.observation_space.shape)
+        else:
+            pass
         self.ac_dim = self.action_space.n
 
         # Range of possible rewards
