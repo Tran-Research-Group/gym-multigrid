@@ -1,6 +1,9 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
-from .constants import COLOR_TO_IDX
+
+from numpy.typing import NDArray
+
+from .constants import COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -9,13 +12,19 @@ WorldT = TypeVar("WorldT", bound="World")
 class World:
     encode_dim: int
     normalize_obs: int
-    COLOR_TO_IDX: dict[str, int]
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
+    COLORS: dict[str, NDArray]  # Map of color names to RGB values
+    COLOR_TO_IDX: dict[str, int] = field(init=False)
     IDX_TO_COLOR: dict[int, str] = field(init=False)
     IDX_TO_OBJECT: dict[int, str] = field(init=False)
 
     def __post_init__(self):
-        self.IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
+        self.COLOR_TO_IDX = dict(
+            zip(self.COLORS.keys(), range(len(self.COLORS.keys())))
+        )
+        self.IDX_TO_COLOR = dict(
+            zip(self.COLOR_TO_IDX.values(), self.COLOR_TO_IDX.keys())
+        )
         self.IDX_TO_OBJECT = dict(
             zip(self.OBJECT_TO_IDX.values(), self.OBJECT_TO_IDX.keys())
         )
@@ -24,7 +33,7 @@ class World:
 DefaultWorld = World(
     encode_dim=6,
     normalize_obs=1,
-    COLOR_TO_IDX=COLOR_TO_IDX,
+    COLORS=COLORS,
     OBJECT_TO_IDX={
         "unseen": 0,
         "empty": 1,
@@ -45,7 +54,7 @@ DefaultWorld = World(
 CollectWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLOR_TO_IDX=COLOR_TO_IDX,
+    COLORS=COLORS,
     OBJECT_TO_IDX={
         "empty": 0,
         "wall": 1,
