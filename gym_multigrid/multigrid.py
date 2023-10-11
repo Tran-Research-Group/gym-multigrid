@@ -2,8 +2,7 @@ import math
 from typing import Literal
 import numpy as np
 import gymnasium as gym
-from gymnasium import error, spaces, utils
-from gymnasium.utils import seeding
+from gymnasium import spaces
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import World, WorldT
 from .core.agent import ActionsT

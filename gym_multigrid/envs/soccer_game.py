@@ -1,6 +1,6 @@
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import World
-from gym_multigrid.core.agent import Actions, Agent
+from gym_multigrid.core.agent import Agent
 from gym_multigrid.core.object import Ball, ObjectGoal
 from gym_multigrid.core.grid import Grid
 import numpy as np
