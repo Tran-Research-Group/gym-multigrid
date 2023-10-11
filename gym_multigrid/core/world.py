@@ -1,18 +1,31 @@
 from typing import TypeVar
-from .constants import *
+from dataclasses import dataclass, field
+from .constants import COLOR_TO_IDX
 
 WorldT = TypeVar("WorldT", bound="World")
 
 
+@dataclass
 class World:
-    encode_dim = 6
-    normalize_obs = 1
+    encode_dim: int
+    normalize_obs: int
+    COLOR_TO_IDX: dict[str, int]
+    OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
+    IDX_TO_COLOR: dict[int, str] = field(init=False)
+    IDX_TO_OBJECT: dict[int, str] = field(init=False)
 
-    COLOR_TO_IDX = COLOR_TO_IDX
-    IDX_TO_COLOR = IDX_TO_COLOR
+    def __post_init__(self):
+        self.IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
+        self.IDX_TO_OBJECT = dict(
+            zip(self.OBJECT_TO_IDX.values(), self.OBJECT_TO_IDX.keys())
+        )
 
-    # Map of object type to integers
-    OBJECT_TO_IDX = {
+
+DefaultWorld = World(
+    encode_dim=6,
+    normalize_obs=1,
+    COLOR_TO_IDX=COLOR_TO_IDX,
+    OBJECT_TO_IDX={
         "unseen": 0,
         "empty": 1,
         "wall": 2,
@@ -26,21 +39,17 @@ class World:
         "agent": 10,
         "objgoal": 11,
         "switch": 12,
-    }
-    IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
+    },
+)
 
-
-class CollectWorld:
-    encode_dim = 3
-    normalize_obs = 1
-
-    COLOR_TO_IDX = COLOR_TO_IDX
-    IDX_TO_COLOR = IDX_TO_COLOR
-
-    OBJECT_TO_IDX = {
+CollectWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLOR_TO_IDX=COLOR_TO_IDX,
+    OBJECT_TO_IDX={
         "empty": 0,
         "wall": 1,
         "ball": 2,
         "agent": 3,
-    }
-    IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
+    },
+)
