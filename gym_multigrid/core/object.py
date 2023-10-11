@@ -1,6 +1,12 @@
+from typing import TypeVar
 import numpy as np
+
+from gym_multigrid.core.world import WorldT
+from gym_multigrid.typing import Position
 from ..utils.rendering import *
 from .constants import COLORS
+
+WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
 
 
 class WorldObj:
@@ -8,7 +14,7 @@ class WorldObj:
     Base class for grid world objects
     """
 
-    def __init__(self, world, type, color):
+    def __init__(self, world: WorldT, type, color):
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type = type
@@ -17,10 +23,10 @@ class WorldObj:
         self.world = world
 
         # Initial position of the object
-        self.init_pos = None
+        self.init_pos: Position | None = None
 
         # Current position of the object
-        self.pos = None
+        self.pos: Position | None = None
 
     def can_overlap(self):
         """Can the agent overlap with this?"""
@@ -70,7 +76,9 @@ class WorldObj:
 
 
 class ObjectGoal(WorldObj):
-    def __init__(self, world, index, target_type="ball", reward=1, color=None):
+    def __init__(
+        self, world: WorldT, index: int, target_type: str = "ball", reward=1, color=None
+    ):
         if color is None:
             super().__init__(world, "objgoal", world.IDX_TO_COLOR[index])
         else:
@@ -87,7 +95,7 @@ class ObjectGoal(WorldObj):
 
 
 class Goal(WorldObj):
-    def __init__(self, world, index, reward=1, color=None):
+    def __init__(self, world: WorldT, index: int, reward=1, color=None):
         if color is None:
             super().__init__(world, "goal", world.IDX_TO_COLOR[index])
         else:
