@@ -4,6 +4,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, World, WorldT
 from .core.agent import ActionsT, DefaultActions
 from .utils.rendering import *
@@ -37,6 +38,7 @@ class MultiGridEnv(gym.Env):
         self.render_mode = render_mode
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
+        self.agent_view_size = agent_view_size
 
         # Can't set both grid_size and width/height
         if grid_size:
@@ -46,6 +48,9 @@ class MultiGridEnv(gym.Env):
         else:
             assert width != None and height != None
 
+        self.width: int = width
+        self.height: int = height
+
         # Action enumeration for this environment
         self.actions = actions_set
 
@@ -54,21 +59,7 @@ class MultiGridEnv(gym.Env):
 
         self.world = world
 
-        if partial_obs:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(agent_view_size, agent_view_size, self.world.encode_dim),
-                dtype="uint8",
-            )
-
-        else:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(width, height, self.world.encode_dim),
-                dtype="uint8",
-            )
+        self.observation_space: spaces.Box = self._set_observation_space()
 
         self.ob_dim = np.prod(self.observation_space.shape)
         self.ac_dim = self.action_space.n
@@ -80,8 +71,6 @@ class MultiGridEnv(gym.Env):
         self.window = None
 
         # Environment configuration
-        self.width = width
-        self.height = height
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
 
@@ -89,6 +78,29 @@ class MultiGridEnv(gym.Env):
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
+
+    def _set_observation_space(self) -> spaces.Box:
+        if self.partial_obs:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(
+                    self.agent_view_size,
+                    self.agent_view_size,
+                    self.world.encode_dim,
+                ),
+                dtype="uint8",
+            )
+
+        else:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(self.width, self.height, self.world.encode_dim),
+                dtype="uint8",
+            )
+
+        return observation_space
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -296,7 +308,7 @@ class MultiGridEnv(gym.Env):
 
         return pos
 
-    def put_obj(self, obj, i, j):
+    def put_obj(self, obj: WorldObjT, i: int, j: int):
         """
         Put an object at a specific position in the grid
         """
