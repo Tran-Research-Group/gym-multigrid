@@ -1,11 +1,11 @@
 import math
-from typing import Literal
+from typing import Literal, Type
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import World, WorldT
-from .core.agent import ActionsT
+from .core.agent import ActionsT, DefaultActions
 from .utils.rendering import *
 from .utils.window import Window
 from .core.constants import *
@@ -29,7 +29,7 @@ class MultiGridEnv(gym.Env):
         agents=None,
         partial_obs: bool = False,
         agent_view_size: int = 7,
-        actions_set=ActionsT,
+        actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = World(),
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):

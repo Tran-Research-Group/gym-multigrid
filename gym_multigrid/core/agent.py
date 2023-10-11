@@ -5,10 +5,10 @@ from ..utils.rendering import *
 from .object import WorldObj
 from .constants import COLORS, DIR_TO_VEC
 
-ActionsT = TypeVar("ActionsT", bound="Actions")
+ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
 
-class Actions(enum.IntEnum):
+class DefaultActions(enum.IntEnum):
     still = 0
     left = 1
     right = 2
@@ -42,7 +42,7 @@ class MineActions(enum.IntEnum):
 
 
 class Agent(WorldObj):
-    def __init__(self, world, index=0, view_size=7, actions=Actions):
+    def __init__(self, world, index=0, view_size=7, actions=DefaultActions):
         super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
         self.pos = None
         self.dir = None
