@@ -54,8 +54,14 @@ class Agent(WorldObj):
         view_size: int = 7,
         actions: Type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
+        color: str | None = None,
     ):
-        super(Agent, self).__init__(world, "agent", world.IDX_TO_COLOR[index])
+        if color is None:
+            color = world.IDX_TO_COLOR[index]
+        else:
+            pass
+
+        super(Agent, self).__init__(world, "agent", color)
         self.pos: Position | None = None
         self.dir: int | None = None
         self.index = index

@@ -14,7 +14,7 @@ class WorldObj:
     Base class for grid world objects
     """
 
-    def __init__(self, world: WorldT, type, color):
+    def __init__(self, world: WorldT, type: str, color: str):
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type = type
