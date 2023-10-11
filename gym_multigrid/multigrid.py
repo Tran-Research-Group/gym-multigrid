@@ -59,7 +59,7 @@ class MultiGridEnv(gym.Env):
 
         self.world = world
 
-        self.observation_space: spaces.Box = self._set_observation_space()
+        self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
 
         self.ob_dim = np.prod(self.observation_space.shape)
         self.ac_dim = self.action_space.n
@@ -79,7 +79,7 @@ class MultiGridEnv(gym.Env):
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
 
-    def _set_observation_space(self) -> spaces.Box:
+    def _set_observation_space(self) -> spaces.Box | spaces.Dict:
         if self.partial_obs:
             observation_space = spaces.Box(
                 low=0,
