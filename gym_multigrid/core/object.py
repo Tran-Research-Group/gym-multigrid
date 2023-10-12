@@ -302,3 +302,26 @@ class Box(WorldObj):
         # Replace the box by its contents
         env.grid.set(*pos, self.contains)
         return True
+
+
+class Flag(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        index: int,
+        reward: float = 1,
+        type: str = "flag",
+        color: str = "blue",
+    ):
+        super().__init__(world, type, color)
+        self.index: int = index
+        self.reward: float = reward
+
+    def can_pickup(self):
+        return True
+
+    def can_overlap(self):
+        return True
+
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
