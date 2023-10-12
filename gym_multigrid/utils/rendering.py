@@ -22,7 +22,11 @@ def downsample(img, factor):
     return img
 
 
-def fill_coords(img: NDArray, fn: Callable, color: NDArray):
+def fill_coords(
+    img: NDArray,
+    fn: Callable[[float, float], bool],
+    color: NDArray | tuple[int, int, int],
+) -> NDArray:
     """
     Fill pixels of an image with coordinates matching a filter function
     """
@@ -37,7 +41,7 @@ def fill_coords(img: NDArray, fn: Callable, color: NDArray):
     return img
 
 
-def rotate_fn(fin, cx, cy, theta):
+def rotate_fn(fin, cx, cy, theta) -> Callable[[float, float], bool]:
     def fout(x, y):
         x = x - cx
         y = y - cy
@@ -50,7 +54,9 @@ def rotate_fn(fin, cx, cy, theta):
     return fout
 
 
-def point_in_line(x0, y0, x1, y1, r):
+def point_in_line(
+    x0: float, y0: float, x1: float, y1: float, r: float
+) -> Callable[[float, float], bool]:
     p0 = np.array([x0, y0])
     p1 = np.array([x1, y1])
     dir = p1 - p0
@@ -62,7 +68,7 @@ def point_in_line(x0, y0, x1, y1, r):
     ymin = min(y0, y1) - r
     ymax = max(y0, y1) + r
 
-    def fn(x, y):
+    def fn(x: float, y: float) -> bool:
         # Fast, early escape test
         if x < xmin or x > xmax or y < ymin or y > ymax:
             return False
@@ -81,21 +87,21 @@ def point_in_line(x0, y0, x1, y1, r):
     return fn
 
 
-def point_in_circle(cx, cy, r):
+def point_in_circle(cx, cy, r) -> Callable[[float, float], bool]:
     def fn(x, y):
         return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r
 
     return fn
 
 
-def point_in_rect(xmin, xmax, ymin, ymax):
+def point_in_rect(xmin, xmax, ymin, ymax) -> Callable[[float, float], bool]:
     def fn(x, y):
         return x >= xmin and x <= xmax and y >= ymin and y <= ymax
 
     return fn
 
 
-def point_in_triangle(a, b, c):
+def point_in_triangle(a, b, c) -> Callable[[float, float], bool]:
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
