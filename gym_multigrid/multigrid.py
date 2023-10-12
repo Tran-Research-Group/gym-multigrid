@@ -23,19 +23,19 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
+        agents: list[Agent],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
         max_steps: int = 100,
         see_through_walls: bool = False,
-        agents=None,
         partial_obs: bool = False,
         agent_view_size: int = 7,
         actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
-        self.agents = agents
+        self.agents: list[Agent] = agents
         self.render_mode = render_mode
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
@@ -114,7 +114,6 @@ class MultiGridEnv(gym.Env):
         self._gen_grid(self.width, self.height)
 
         # These fields should be defined by _gen_grid
-        self.agents: list[Agent]
         for a in self.agents:
             assert a.pos is not None
             assert a.dir is not None
