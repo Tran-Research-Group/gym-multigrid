@@ -1,8 +1,8 @@
 import math
-import numpy as np
+from typing import Callable
 
-# Size in pixels of a tile in the full-scale human view
-TILE_PIXELS = 32
+import numpy as np
+from numpy.typing import NDArray
 
 
 def downsample(img, factor):
@@ -22,7 +22,7 @@ def downsample(img, factor):
     return img
 
 
-def fill_coords(img, fn, color):
+def fill_coords(img: NDArray, fn: Callable, color: NDArray):
     """
     Fill pixels of an image with coordinates matching a filter function
     """
