@@ -3,14 +3,15 @@ from typing import Literal, Type
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
+import random
+
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, World, WorldT
-from .core.agent import ActionsT, DefaultActions
-from .utils.rendering import *
-from .utils.window import Window
-from .core.constants import *
-import random
+from gym_multigrid.core.agent import ActionsT, Agent, DefaultActions
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.utils.window import Window
+from gym_multigrid.core.constants import *
 
 
 class MultiGridEnv(gym.Env):
@@ -113,6 +114,7 @@ class MultiGridEnv(gym.Env):
         self._gen_grid(self.width, self.height)
 
         # These fields should be defined by _gen_grid
+        self.agents: list[Agent]
         for a in self.agents:
             assert a.pos is not None
             assert a.dir is not None
