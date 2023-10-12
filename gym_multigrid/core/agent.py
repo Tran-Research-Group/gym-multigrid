@@ -46,6 +46,9 @@ class MineActions(enum.IntEnum):
     build = 4
 
 
+AgentT = TypeVar("AgentT", bound="Agent")
+
+
 class Agent(WorldObj):
     def __init__(
         self,
@@ -64,6 +67,7 @@ class Agent(WorldObj):
         super(Agent, self).__init__(world, "agent", color)
         self.pos: Position | None = None
         self.dir: int | None = None
+        self.init_dir: int | None = None
         self.index = index
         self.view_size = view_size
         self.carrying = None
