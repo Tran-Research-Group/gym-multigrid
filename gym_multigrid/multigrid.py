@@ -8,7 +8,8 @@ import random
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, World, WorldT
-from gym_multigrid.core.agent import ActionsT, Agent, DefaultActions
+from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
+from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
 from gym_multigrid.core.constants import *
@@ -260,7 +261,14 @@ class MultiGridEnv(gym.Env):
             self.np_random.randint(yLow, yHigh),
         )
 
-    def place_obj(self, obj, top=None, size=None, reject_fn=None, max_tries=math.inf):
+    def place_obj(
+        self,
+        obj: WorldObjT,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        reject_fn: Callable[["MultiGridEnv", NDArray], bool] | None = None,
+        max_tries: float = math.inf,
+    ):
         """
         Place an object at an empty position in the grid
 
@@ -322,8 +330,14 @@ class MultiGridEnv(gym.Env):
         obj.pos = (i, j)
 
     def place_agent(
-        self, agent, pos=None, top=None, size=None, rand_dir=False, max_tries=math.inf
-    ):
+        self,
+        agent: AgentT,
+        pos: Position | None = None,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        rand_dir: bool = False,
+        max_tries: float = math.inf,
+    ) -> Position:
         """
         Set the agent's starting point at an empty position in the grid
         """
