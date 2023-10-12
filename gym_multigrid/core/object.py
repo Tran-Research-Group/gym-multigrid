@@ -170,6 +170,28 @@ class Wall(WorldObj):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
+class Obstacle(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        penalty: float = 0,
+        can_see_through: bool = True,
+        color: str = "grey",
+    ):
+        super().__init__(world, "obstacle", color)
+        self.penalty = penalty
+        self.can_see_through = can_see_through
+
+    def see_behind(self):
+        return self.can_see_through
+
+    def can_overlap(self):
+        return True if self.penalty != 0 else False
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
+
+
 class Door(WorldObj):
     def __init__(self, world, color, is_open=False, is_locked=False):
         super().__init__(world, "door", color)
