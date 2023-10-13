@@ -10,6 +10,7 @@ class RwPolicy(BaseAgentPolicy):
 
     def __init__(self) -> None:
         super().__init__()
+        self.name = "rw"
 
     def act(self, allowed_actions: list[int]) -> int:
         return np.random.choice(allowed_actions)

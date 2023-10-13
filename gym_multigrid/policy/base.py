@@ -1,4 +1,7 @@
 from abc import abstractmethod, ABC
+from typing import TypeVar
+
+AgentPolicyT = TypeVar("AgentPolicyT", bound="BaseAgentPolicy")
 
 
 class BaseAgentPolicy(ABC):
@@ -8,6 +11,7 @@ class BaseAgentPolicy(ABC):
 
     def __init__(self) -> None:
         super().__init__()
+        self.name: str = "base"
 
     @abstractmethod
     def act(self) -> int:

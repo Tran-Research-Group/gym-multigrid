@@ -1,10 +1,12 @@
-from typing import Type, TypeVar
-import numpy as np
-from numpy.typing import NDArray
 import enum
 import math
+from typing import Type, TypeVar
+
+import numpy as np
+from numpy.typing import NDArray
 
 from gym_multigrid.core.world import WorldT
+from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
 from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from .object import WorldObj
@@ -280,3 +282,22 @@ class Agent(WorldObj):
         """
 
         return self.relative_coords(x, y) is not None
+
+
+class PolicyAgent(Agent):
+    """
+    Agent with a policy that determines its actions
+    """
+
+    def __init__(
+        self,
+        policy: Type[AgentPolicyT],
+        world: WorldT,
+        index: int = 0,
+        view_size: int = 7,
+        actions: type[ActionsT] = DefaultActions,
+        dir_to_vec: list[NDArray] = DIR_TO_VEC,
+        color: str | None = None,
+    ):
+        super().__init__(world, index, view_size, actions, dir_to_vec, color)
+        self.policy: AgentPolicyT = policy()
