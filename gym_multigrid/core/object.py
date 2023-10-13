@@ -331,13 +331,11 @@ class Flag(WorldObj):
         self,
         world: WorldT,
         index: int,
-        reward: float = 1,
         type: str = "flag",
         color: str = "blue",
     ):
         super().__init__(world, type, color)
         self.index: int = index
-        self.reward: float = reward
 
     def can_pickup(self):
         return True
