@@ -1,7 +1,6 @@
+import enum
 from abc import abstractmethod, ABC
 from typing import TypeVar, TypedDict, Type
-
-from gym_multigrid.core.agent import ActionsT
 
 AgentPolicyT = TypeVar("AgentPolicyT", bound="BaseAgentPolicy")
 
@@ -16,5 +15,5 @@ class BaseAgentPolicy(ABC):
         self.name: str = "base"
 
     @abstractmethod
-    def act(self, observation: TypedDict, actions: Type[ActionsT]) -> int:
+    def act(self, observation: TypedDict, actions: Type[enum.IntEnum]) -> int:
         ...

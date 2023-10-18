@@ -126,8 +126,8 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
 
-    def __init__(self, world: WorldT, color: str = "blue"):
-        super().__init__(world, "floor", color)
+    def __init__(self, world: WorldT, color: str = "blue", type: str = "floor"):
+        super().__init__(world, type, color)
 
     def can_overlap(self) -> bool:
         return True

@@ -12,6 +12,7 @@ from gym_multigrid.core.object import Floor, Flag, Obstacle
 from gym_multigrid.core.world import World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.base import AgentPolicyT
+from gym_multigrid.policy.ctf.heuristic import RwPolicy
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points
 
@@ -73,7 +74,7 @@ class Ctf1v1Env(MultiGridEnv):
     def __init__(
         self,
         map_path: str,
-        enemy_policy: AgentPolicyT,
+        enemy_policy: AgentPolicyT = RwPolicy(),
         battle_range: float = 1.0,
         randomness: float = 0.75,
         flag_reward: float = 1.0,
@@ -139,13 +140,13 @@ class Ctf1v1Env(MultiGridEnv):
 
         self.red_territory: Final[list[Position]] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_territory"]))) + [self.red_flag]  # type: ignore
 
-        blue_agnet = Agent(
+        blue_agent = Agent(
             self.world,
             index=0,
             color="blue",
             view_size=agent_view_size,
             actions=self.actions_set,
-            agent_name="blue",
+            type="blue_agent",
         )
         red_agent = PolicyAgent(
             enemy_policy,
@@ -154,10 +155,11 @@ class Ctf1v1Env(MultiGridEnv):
             color="red",
             view_size=agent_view_size,
             actions=self.actions_set,
-            agent_name="red",
+            type="red_agent",
         )
+        red_agent.type = "red_agent"
 
-        agents: list[AgentT] = [blue_agnet, red_agent]
+        agents: list[AgentT] = [blue_agent, red_agent]
 
         super().__init__(
             width=width,
@@ -212,20 +214,24 @@ class Ctf1v1Env(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
 
         for i, j in self.blue_territory:
-            self.put_obj(Floor(self.world, color="light_blue"), i, j)
+            self.put_obj(
+                Floor(self.world, color="light_blue", type="blue_territory"), i, j
+            )
 
         for i, j in self.red_territory:
-            self.put_obj(Floor(self.world, color="light_red"), i, j)
+            self.put_obj(
+                Floor(self.world, color="light_red", type="red_territory"), i, j
+            )
 
         for i, j in self.obstacle:
             self.put_obj(Obstacle(self.world, penalty=self.obstacle_penalty), i, j)
 
-        self.put_obj(
-            Flag(self.world, index=0, color="blue", type="blue_flag"), *self.blue_flag
-        )
-        self.put_obj(
-            Flag(self.world, index=1, color="red", type="red_flag"), *self.red_flag
-        )
+        bf = Flag(self.world, index=0, color="blue", type="blue_flag")
+        bf.type = "blue_flag"
+        self.put_obj(bf, *self.blue_flag)
+        rf = Flag(self.world, index=1, color="red", type="red_flag")
+        rf.type = "red_flag"
+        self.put_obj(rf, *self.red_flag)
 
         for agent in self.agents:
             self.place_agent(agent)
@@ -303,7 +309,7 @@ class Ctf1v1Env(MultiGridEnv):
         if next_cell is None:
             agent.move(next_pos, self.grid)
         elif next_cell.can_overlap():
-            if agent.agent_name == "red" and next_cell.type == "obstacle":
+            if agent.type == "red_agent" and next_cell.type == "obstacle":
                 pass
             else:
                 agent.move(next_pos, self.grid)

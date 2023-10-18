@@ -61,14 +61,14 @@ class Agent(WorldObj):
         actions: Type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
-        agent_name: str | None = None,
+        type: str = "agent",
     ):
         if color is None:
             color = world.IDX_TO_COLOR[index]
         else:
             pass
 
-        super(Agent, self).__init__(world, "agent", color)
+        super().__init__(world, type, color)
         self.pos: Position | None = None
         self.dir: int | None = None
         self.init_dir: int | None = None
@@ -81,7 +81,6 @@ class Agent(WorldObj):
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec
-        self.agent_name: str | None = agent_name
 
     def render(self, img):
         c = COLORS[self.color]
@@ -143,13 +142,13 @@ class Agent(WorldObj):
                     0,
                 )
 
-    def move(self, next_pos: Position, grid: Grid, dummy_move: bool = False)):
+    def move(self, next_pos: Position, grid: Grid, dummy_move: bool = False):
         """Move the agent to a new position"""
         if self.pos is not None:
             grid.set(*self.pos, None)
         else:
             pass
-        
+
         if dummy_move:
             pass
         else:
@@ -314,9 +313,7 @@ class PolicyAgent(Agent):
         actions: type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
-        agent_name: str | None = None,
+        type: str = "agent",
     ):
-        super().__init__(
-            world, index, view_size, actions, dir_to_vec, color, agent_name
-        )
+        super().__init__(world, index, view_size, actions, dir_to_vec, color, type)
         self.policy: AgentPolicyT = policy
