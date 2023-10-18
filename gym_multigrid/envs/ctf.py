@@ -80,7 +80,7 @@ class Ctf1v1Env(MultiGridEnv):
         randomness: float = 0.75,
         flag_reward: float = 1.0,
         battle_reward_ratio: float = 0.25,
-        obstacle_penalty_ratio: float = 0.5,
+        obstacle_penalty_ratio: float = 0.0,
         step_penalty_ratio: float = 0.01,
         max_steps: int = 100,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -290,9 +290,10 @@ class Ctf1v1Env(MultiGridEnv):
     def _move_agent(self, action: int, agent: AgentT) -> None:
         next_pos: Position
 
+        assert agent.pos is not None
+
         match action:
             case self.actions_set.stay:
-                assert agent.pos is not None
                 next_pos = agent.pos
             case self.actions_set.left:
                 next_pos = agent.west_pos()
@@ -304,6 +305,14 @@ class Ctf1v1Env(MultiGridEnv):
                 next_pos = agent.north_pos()
             case _:
                 raise ValueError(f"Invalid action: {action}")
+
+        if (
+            next_pos[0] < 0
+            or next_pos[1] < 0
+            or next_pos[0] >= self.width
+            or next_pos[1] >= self.height
+        ):
+            next_pos = agent.pos
 
         next_cell = self.grid.get(*next_pos)
 
@@ -346,13 +355,19 @@ class Ctf1v1Env(MultiGridEnv):
 
         reward: float = 0.0
 
-        if (blue_agent_loc == self.red_flag).all():
+        if (
+            blue_agent_loc[0] == self.red_flag[0]
+            and blue_agent_loc[1] == self.red_flag[1]
+        ):
             reward += self.flag_reward
             terminated = True
         else:
             pass
 
-        if (red_agent_loc == self.blue_flag).all():
+        if (
+            red_agent_loc[0] == self.blue_flag[0]
+            and red_agent_loc[1] == self.blue_flag[1]
+        ):
             reward -= self.flag_reward
             terminated = True
         else:
@@ -364,8 +379,21 @@ class Ctf1v1Env(MultiGridEnv):
         ):
             blue_win: bool
 
-            blue_agent_in_blue_territory: bool = blue_agent_loc in self.blue_territory
-            red_agent_in_red_territory: bool = red_agent_loc in self.red_territory
+            blue_agent_in_blue_territory: bool = False
+            for i, j in self.blue_territory:
+                if blue_agent_loc[0] == i and blue_agent_loc[1] == j:
+                    blue_agent_in_blue_territory = True
+                    break
+                else:
+                    pass
+
+            red_agent_in_red_territory: bool = False
+            for i, j in self.red_territory:
+                if red_agent_loc[0] == i and red_agent_loc[1] == j:
+                    red_agent_in_red_territory = True
+                    break
+                else:
+                    pass
 
             match (blue_agent_in_blue_territory, red_agent_in_red_territory):
                 case (True, True):
