@@ -230,7 +230,7 @@ class Ctf1v1Env(MultiGridEnv):
         for agent in self.agents:
             self.place_agent(agent)
 
-    def reset(self, seed=None):
+    def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
         super().reset(seed)
         self._is_red_agent_defeated: bool = False
 
@@ -238,6 +238,11 @@ class Ctf1v1Env(MultiGridEnv):
         assert self.agents[1].pos is not None
         self.blue_traj: list[Position] = [self.agents[0].pos]
         self.red_traj: list[Position] = [self.agents[1].pos]
+
+        obs: Observation = self._get_obs()
+        info: dict[str, float] = self._get_info()
+
+        return obs, info
 
     def _get_obs(self) -> Observation:
         for a in self.agents:
