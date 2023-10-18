@@ -73,7 +73,8 @@ class Ctf1v1Env(MultiGridEnv):
     def __init__(
         self,
         map_path: str,
-        enemy_policy: Type[AgentPolicyT],
+        enemy_policy: AgentPolicyT,
+        battle_range: float = 1.0,
         randomness: float = 0.75,
         flag_reward: float = 1.0,
         battle_reward_ratio: float = 0.25,
@@ -107,6 +108,7 @@ class Ctf1v1Env(MultiGridEnv):
             Rendering mode.
         """
 
+        self.battle_range: Final[float] = battle_range
         self.randomness: Final[float] = randomness
         self.flag_reward: Final[float] = flag_reward
         self.battle_reward: Final[float] = battle_reward_ratio * flag_reward
@@ -117,7 +119,7 @@ class Ctf1v1Env(MultiGridEnv):
         agent_view_size: int = 10
 
         self.world = Ctf1v1World
-        actions_set = CtfActions
+        self.actions_set = CtfActions
         see_through_walls: bool = False
 
         self._map_path: Final[str] = map_path
@@ -142,7 +144,8 @@ class Ctf1v1Env(MultiGridEnv):
             index=0,
             color="blue",
             view_size=agent_view_size,
-            actions=actions_set,
+            actions=self.actions_set,
+            agent_name="blue",
         )
         red_agent = PolicyAgent(
             enemy_policy,
@@ -150,10 +153,11 @@ class Ctf1v1Env(MultiGridEnv):
             index=1,
             color="red",
             view_size=agent_view_size,
-            actions=actions_set,
+            actions=self.actions_set,
+            agent_name="red",
         )
 
-        agents: list[Agent] = [blue_agnet, red_agent]
+        agents: list[AgentT] = [blue_agnet, red_agent]
 
         super().__init__(
             width=width,
@@ -163,7 +167,7 @@ class Ctf1v1Env(MultiGridEnv):
             agents=agents,
             partial_obs=partial_obs,
             agent_view_size=agent_view_size,
-            actions_set=actions_set,
+            actions_set=self.actions_set,
             world=self.world,
             render_mode=render_mode,
         )
@@ -271,15 +275,53 @@ class Ctf1v1Env(MultiGridEnv):
         }
         return info
 
-    def _move_agents(self, action: int) -> None:
-        ...
+    def _move_agent(self, action: int, agent: AgentT) -> None:
+        next_pos: Position
+
+        match action:
+            case self.actions_set.stay:
+                assert agent.pos is not None
+                next_pos = agent.pos
+            case self.actions_set.left:
+                next_pos = agent.west_pos()
+            case self.actions_set.down:
+                next_pos = agent.south_pos()
+            case self.actions_set.right:
+                next_pos = agent.east_pos()
+            case self.actions_set.up:
+                next_pos = agent.north_pos()
+            case _:
+                raise ValueError(f"Invalid action: {action}")
+
+        next_cell = self.grid.get(*next_pos)
+
+        if next_cell is None:
+            agent.move(next_pos, self.grid)
+        elif next_cell.can_overlap():
+            if agent.agent_name == "red" and next_cell.type == "obstacle":
+                pass
+            else:
+                agent.move(next_pos, self.grid)
+        else:
+            pass
+
+    def _move_agents(self, actions: list[int]) -> None:
+        # Move blue agent
+        self._move_agent(actions[0], self.agents[0])
+        # Move red agent
+        self._move_agent(actions[1], self.agents[1])
 
     def step(
         self, action: int
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
         self.step_count += 1
 
-        self._move_agents(action)
+        assert type(self.agents[1]) is PolicyAgent
+        red_action: int = self.agents[1].policy.act(self._get_obs(), self.actions_set)
+
+        actions: list[int] = [action, red_action]
+
+        self._move_agents(actions)
 
         assert self.agents[0].pos is not None
         assert self.agents[1].pos is not None
@@ -305,7 +347,7 @@ class Ctf1v1Env(MultiGridEnv):
             pass
 
         if (
-            distance_points(blue_agent_loc, red_agent_loc) <= 1
+            distance_points(blue_agent_loc, red_agent_loc) <= self.battle_range
             and not self._is_red_agent_defeated
         ):
             blue_win: bool

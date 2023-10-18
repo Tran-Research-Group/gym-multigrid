@@ -24,7 +24,7 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
-        agents: list[Agent],
+        agents: list[AgentT],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
@@ -36,7 +36,7 @@ class MultiGridEnv(gym.Env):
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
-        self.agents: list[Agent] = agents
+        self.agents: list[AgentT] = agents
         self.render_mode = render_mode
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs

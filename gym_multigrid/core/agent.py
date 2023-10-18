@@ -4,6 +4,7 @@ from typing import Type, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
+from gym_multigrid.core.grid import Grid
 
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
@@ -60,6 +61,7 @@ class Agent(WorldObj):
         actions: Type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
+        agent_name: str | None = None,
     ):
         if color is None:
             color = world.IDX_TO_COLOR[index]
@@ -79,6 +81,7 @@ class Agent(WorldObj):
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec
+        self.agent_name: str | None = agent_name
 
     def render(self, img):
         c = COLORS[self.color]
@@ -139,6 +142,19 @@ class Agent(WorldObj):
                     self.dir,
                     0,
                 )
+
+    def move(self, next_pos: Position, grid: Grid, dummy_move: bool = False)):
+        """Move the agent to a new position"""
+        if self.pos is not None:
+            grid.set(*self.pos, None)
+        else:
+            pass
+        
+        if dummy_move:
+            pass
+        else:
+            self.pos = next_pos
+        grid.set(*self.pos, self)
 
     @property
     def dir_vec(self):
@@ -291,13 +307,16 @@ class PolicyAgent(Agent):
 
     def __init__(
         self,
-        policy: Type[AgentPolicyT],
+        policy: AgentPolicyT,
         world: WorldT,
         index: int = 0,
         view_size: int = 7,
         actions: type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
+        agent_name: str | None = None,
     ):
-        super().__init__(world, index, view_size, actions, dir_to_vec, color)
-        self.policy: AgentPolicyT = policy()
+        super().__init__(
+            world, index, view_size, actions, dir_to_vec, color, agent_name
+        )
+        self.policy: AgentPolicyT = policy
