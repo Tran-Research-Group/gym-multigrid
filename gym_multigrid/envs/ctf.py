@@ -1,5 +1,6 @@
 import enum
 from itertools import chain
+import random
 from typing import Final, Literal, TypedDict, Type
 
 from gymnasium import spaces
@@ -124,7 +125,7 @@ class Ctf1v1Env(MultiGridEnv):
         see_through_walls: bool = False
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.loadtxt(map_path)
+        self._field_map: Final[NDArray] = np.rot90(np.loadtxt(map_path))
 
         height: int
         width: int
@@ -233,8 +234,8 @@ class Ctf1v1Env(MultiGridEnv):
         rf.type = "red_flag"
         self.put_obj(rf, *self.red_flag)
 
-        for agent in self.agents:
-            self.place_agent(agent)
+        self.place_agent(self.agents[0], pos=random.choice(self.blue_territory))
+        self.place_agent(self.agents[1], pos=random.choice(self.red_territory))
 
     def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
         super().reset(seed)
@@ -345,13 +346,13 @@ class Ctf1v1Env(MultiGridEnv):
 
         reward: float = 0.0
 
-        if blue_agent_loc == self.red_flag:
+        if (blue_agent_loc == self.red_flag).all():
             reward += self.flag_reward
             terminated = True
         else:
             pass
 
-        if red_agent_loc == self.blue_flag:
+        if (red_agent_loc == self.blue_flag).all():
             reward -= self.flag_reward
             terminated = True
         else:
