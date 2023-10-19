@@ -11,7 +11,7 @@ from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
 from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from .object import WorldObj
-from .constants import COLORS, DIR_TO_VEC
+from .constants import DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
@@ -63,6 +63,7 @@ class Agent(WorldObj):
         actions: Type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
+        bg_color: str | None = None,
         type: str = "agent",
     ):
         if color is None:
@@ -70,7 +71,7 @@ class Agent(WorldObj):
         else:
             pass
 
-        super().__init__(world, type, color)
+        super().__init__(world, type, color, bg_color)
         self.pos: Position | None = None
         self.dir: int | None = None
         self.init_dir: int | None = None
@@ -85,7 +86,7 @@ class Agent(WorldObj):
         self.dir_to_vec = dir_to_vec
 
     def render(self, img):
-        c = COLORS[self.color]
+        c = self.world.COLORS[self.color]
         tri_fn = point_in_triangle(
             (0.12, 0.19),
             (0.87, 0.50),
@@ -94,7 +95,9 @@ class Agent(WorldObj):
         # Rotate the agent based on its direction
         assert self.dir is not None
         tri_fn = rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * self.dir)
-        fill_coords(img, tri_fn, c)
+        fill_coords(
+            img, tri_fn, c, self.world.COLORS[self.bg_color] if self.bg_color else None
+        )
 
     def encode(self, current_agent=False):
         """Encode the a description of this object as a 3-tuple of integers"""
@@ -144,10 +147,25 @@ class Agent(WorldObj):
                     0,
                 )
 
-    def move(self, next_pos: Position, grid: Grid, dummy_move: bool = False):
+    def move(
+        self,
+        next_pos: Position,
+        grid: Grid,
+        init_grid: Grid | None = None,
+        dummy_move: bool = False,
+        bg_color: str | None = None,
+    ):
         """Move the agent to a new position"""
         if self.pos is not None:
-            grid.set(*self.pos, None)
+            direction = np.array(next_pos) - np.array(self.pos)
+
+            for i, vec in enumerate(self.dir_to_vec):
+                if np.array_equal(vec, direction):
+                    self.dir = i
+                    break
+
+            if init_grid is not None:
+                grid.set(*self.pos, init_grid.get(*self.pos))
         else:
             pass
 
@@ -155,7 +173,14 @@ class Agent(WorldObj):
             pass
         else:
             self.pos = next_pos
+
+        assert self.pos is not None
         grid.set(*self.pos, self)
+
+        if bg_color is not None:
+            self.bg_color = bg_color
+        else:
+            pass
 
     @property
     def dir_vec(self):
@@ -315,7 +340,10 @@ class PolicyAgent(Agent):
         actions: type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
+        bg_color: str | None = None,
         type: str = "agent",
     ):
-        super().__init__(world, index, view_size, actions, dir_to_vec, color, type)
+        super().__init__(
+            world, index, view_size, actions, dir_to_vec, color, bg_color, type
+        )
         self.policy: AgentPolicyT = policy
