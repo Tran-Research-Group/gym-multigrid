@@ -65,7 +65,7 @@ class Observation(TypedDict):
     blue_territory: NDArray
     red_territory: NDArray
     obstacle: NDArray
-    is_red_agent_defeated: NDArray
+    is_red_agent_defeated: int
 
 
 class Ctf1v1Env(MultiGridEnv):
@@ -184,31 +184,39 @@ class Ctf1v1Env(MultiGridEnv):
         observation_space = spaces.Dict(
             {
                 "blue_agent": spaces.Box(
-                    low=np.array([-1, -1]), high=np.array(self._field_map.shape) - 1, dtype=int  # type: ignore
+                    low=np.array([-1, -1]),
+                    high=np.array(self._field_map.shape) - 1,
+                    dtype=np.int64,
                 ),
                 "red_agent": spaces.Box(
-                    low=np.array([-1, -1]), high=np.array(self._field_map.shape) - 1, dtype=int  # type: ignore
+                    low=np.array([-1, -1]),
+                    high=np.array(self._field_map.shape) - 1,
+                    dtype=np.int64,
                 ),
                 "blue_flag": spaces.Box(
-                    low=np.array([0, 0]), high=np.array(self._field_map.shape) - 1, dtype=int  # type: ignore
+                    low=np.array([0, 0]),
+                    high=np.array(self._field_map.shape) - 1,
+                    dtype=np.int64,
                 ),
                 "red_flag": spaces.Box(
-                    low=np.array([0, 0]), high=np.array(self._field_map.shape) - 1, dtype=int  # type: ignore
+                    low=np.array([0, 0]),
+                    high=np.array(self._field_map.shape) - 1,
+                    dtype=np.int64,
                 ),
                 "blue_territory": spaces.Box(
                     low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.blue_territory))]))),  # type: ignore
                     high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.blue_territory))]))).flatten() - 1,  # type: ignore
-                    dtype=int,  # type: ignore
+                    dtype=np.int64,
                 ),
                 "red_territory": spaces.Box(
                     low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.red_territory))]))),  # type: ignore
                     high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.red_territory))]))).flatten() - 1,  # type: ignore
-                    dtype=int,  # type: ignore
+                    dtype=np.int64,
                 ),
                 "obstacle": spaces.Box(
                     low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.obstacle))]))),  # type: ignore
                     high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.obstacle))]))).flatten() - 1,  # type: ignore
-                    dtype=int,  # type: ignore
+                    dtype=np.int64,
                 ),
                 "is_red_agent_defeated": spaces.Discrete(2),
             }
@@ -277,10 +285,10 @@ class Ctf1v1Env(MultiGridEnv):
             "red_agent": np.array(self.agents[1].pos),
             "blue_flag": np.array(self.blue_flag),
             "red_flag": np.array(self.red_flag),
-            "blue_territory": np.array(self.blue_territory),
-            "red_territory": np.array(self.red_territory),
-            "obstacle": np.array(self.obstacle),
-            "is_red_agent_defeated": np.array(int(self._is_red_agent_defeated)),
+            "blue_territory": np.array(self.blue_territory).flatten(),
+            "red_territory": np.array(self.red_territory).flatten(),
+            "obstacle": np.array(self.obstacle).flatten(),
+            "is_red_agent_defeated": int(self._is_red_agent_defeated),
         }
 
         return observation

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gym-multigrid"
-version = "0.2.2"
+version = "0.2.3"
 description = "Muti-agent gymnasium gridworld environments"
 authors = ["Mikihisa Yuasa <myuasa2@illinois.edu>", "Rupal Nigam"]
 license = "Apache-2.0"
