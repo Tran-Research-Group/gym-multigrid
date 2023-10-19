@@ -1,3 +1,4 @@
+from typing import Callable, Type
 import numpy as np
 
 from gym_multigrid.core.world import WorldT
@@ -24,7 +25,7 @@ class Grid:
 
         self.grid: list[WorldObjT | None] = [None] * width * height
 
-    def __contains__(self, key):
+    def __contains__(self, key: type[WorldObjT] | tuple) -> bool:
         if isinstance(key, WorldObj):
             for e in self.grid:
                 if e is key:
@@ -39,15 +40,15 @@ class Grid:
                     return True
         return False
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Grid") -> bool:
         grid1 = self.encode()
         grid2 = other.encode()
         return np.array_equal(grid2, grid1)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "Grid") -> bool:
         return not self == other
 
-    def copy(self):
+    def copy(self) -> "Grid":
         from copy import deepcopy
 
         return deepcopy(self)
@@ -62,25 +63,38 @@ class Grid:
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
 
-    def horz_wall(self, x, y, length=None, obj_type=Wall):
+    def horz_wall(
+        self,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Type[WorldObjT] = Wall,
+    ) -> None:
         if length is None:
             length = self.width - x
+        assert length is not None
         for i in range(0, length):
             self.set(x + i, y, obj_type(self.world))
 
-    def vert_wall(self, x, y, length=None, obj_type=Wall):
+    def vert_wall(
+        self,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Type[WorldObjT] = Wall,
+    ):
         if length is None:
             length = self.height - y
         for j in range(0, length):
             self.set(x, y + j, obj_type(self.world))
 
-    def wall_rect(self, x, y, w, h):
+    def wall_rect(self, x: int, y: int, w: int, h: int) -> None:
         self.horz_wall(x, y, w)
         self.horz_wall(x, y + h - 1, w)
         self.vert_wall(x, y, h)
         self.vert_wall(x + w - 1, y, h)
 
-    def rotate_left(self):
+    def rotate_left(self) -> "Grid":
         """
         Rotate the grid to the left (counter-clockwise)
         """
@@ -118,11 +132,11 @@ class Grid:
     @classmethod
     def render_tile(
         cls,
-        world,
-        obj,
-        highlights=[],
-        tile_size=TILE_PIXELS,
-        subdivs=3,
+        world: WorldT,
+        obj: WorldObjT | None,
+        highlights: list[bool] = [],
+        tile_size: int = TILE_PIXELS,
+        subdivs: int = 3,
         cache: bool = True,
     ):
         """
@@ -130,7 +144,7 @@ class Grid:
         """
 
         key = (*highlights, tile_size)
-        key = obj.encode(world) + key if obj else key
+        key = obj.encode() + key if obj else key
 
         if key in cls.tile_cache:
             return cls.tile_cache[key]
