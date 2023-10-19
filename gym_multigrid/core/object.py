@@ -216,7 +216,7 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    def toggle(self, env, pos: Point):
+    def toggle(self, env, pos: Position):
         # If the player has the right key to open the door
         if self.is_locked:
             if isinstance(env.carrying, Key) and env.carrying.color == self.color:
@@ -300,7 +300,7 @@ class Key(WorldObj):
 
 class Ball(WorldObj):
     def __init__(self, world, index=0, reward=2):
-        super(Ball, self).__init__(world, "ball", self.world.IDX_TO_COLOR[index])
+        super().__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
 
@@ -332,7 +332,7 @@ class Box(WorldObj):
         # Horizontal slit
         fill_coords(img, point_in_rect(0.16, 0.84, 0.47, 0.53), c)
 
-    def toggle(self, env: MultiGridEnvT, pos: Point):
+    def toggle(self, env, pos: Position):
         # Replace the box by its contents
         env.grid.set(*pos, self.contains)
         return True

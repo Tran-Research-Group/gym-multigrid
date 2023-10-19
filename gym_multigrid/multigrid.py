@@ -1,5 +1,5 @@
 import math
-from typing import Literal, Type
+from typing import Literal, Type, TypeVar
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
@@ -13,6 +13,9 @@ from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
 from gym_multigrid.core.constants import *
+
+
+MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
 class MultiGridEnv(gym.Env):
