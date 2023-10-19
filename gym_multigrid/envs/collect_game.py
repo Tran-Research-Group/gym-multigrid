@@ -65,10 +65,10 @@ class CollectGameEnv(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(self.world, 0, 0)
-        self.grid.horz_wall(self.world, 0, height - 1)
-        self.grid.vert_wall(self.world, 0, 0)
-        self.grid.vert_wall(self.world, width - 1, 0)
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
 
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
@@ -429,6 +429,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
 
 class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
     def __init__(self):

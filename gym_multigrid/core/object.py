@@ -14,11 +14,11 @@ class WorldObj:
     Base class for grid world objects
     """
 
-    def __init__(self, world: WorldT, type: str, color: str):
+    def __init__(self, world: WorldT, type: str = "base", color: str = "grey"):
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
-        self.type = type
-        self.color = color
+        self.type: str = type
+        self.color: str = color
         self.contains = None
         self.world = world
 
@@ -44,7 +44,7 @@ class WorldObj:
         """Can the agent see behind this object?"""
         return True
 
-    def toggle(self, env, pos):
+    def toggle(self, env, pos: Position):
         """Method to trigger/toggle an action this object performs"""
         return False
 
@@ -67,7 +67,7 @@ class WorldObj:
             )
 
     @staticmethod
-    def decode(type_idx, color_idx, state):
+    def decode(type_idx: int, color_idx: int, state: int):
         assert False, "not implemented"
 
     def render(self, r: NDArray) -> None:
@@ -77,15 +77,20 @@ class WorldObj:
 
 class ObjectGoal(WorldObj):
     def __init__(
-        self, world: WorldT, index: int, target_type: str = "ball", reward=1, color=None
+        self,
+        world: WorldT,
+        index: int,
+        target_type: str = "ball",
+        reward: float = 1,
+        color: int | None = None,
     ):
         if color is None:
             super().__init__(world, "objgoal", world.IDX_TO_COLOR[index])
         else:
             super().__init__(world, "objgoal", world.IDX_TO_COLOR[color])
-        self.target_type = target_type
-        self.index = index
-        self.reward = reward
+        self.target_type: str = target_type
+        self.index: int = index
+        self.reward: float = reward
 
     def can_overlap(self):
         return False
@@ -137,13 +142,13 @@ class Floor(WorldObj):
 
 
 class Lava(WorldObj):
-    def __init__(self, world):
+    def __init__(self, world: WorldT):
         super().__init__(world, "lava", "red")
 
     def can_overlap(self):
         return True
 
-    def render(self, img):
+    def render(self, img: NDArray):
         c = (255, 128, 0)
 
         # Background color
@@ -160,7 +165,7 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world, color="grey"):
+    def __init__(self, world: WorldT, color: str = "grey"):
         super().__init__(world, "wall", color)
 
     def see_behind(self):
@@ -193,10 +198,16 @@ class Obstacle(WorldObj):
 
 
 class Door(WorldObj):
-    def __init__(self, world, color, is_open=False, is_locked=False):
+    def __init__(
+        self,
+        world: WorldT,
+        color: str,
+        is_open: bool = False,
+        is_locked: bool = False,
+    ):
         super().__init__(world, "door", color)
-        self.is_open = is_open
-        self.is_locked = is_locked
+        self.is_open: bool = is_open
+        self.is_locked: bool = is_locked
 
     def can_overlap(self):
         """The agent can only walk over this cell when the door is open"""
@@ -205,7 +216,7 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    def toggle(self, env, pos):
+    def toggle(self, env, pos: Point):
         # If the player has the right key to open the door
         if self.is_locked:
             if isinstance(env.carrying, Key) and env.carrying.color == self.color:
@@ -221,6 +232,7 @@ class Door(WorldObj):
         """Encode the a description of this object as a 3-tuple of integers"""
 
         # State, 0: open, 1: closed, 2: locked
+        state: int
         if self.is_open:
             state = 0
         elif self.is_locked:
@@ -265,7 +277,7 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
-    def __init__(self, world, color="blue"):
+    def __init__(self, world: WorldT, color: str = "blue"):
         super(Key, self).__init__(world, "key", color)
 
     def can_pickup(self):
@@ -303,7 +315,7 @@ class Ball(WorldObj):
 
 
 class Box(WorldObj):
-    def __init__(self, world, color, contains=None):
+    def __init__(self, world: WorldT, color: str, contains=None):
         super(Box, self).__init__(world, "box", color)
         self.contains = contains
 
@@ -320,7 +332,7 @@ class Box(WorldObj):
         # Horizontal slit
         fill_coords(img, point_in_rect(0.16, 0.84, 0.47, 0.53), c)
 
-    def toggle(self, env, pos):
+    def toggle(self, env: MultiGridEnvT, pos: Point):
         # Replace the box by its contents
         env.grid.set(*pos, self.contains)
         return True

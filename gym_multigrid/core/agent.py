@@ -15,6 +15,8 @@ from .constants import COLORS, DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
+ActionsT = TypeVar("ActionsT", bound="Actions")
+
 
 class DefaultActions(enum.IntEnum):
     still = 0

@@ -1,6 +1,9 @@
+from typing import Callable, Type
 import numpy as np
+
+from gym_multigrid.core.world import WorldT
 from ..utils.rendering import *
-from .object import WorldObj, Wall
+from .object import Wall, WorldObj, WorldObjT
 from .constants import COLORS, TILE_PIXELS
 
 
@@ -12,7 +15,7 @@ class Grid:
     # Static cache of pre-renderer tiles
     tile_cache = {}
 
-    def __init__(self, width, height, world):
+    def __init__(self, width: int, height: int, world: WorldT):
         assert width >= 3
         assert height >= 3
 
@@ -20,9 +23,9 @@ class Grid:
         self.height = height
         self.world = world
 
-        self.grid = [None] * width * height
+        self.grid: list[WorldObj | tuple | None] | list[None] = [None] * width * height
 
-    def __contains__(self, key):
+    def __contains__(self, key: type[WorldObjT] | tuple) -> bool:
         if isinstance(key, WorldObj):
             for e in self.grid:
                 if e is key:
@@ -37,53 +40,66 @@ class Grid:
                     return True
         return False
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Grid") -> bool:
         grid1 = self.encode()
         grid2 = other.encode()
         return np.array_equal(grid2, grid1)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "Grid") -> bool:
         return not self == other
 
-    def copy(self):
+    def copy(self) -> "Grid":
         from copy import deepcopy
 
         return deepcopy(self)
 
-    def set(self, i, j, v):
+    def set(self, i: int, j: int, v) -> None:
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         self.grid[j * self.width + i] = v
 
-    def get(self, i, j):
+    def get(self, i: int, j: int):
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
 
-    def horz_wall(self, x, y, length=None, obj_type=Wall):
+    def horz_wall(
+        self,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Type[WorldObjT] = Wall,
+    ) -> None:
         if length is None:
             length = self.width - x
+        assert length is not None
         for i in range(0, length):
             self.set(x + i, y, obj_type(self.world))
 
-    def vert_wall(self, x, y, length=None, obj_type=Wall):
+    def vert_wall(
+        self,
+        x: int,
+        y: int,
+        length: int | None = None,
+        obj_type: Type[WorldObjT] = Wall,
+    ):
         if length is None:
             length = self.height - y
         for j in range(0, length):
             self.set(x, y + j, obj_type(self.world))
 
-    def wall_rect(self, x, y, w, h):
+    def wall_rect(self, x: int, y: int, w: int, h: int) -> None:
         self.horz_wall(x, y, w)
         self.horz_wall(x, y + h - 1, w)
         self.vert_wall(x, y, h)
         self.vert_wall(x + w - 1, y, h)
 
-    def rotate_left(self):
+    def rotate_left(self) -> "Grid":
         """
         Rotate the grid to the left (counter-clockwise)
         """
 
-        grid = Grid(self.height, self.width)
+        grid = Grid(self.height, self.width, self.world)
 
         for i in range(self.width):
             for j in range(self.height):
@@ -97,7 +113,7 @@ class Grid:
         Get a subset of the grid
         """
 
-        grid = Grid(width, height)
+        grid = Grid(width, height, self.world)
 
         for j in range(0, height):
             for i in range(0, width):
@@ -114,13 +130,20 @@ class Grid:
         return grid
 
     @classmethod
-    def render_tile(cls, world, obj, highlights=[], tile_size=TILE_PIXELS, subdivs=3):
+    def render_tile(
+        cls,
+        world: WorldT,
+        obj: WorldObjT | None,
+        highlights: list[bool] = [],
+        tile_size: int = TILE_PIXELS,
+        subdivs: int = 3,
+    ) -> NDArray:
         """
         Render a tile and cache the result
         """
 
         key = (*highlights, tile_size)
-        key = obj.encode(world) + key if obj else key
+        key = obj.encode() + key if obj else key
 
         if key in cls.tile_cache:
             return cls.tile_cache[key]
@@ -168,6 +191,8 @@ class Grid:
         for j in range(0, self.height):
             for i in range(0, self.width):
                 cell = self.get(i, j)
+
+                assert isinstance(cell, WorldObj) or cell is None
 
                 # agent_here = np.array_equal(agent_pos, (i, j))
                 tile_img = Grid.render_tile(

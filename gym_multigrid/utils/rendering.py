@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def downsample(img, factor):
+def downsample(img: NDArray, factor: int):
     """
     Downsample an image along both dimensions by some factor
     """
