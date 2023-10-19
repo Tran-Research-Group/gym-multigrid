@@ -65,7 +65,7 @@ class Observation(TypedDict):
     blue_territory: NDArray
     red_territory: NDArray
     obstacle: NDArray
-    is_red_agent_defeated: NDArray
+    is_red_agent_defeated: int
 
 
 class Ctf1v1Env(MultiGridEnv):
@@ -288,7 +288,7 @@ class Ctf1v1Env(MultiGridEnv):
             "blue_territory": np.array(self.blue_territory).flatten(),
             "red_territory": np.array(self.red_territory).flatten(),
             "obstacle": np.array(self.obstacle).flatten(),
-            "is_red_agent_defeated": np.array(int(self._is_red_agent_defeated)),
+            "is_red_agent_defeated": int(self._is_red_agent_defeated),
         }
 
         return observation
