@@ -1,7 +1,9 @@
 import numpy as np
+
+from gym_multigrid.core.world import WorldT
 from ..utils.rendering import *
-from .object import WorldObj, Wall
-from .constants import COLORS, TILE_PIXELS
+from .object import WorldObj, Wall, WorldObjT
+from .constants import TILE_PIXELS
 
 
 class Grid:
@@ -12,7 +14,7 @@ class Grid:
     # Static cache of pre-renderer tiles
     tile_cache = {}
 
-    def __init__(self, width, height, world):
+    def __init__(self, width: int, height: int, world: WorldT):
         assert width >= 3
         assert height >= 3
 
@@ -20,7 +22,7 @@ class Grid:
         self.height = height
         self.world = world
 
-        self.grid = [None] * width * height
+        self.grid: list[WorldObjT | None] = [None] * width * height
 
     def __contains__(self, key):
         if isinstance(key, WorldObj):
@@ -50,12 +52,12 @@ class Grid:
 
         return deepcopy(self)
 
-    def set(self, i, j, v):
+    def set(self, i: int, j: int, v: WorldObjT | None) -> None:
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         self.grid[j * self.width + i] = v
 
-    def get(self, i, j):
+    def get(self, i: int, j: int) -> WorldObjT | None:
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         return self.grid[j * self.width + i]
@@ -83,7 +85,7 @@ class Grid:
         Rotate the grid to the left (counter-clockwise)
         """
 
-        grid = Grid(self.height, self.width)
+        grid = Grid(self.height, self.width, self.world)
 
         for i in range(self.width):
             for j in range(self.height):
@@ -97,7 +99,7 @@ class Grid:
         Get a subset of the grid
         """
 
-        grid = Grid(width, height)
+        grid = Grid(width, height, self.world)
 
         for j in range(0, height):
             for i in range(0, width):
@@ -114,7 +116,15 @@ class Grid:
         return grid
 
     @classmethod
-    def render_tile(cls, world, obj, highlights=[], tile_size=TILE_PIXELS, subdivs=3):
+    def render_tile(
+        cls,
+        world,
+        obj,
+        highlights=[],
+        tile_size=TILE_PIXELS,
+        subdivs=3,
+        cache: bool = True,
+    ):
         """
         Render a tile and cache the result
         """
@@ -130,28 +140,35 @@ class Grid:
         )
 
         # Draw the grid lines (top and left edges)
-        fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
-        fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
 
         if obj != None:
             obj.render(img)
+
+        fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
+        fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
 
         # Highlight the cell  if needed
         if len(highlights) > 0:
             for h in highlights:
                 highlight_img(
-                    img, color=COLORS[world.IDX_TO_COLOR[h % len(world.IDX_TO_COLOR)]]
+                    img,
+                    color=world.COLORS[world.IDX_TO_COLOR[h % len(world.IDX_TO_COLOR)]],
                 )
 
         # Downsample the image to perform supersampling/anti-aliasing
         img = downsample(img, subdivs)
 
         # Cache the rendered tile
-        cls.tile_cache[key] = img
+        if cache:
+            cls.tile_cache[key] = img
+        else:
+            pass
 
         return img
 
-    def render(self, tile_size, highlight_masks=None):
+    def render(
+        self, tile_size, highlight_masks=None, uncached_object_types: list[str] = []
+    ):
         """
         Render this grid at a given scale
         :param r: target renderer object
@@ -169,12 +186,16 @@ class Grid:
             for i in range(0, self.width):
                 cell = self.get(i, j)
 
+                cache: bool = True
+                if cell is not None and cell.type in uncached_object_types:
+                    cache = False
                 # agent_here = np.array_equal(agent_pos, (i, j))
                 tile_img = Grid.render_tile(
                     self.world,
                     cell,
                     highlights=[] if highlight_masks is None else highlight_masks[i, j],
                     tile_size=tile_size,
+                    cache=cache,
                 )
 
                 ymin = j * tile_size

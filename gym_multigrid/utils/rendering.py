@@ -26,6 +26,7 @@ def fill_coords(
     img: NDArray,
     fn: Callable[[float, float], bool],
     color: NDArray | tuple[int, int, int],
+    bg_color: NDArray | tuple[int, int, int] | None = None,
 ) -> NDArray:
     """
     Fill pixels of an image with coordinates matching a filter function
@@ -37,6 +38,10 @@ def fill_coords(
             xf = (x + 0.5) / img.shape[1]
             if fn(xf, yf):
                 img[y, x] = color
+            elif bg_color is not None:
+                img[y, x] = bg_color
+            else:
+                pass
 
     return img
 

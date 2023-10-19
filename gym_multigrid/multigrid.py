@@ -35,9 +35,11 @@ class MultiGridEnv(gym.Env):
         actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        uncached_object_types: list[str] = [],
     ):
         self.agents: list[AgentT] = agents
         self.render_mode = render_mode
+        self.uncahed_object_types = uncached_object_types
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
         self.agent_view_size = agent_view_size
@@ -581,6 +583,7 @@ class MultiGridEnv(gym.Env):
         img = self.grid.render(
             tile_size,
             highlight_masks=highlight_masks if highlight else None,
+            uncached_object_types=self.uncahed_object_types,
         )
 
         if self.render_mode == "human":
