@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Floor, Flag, Obstacle
+from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.base import AgentPolicyT
@@ -27,8 +27,9 @@ CtfColors: dict[str, NDArray] = {
     "purple": np.array([117, 7, 135]),
     "brown": np.array([120, 79, 23]),
     "grey": np.array([100, 100, 100]),
-    "light_red": np.array([234, 153, 153]),
-    "light_blue": np.array([90, 170, 223]),
+    "light_red": np.array([255, 228, 225]),
+    "light_blue": np.array([240, 248, 255]),
+    "white": np.array([255, 250, 250]),
 }
 
 
@@ -84,6 +85,7 @@ class Ctf1v1Env(MultiGridEnv):
         step_penalty_ratio: float = 0.01,
         max_steps: int = 100,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        uncached_object_types: list[str] = ["red_agent", "blue_agent"],
     ):
         """
         Initialize a new capture the flag environment.
@@ -145,6 +147,7 @@ class Ctf1v1Env(MultiGridEnv):
             self.world,
             index=0,
             color="blue",
+            bg_color="light_blue",
             view_size=agent_view_size,
             actions=self.actions_set,
             type="blue_agent",
@@ -154,6 +157,7 @@ class Ctf1v1Env(MultiGridEnv):
             self.world,
             index=1,
             color="red",
+            bg_color="light_red",
             view_size=agent_view_size,
             actions=self.actions_set,
             type="red_agent",
@@ -173,6 +177,7 @@ class Ctf1v1Env(MultiGridEnv):
             actions_set=self.actions_set,
             world=self.world,
             render_mode=render_mode,
+            uncached_object_types=uncached_object_types,
         )
 
     def _set_observation_space(self) -> spaces.Dict:
@@ -227,12 +232,24 @@ class Ctf1v1Env(MultiGridEnv):
         for i, j in self.obstacle:
             self.put_obj(Obstacle(self.world, penalty=self.obstacle_penalty), i, j)
 
-        bf = Flag(self.world, index=0, color="blue", type="blue_flag")
-        bf.type = "blue_flag"
-        self.put_obj(bf, *self.blue_flag)
-        rf = Flag(self.world, index=1, color="red", type="red_flag")
-        rf.type = "red_flag"
-        self.put_obj(rf, *self.red_flag)
+        self.put_obj(
+            Flag(
+                self.world,
+                index=0,
+                color="blue",
+                type="blue_flag",
+                bg_color="light_blue",
+            ),
+            *self.blue_flag,
+        )
+        self.put_obj(
+            Flag(
+                self.world, index=1, color="red", type="red_flag", bg_color="light_red"
+            ),
+            *self.red_flag,
+        )
+
+        self.init_grid: Grid = self.grid.copy()
 
         self.place_agent(self.agents[0], pos=random.choice(self.blue_territory))
         self.place_agent(self.agents[1], pos=random.choice(self.red_territory))
@@ -314,15 +331,29 @@ class Ctf1v1Env(MultiGridEnv):
         ):
             next_pos = agent.pos
 
-        next_cell = self.grid.get(*next_pos)
+        next_cell: WorldObjT | None = self.grid.get(*next_pos)
+
+        is_agent_in_blue_territory: bool = self._is_agent_in_territory(
+            agent.type, "blue", next_pos
+        )
+        is_agent_in_red_territory: bool = self._is_agent_in_territory(
+            agent.type, "red", next_pos
+        )
+
+        if is_agent_in_blue_territory:
+            bg_color = "light_blue"
+        elif is_agent_in_red_territory:
+            bg_color = "light_red"
+        else:
+            bg_color = None
 
         if next_cell is None:
-            agent.move(next_pos, self.grid)
+            agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
         elif next_cell.can_overlap():
             if agent.type == "red_agent" and next_cell.type == "obstacle":
                 pass
             else:
-                agent.move(next_pos, self.grid)
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
         else:
             pass
 
@@ -331,6 +362,45 @@ class Ctf1v1Env(MultiGridEnv):
         self._move_agent(actions[0], self.agents[0])
         # Move red agent
         self._move_agent(actions[1], self.agents[1])
+
+    def _is_agent_in_territory(
+        self,
+        agent_type: Literal["blue_agent", "red_agent"],
+        territory_name: Literal["blue", "red"],
+        agent_loc: Position | None = None,
+    ) -> bool:
+        in_territory: bool = False
+
+        territory: list[Position]
+        if agent_loc is None:
+            match agent_type:
+                case "blue_agent":
+                    assert self.agents[0].pos is not None
+                    agent_loc = self.agents[0].pos
+                case "red_agent":
+                    assert self.agents[1].pos is not None
+                    agent_loc = self.agents[1].pos
+                case _:
+                    raise ValueError(f"Invalid agent_name: {agent_type}")
+        else:
+            pass
+
+        match territory_name:
+            case "blue":
+                territory = self.blue_territory
+            case "red":
+                territory = self.red_territory
+            case _:
+                raise ValueError(f"Invalid territory_name: {territory_name}")
+
+        for i, j in territory:
+            if agent_loc[0] == i and agent_loc[1] == j:
+                in_territory = True
+                break
+            else:
+                pass
+
+        return in_territory
 
     def step(
         self, action: int
@@ -379,21 +449,12 @@ class Ctf1v1Env(MultiGridEnv):
         ):
             blue_win: bool
 
-            blue_agent_in_blue_territory: bool = False
-            for i, j in self.blue_territory:
-                if blue_agent_loc[0] == i and blue_agent_loc[1] == j:
-                    blue_agent_in_blue_territory = True
-                    break
-                else:
-                    pass
-
-            red_agent_in_red_territory: bool = False
-            for i, j in self.red_territory:
-                if red_agent_loc[0] == i and red_agent_loc[1] == j:
-                    red_agent_in_red_territory = True
-                    break
-                else:
-                    pass
+            blue_agent_in_blue_territory: bool = self._is_agent_in_territory(
+                "blue_agent", "blue"
+            )
+            red_agent_in_red_territory: bool = self._is_agent_in_territory(
+                "red_agent", "red"
+            )
 
             match (blue_agent_in_blue_territory, red_agent_in_red_territory):
                 case (True, True):

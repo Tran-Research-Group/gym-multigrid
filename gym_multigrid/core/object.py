@@ -14,13 +14,20 @@ class WorldObj:
     Base class for grid world objects
     """
 
-    def __init__(self, world: WorldT, type: str = "base", color: str = "grey"):
+    def __init__(
+        self,
+        world: WorldT,
+        type: str = "base",
+        color: str = "grey",
+        bg_color: str | None = None,
+    ):
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type
         self.color: str = color
         self.contains = None
         self.world = world
+        self.bg_color: str | None = bg_color
 
         # Initial position of the object
         self.init_pos: Position | None = None
@@ -345,8 +352,9 @@ class Flag(WorldObj):
         index: int,
         type: str = "flag",
         color: str = "blue",
+        bg_color: str = "light_blue",
     ):
-        super().__init__(world, type, color)
+        super().__init__(world, type, color, bg_color)
         self.index: int = index
 
     def can_pickup(self):
@@ -356,4 +364,9 @@ class Flag(WorldObj):
         return True
 
     def render(self, img):
-        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
+        fill_coords(
+            img,
+            point_in_circle(0.5, 0.5, 0.31),
+            self.world.COLORS[self.color],
+            self.world.COLORS[self.bg_color] if self.bg_color else None,
+        )
