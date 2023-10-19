@@ -3,13 +3,16 @@ from typing import Literal, Type
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.world import DefaultWorld, World, WorldT
-from .core.agent import ActionsT, DefaultActions
-from .utils.rendering import *
-from .utils.window import Window
-from .core.constants import *
 import random
+
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import WorldObjT
+from gym_multigrid.core.world import DefaultWorld, World, WorldT
+from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
+from gym_multigrid.typing import Position
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.utils.window import Window
+from gym_multigrid.core.constants import *
 
 
 class MultiGridEnv(gym.Env):
@@ -21,22 +24,23 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
+        agents: list[AgentT],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
         max_steps: int = 100,
         see_through_walls: bool = False,
-        agents=None,
         partial_obs: bool = False,
         agent_view_size: int = 7,
         actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
-        self.agents = agents
+        self.agents: list[AgentT] = agents
         self.render_mode = render_mode
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
+        self.agent_view_size = agent_view_size
 
         # Can't set both grid_size and width/height
         if grid_size:
@@ -46,6 +50,9 @@ class MultiGridEnv(gym.Env):
         else:
             assert width != None and height != None
 
+        self.width: int = width
+        self.height: int = height
+
         # Action enumeration for this environment
         self.actions = actions_set
 
@@ -54,23 +61,12 @@ class MultiGridEnv(gym.Env):
 
         self.world = world
 
-        if partial_obs:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(agent_view_size, agent_view_size, self.world.encode_dim),
-                dtype="uint8",
-            )
+        self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
 
+        if self.observation_space is spaces.Box:
+            self.ob_dim = np.prod(self.observation_space.shape)
         else:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(width, height, self.world.encode_dim),
-                dtype="uint8",
-            )
-
-        self.ob_dim = np.prod(self.observation_space.shape)
+            pass
         self.ac_dim = self.action_space.n
 
         # Range of possible rewards
@@ -80,8 +76,6 @@ class MultiGridEnv(gym.Env):
         self.window = None
 
         # Environment configuration
-        self.width = width
-        self.height = height
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
 
@@ -89,6 +83,29 @@ class MultiGridEnv(gym.Env):
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
+
+    def _set_observation_space(self) -> spaces.Box | spaces.Dict:
+        if self.partial_obs:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(
+                    self.agent_view_size,
+                    self.agent_view_size,
+                    self.world.encode_dim,
+                ),
+                dtype="uint8",
+            )
+
+        else:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(self.width, self.height, self.world.encode_dim),
+                dtype="uint8",
+            )
+
+        return observation_space
 
     def reset(self, seed=None):
         super().reset(seed=seed)
@@ -244,7 +261,14 @@ class MultiGridEnv(gym.Env):
             self.np_random.randint(yLow, yHigh),
         )
 
-    def place_obj(self, obj, top=None, size=None, reject_fn=None, max_tries=math.inf):
+    def place_obj(
+        self,
+        obj: WorldObjT,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        reject_fn: Callable[["MultiGridEnv", NDArray], bool] | None = None,
+        max_tries: float = math.inf,
+    ):
         """
         Place an object at an empty position in the grid
 
@@ -296,7 +320,7 @@ class MultiGridEnv(gym.Env):
 
         return pos
 
-    def put_obj(self, obj, i, j):
+    def put_obj(self, obj: WorldObjT, i: int, j: int):
         """
         Put an object at a specific position in the grid
         """
@@ -306,8 +330,14 @@ class MultiGridEnv(gym.Env):
         obj.pos = (i, j)
 
     def place_agent(
-        self, agent, pos=None, top=None, size=None, rand_dir=False, max_tries=math.inf
-    ):
+        self,
+        agent: AgentT,
+        pos: Position | None = None,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        rand_dir: bool = False,
+        max_tries: float = math.inf,
+    ) -> Position:
         """
         Set the agent's starting point at an empty position in the grid
         """
@@ -496,7 +526,7 @@ class MultiGridEnv(gym.Env):
 
         return img
 
-    def render(self, mode="human", close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
         """
         Render the whole-grid human view
         """
@@ -506,7 +536,7 @@ class MultiGridEnv(gym.Env):
                 self.window.close()
             return
 
-        if mode == "human" and not self.window:
+        if self.render_mode == "human" and not self.window:
             self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
@@ -553,7 +583,7 @@ class MultiGridEnv(gym.Env):
             highlight_masks=highlight_masks if highlight else None,
         )
 
-        if mode == "human":
+        if self.render_mode == "human":
             self.window.show_img(img)
 
         return img

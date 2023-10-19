@@ -1,5 +1,6 @@
 import numpy as np
 
+# Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
 
 # Map of color names to RGB values
