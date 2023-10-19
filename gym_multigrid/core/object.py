@@ -1,15 +1,12 @@
-from typing import TypeAlias, TypeVar
+from typing import TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.multigrid import MultiGridEnvT
-from .rendering import *
-from .world import WorldT, COLORS, COLOR_NAMES, STATE_TO_IDX
-
+from gym_multigrid.core.world import WorldT
+from gym_multigrid.typing import Position
+from ..utils.rendering import *
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
-
-Point: TypeAlias = tuple[int, int]
 
 
 class WorldObj:
@@ -17,47 +14,52 @@ class WorldObj:
     Base class for grid world objects
     """
 
-    def __init__(self, world: WorldT, type: str, color: str):
+    def __init__(self, world: WorldT, type: str = "base", color: str = "grey"):
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type
         self.color: str = color
         self.contains = None
+        self.world = world
 
         # Initial position of the object
-        self.init_pos: Point | None = None
+        self.init_pos: Position | None = None
 
         # Current position of the object
-        self.pos: Point | None = None
+        self.pos: Position | None = None
 
-    def can_overlap(self):
+    def can_overlap(self) -> bool:
         """Can the agent overlap with this?"""
         return False
 
-    def can_pickup(self):
+    def can_pickup(self) -> bool:
         """Can the agent pick this up?"""
         return False
 
-    def can_contain(self):
+    def can_contain(self) -> bool:
         """Can this contain another object?"""
         return False
 
-    def see_behind(self):
+    def see_behind(self) -> bool:
         """Can the agent see behind this object?"""
         return True
 
-    def toggle(self, env, pos: Point):
+    def toggle(self, env, pos: Position):
         """Method to trigger/toggle an action this object performs"""
         return False
 
-    def encode(self, world: WorldT, current_agent=False):
+    def encode(self, current_agent: bool = False) -> tuple[int, ...]:
         """Encode the a description of this object as a 3-tuple of integers"""
-        if world.encode_dim == 3:
-            return (world.OBJECT_TO_IDX[self.type], world.COLOR_TO_IDX[self.color], 0)
+        if self.world.encode_dim == 3:
+            return (
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
+                0,
+            )
         else:
             return (
-                world.OBJECT_TO_IDX[self.type],
-                world.COLOR_TO_IDX[self.color],
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
                 0,
                 0,
                 0,
@@ -94,17 +96,11 @@ class ObjectGoal(WorldObj):
         return False
 
     def render(self, img: NDArray):
-        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Goal(WorldObj):
-    def __init__(
-        self,
-        world: WorldT,
-        index: int,
-        reward: float = 1,
-        color: int | None = None,
-    ):
+    def __init__(self, world: WorldT, index: int, reward=1, color=None):
         if color is None:
             super().__init__(world, "goal", world.IDX_TO_COLOR[index])
         else:
@@ -116,7 +112,7 @@ class Goal(WorldObj):
         return True
 
     def render(self, img: NDArray):
-        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Switch(WorldObj):
@@ -127,7 +123,7 @@ class Switch(WorldObj):
         return True
 
     def render(self, img: NDArray):
-        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Floor(WorldObj):
@@ -135,20 +131,14 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
 
-    def __init__(self, world: WorldT, color: str = "blue"):
-        super().__init__(world, "floor", color)
+    def __init__(self, world: WorldT, color: str = "blue", type: str = "floor"):
+        super().__init__(world, type, color)
 
-    def can_overlap(self):
+    def can_overlap(self) -> bool:
         return True
 
-    def render(self, r: NDArray):
-        # Give the floor a pale color
-        c = COLORS[self.color]
-        r.setLineColor(100, 100, 100, 0)
-        r.setColor(*c / 2)
-        r.drawPolygon(
-            [(1, TILE_PIXELS), (TILE_PIXELS, TILE_PIXELS), (TILE_PIXELS, 1), (1, 1)]
-        )
+    def render(self, img: NDArray):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Lava(WorldObj):
@@ -181,8 +171,30 @@ class Wall(WorldObj):
     def see_behind(self):
         return False
 
-    def render(self, img: NDArray):
-        fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
+
+
+class Obstacle(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        penalty: float = 0,
+        can_see_through: bool = True,
+        color: str = "grey",
+    ):
+        super().__init__(world, "obstacle", color)
+        self.penalty = penalty
+        self.can_see_through = can_see_through
+
+    def see_behind(self):
+        return self.can_see_through
+
+    def can_overlap(self):
+        return True if self.penalty != 0 else False
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Door(WorldObj):
@@ -204,7 +216,7 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    def toggle(self, env, pos: Point):
+    def toggle(self, env, pos: Position):
         # If the player has the right key to open the door
         if self.is_locked:
             if isinstance(env.carrying, Key) and env.carrying.color == self.color:
@@ -216,7 +228,7 @@ class Door(WorldObj):
         self.is_open = not self.is_open
         return True
 
-    def encode(self, world: WorldT, current_agent: bool = False):
+    def encode(self, current_agent: bool = False):
         """Encode the a description of this object as a 3-tuple of integers"""
 
         # State, 0: open, 1: closed, 2: locked
@@ -228,19 +240,19 @@ class Door(WorldObj):
         elif not self.is_open:
             state = 1
         else:
-            assert False, "invalid door state"
+            raise ValueError("Invalid door state")
 
         return (
-            world.OBJECT_TO_IDX[self.type],
-            world.COLOR_TO_IDX[self.color],
+            self.world.OBJECT_TO_IDX[self.type],
+            self.world.COLOR_TO_IDX[self.color],
             state,
             0,
             0,
             0,
         )
 
-    def render(self, img: NDArray):
-        c: NDArray = COLORS[self.color]
+    def render(self, img):
+        c = self.world.COLORS[self.color]
 
         if self.is_open:
             fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), c)
@@ -271,8 +283,8 @@ class Key(WorldObj):
     def can_pickup(self):
         return True
 
-    def render(self, img: NDArray):
-        c = COLORS[self.color]
+    def render(self, img):
+        c = self.world.COLORS[self.color]
 
         # Vertical quad
         fill_coords(img, point_in_rect(0.50, 0.63, 0.31, 0.88), c)
@@ -287,8 +299,8 @@ class Key(WorldObj):
 
 
 class Ball(WorldObj):
-    def __init__(self, world: WorldT, index: int = 0, reward: float = 2):
-        super(Ball, self).__init__(world, "ball", world.IDX_TO_COLOR[index])
+    def __init__(self, world, index=0, reward=2):
+        super().__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
 
@@ -298,8 +310,8 @@ class Ball(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray):
-        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), COLORS[self.color])
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
 
 
 class Box(WorldObj):
@@ -310,8 +322,8 @@ class Box(WorldObj):
     def can_pickup(self):
         return True
 
-    def render(self, img: NDArray):
-        c = COLORS[self.color]
+    def render(self, img):
+        c = self.world.COLORS[self.color]
 
         # Outline
         fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), c)
@@ -320,7 +332,28 @@ class Box(WorldObj):
         # Horizontal slit
         fill_coords(img, point_in_rect(0.16, 0.84, 0.47, 0.53), c)
 
-    def toggle(self, env: MultiGridEnvT, pos: Point):
+    def toggle(self, env, pos: Position):
         # Replace the box by its contents
         env.grid.set(*pos, self.contains)
         return True
+
+
+class Flag(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        index: int,
+        type: str = "flag",
+        color: str = "blue",
+    ):
+        super().__init__(world, type, color)
+        self.index: int = index
+
+    def can_pickup(self):
+        return True
+
+    def can_overlap(self):
+        return True
+
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])

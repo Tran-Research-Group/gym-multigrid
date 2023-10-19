@@ -1,11 +1,10 @@
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.world import CollectWorld
-from gym_multigrid.agent import CollectActions, Agent
-from gym_multigrid.object import Ball
-from gym_multigrid.grid import Grid
+from gym_multigrid.core.world import CollectWorld
+from gym_multigrid.core.agent import CollectActions, Agent
+from gym_multigrid.core.object import Ball
+from gym_multigrid.core.grid import Grid
 import random
 import numpy as np
-
 
 
 class CollectGameEnv(MultiGridEnv):
@@ -53,7 +52,7 @@ class CollectGameEnv(MultiGridEnv):
             width=width,
             height=height,
             max_steps=100,
-            objects_set=self.world,
+            world=self.world,
             see_through_walls=False,
             agents=agents,
             partial_obs=partial_obs,
@@ -63,13 +62,13 @@ class CollectGameEnv(MultiGridEnv):
         )
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(self.world, 0, 0)
-        self.grid.horz_wall(self.world, 0, height - 1)
-        self.grid.vert_wall(self.world, 0, 0)
-        self.grid.vert_wall(self.world, width - 1, 0)
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
 
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
@@ -92,7 +91,7 @@ class CollectGameEnv(MultiGridEnv):
             "agent2ball3": 0,
         }
         super().reset()
-        state = self.grid.encode(self.world)
+        state = self.grid.encode()
         return state, {}
 
     def _reward(self, i, rewards, reward=1):
@@ -163,7 +162,7 @@ class CollectGameEnv(MultiGridEnv):
             done = True
             truncated = True
 
-        obs = self.grid.encode(self.world)
+        obs = self.grid.encode()
         return obs, rewards, done, truncated, self.info
 
     def simulate(self, action):
@@ -232,13 +231,13 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.sigma = 0.1
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(self.world, 0, 0)
-        self.grid.horz_wall(self.world, 0, height - 1)
-        self.grid.vert_wall(self.world, 0, 0)
-        self.grid.vert_wall(self.world, width - 1, 0)
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
 
         # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
         # partition_size = (width // 2 + 1, height // 2 + 1)
@@ -394,7 +393,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         super().__init__()
 
     def _gen_grid(self, width, height):
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
         self.grid.horz_wall(self.world, 0, 0)
@@ -430,3 +429,8 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
+
+class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__(agents_index=[3])

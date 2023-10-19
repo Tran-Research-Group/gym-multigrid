@@ -1,4 +1,4 @@
-# trg-multigrid
+# gym-multigrid
 
 ## Code conventions
 This repository uses the following conventions:

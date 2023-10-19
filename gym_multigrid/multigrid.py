@@ -1,15 +1,19 @@
 import math
-from typing import TypeVar
+from typing import Literal, Type, TypeVar
 import numpy as np
 import gymnasium as gym
-from gymnasium import error, spaces, utils
-from gymnasium.utils import seeding
-
-from gym_multigrid.agent import ActionsT
-from gym_multigrid.world import WorldT
-from .rendering import *
-from .window import Window
+from gymnasium import spaces
 import random
+
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import WorldObjT
+from gym_multigrid.core.world import DefaultWorld, World, WorldT
+from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
+from gym_multigrid.typing import Position
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.utils.window import Window
+from gym_multigrid.core.constants import *
+
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
@@ -23,55 +27,49 @@ class MultiGridEnv(gym.Env):
 
     def __init__(
         self,
+        agents: list[AgentT],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
         max_steps: int = 100,
         see_through_walls: bool = False,
-        seed=2,
-        agents=None,
         partial_obs: bool = False,
         agent_view_size: int = 7,
-        actions_set: ActionsT = None,
-        objects_set: WorldT = None,
-        render_mode="rgb_array",
+        actions_set: Type[ActionsT] = DefaultActions,
+        world: WorldT = DefaultWorld,
+        render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
-        self.agents = agents
+        self.agents: list[AgentT] = agents
         self.render_mode = render_mode
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
+        self.agent_view_size = agent_view_size
 
         # Can't set both grid_size and width/height
         if grid_size:
             assert width == None and height == None
             width = grid_size
             height = grid_size
+        else:
+            assert width != None and height != None
+
+        self.width: int = width
+        self.height: int = height
 
         # Action enumeration for this environment
         self.actions = actions_set
 
         # Actions are discrete integer values
-        self.action_space = spaces.Discrete(len(self.actions.available))
+        self.action_space = spaces.Discrete(len(self.actions))
 
-        self.objects = objects_set
+        self.world = world
 
-        if partial_obs:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(agent_view_size, agent_view_size, self.objects.encode_dim),
-                dtype="uint8",
-            )
+        self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
 
+        if self.observation_space is spaces.Box:
+            self.ob_dim = np.prod(self.observation_space.shape)
         else:
-            self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(width, height, self.objects.encode_dim),
-                dtype="uint8",
-            )
-
-        self.ob_dim = np.prod(self.observation_space.shape)
+            pass
         self.ac_dim = self.action_space.n
 
         # Range of possible rewards
@@ -81,18 +79,39 @@ class MultiGridEnv(gym.Env):
         self.window = None
 
         # Environment configuration
-        self.width = width
-        self.height = height
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
 
         # Initialize the RNG
-        self.seed(seed=seed)
 
-        # Initialize the state
-        self.reset()
+        # Define the empty grid. _gen_grid is supposed to fill this up
+        self.grid = Grid(width, height, world)
+
+    def _set_observation_space(self) -> spaces.Box | spaces.Dict:
+        if self.partial_obs:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(
+                    self.agent_view_size,
+                    self.agent_view_size,
+                    self.world.encode_dim,
+                ),
+                dtype="uint8",
+            )
+
+        else:
+            observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(self.width, self.height, self.world.encode_dim),
+                dtype="uint8",
+            )
+
+        return observation_space
 
     def reset(self, seed: int | None = None):
+        super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
@@ -115,18 +134,11 @@ class MultiGridEnv(gym.Env):
             obs = self.gen_obs()
         else:
             obs = [
-                self.grid.encode_for_agents(
-                    world=self.world, agent_pos=self.agents[i].pos
-                )
+                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
                 for i in range(len(self.agents))
             ]
-        obs = [self.objects.normalize_obs * ob for ob in obs]
+        obs = [self.world.normalize_obs * ob for ob in obs]
         return obs
-
-    def seed(self, seed=1337):
-        # Seed the random number generator
-        self.np_random, _ = seeding.np_random(seed)
-        return [seed]
 
     @property
     def steps_remaining(self):
@@ -138,25 +150,6 @@ class MultiGridEnv(gym.Env):
         A grid cell is represented by 2-character string, the first one for
         the object and the second one for the color.
         """
-
-        # Map of object types to short string
-        OBJECT_TO_STR = {
-            "wall": "x",
-            "floor": "F",
-            "door": "D",
-            "key": "K",
-            "ball": "o",
-            "box": "B",
-            "goal": "G",
-            "lava": "V",
-            "agent": "a",
-        }
-
-        # Short string for opened door
-        OPENED_DOOR_IDS = "_"
-
-        # Map agent's direction to short string
-        AGENT_DIR_TO_STR = {0: ">", 1: "V", 2: "<", 3: "^"}
 
         str = ""
 
@@ -189,6 +182,7 @@ class MultiGridEnv(gym.Env):
         return str
 
     def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
@@ -270,7 +264,14 @@ class MultiGridEnv(gym.Env):
             self.np_random.randint(yLow, yHigh),
         )
 
-    def place_obj(self, obj, top=None, size=None, reject_fn=None, max_tries=math.inf):
+    def place_obj(
+        self,
+        obj: WorldObjT,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        reject_fn: Callable[["MultiGridEnv", NDArray], bool] | None = None,
+        max_tries: float = math.inf,
+    ):
         """
         Place an object at an empty position in the grid
 
@@ -322,7 +323,7 @@ class MultiGridEnv(gym.Env):
 
         return pos
 
-    def put_obj(self, obj, i, j):
+    def put_obj(self, obj: WorldObjT, i: int, j: int):
         """
         Put an object at a specific position in the grid
         """
@@ -332,8 +333,14 @@ class MultiGridEnv(gym.Env):
         obj.pos = (i, j)
 
     def place_agent(
-        self, agent, pos=None, top=None, size=None, rand_dir=False, max_tries=math.inf
-    ):
+        self,
+        agent: AgentT,
+        pos: Position | None = None,
+        top: Position | None = None,
+        size: tuple[int, int] | None = None,
+        rand_dir: bool = False,
+        max_tries: float = math.inf,
+    ) -> Position:
         """
         Set the agent's starting point at an empty position in the grid
         """
@@ -457,7 +464,7 @@ class MultiGridEnv(gym.Env):
                 for i in range(len(actions))
             ]
 
-        obs = [self.objects.normalize_obs * ob for ob in obs]
+        obs = [self.world.normalize_obs * ob for ob in obs]
 
         return obs, rewards, done, {}
 
@@ -474,7 +481,7 @@ class MultiGridEnv(gym.Env):
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
 
-            grid = self.grid.slice(self.objects, topX, topY, a.view_size, a.view_size)
+            grid = self.grid.slice(self.world, topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
                 grid = grid.rotate_left()
@@ -503,7 +510,7 @@ class MultiGridEnv(gym.Env):
         # Encode the partially observable view into a numpy array
         obs = [
             grid.encode_for_agents(
-                self.objects, [grid.width // 2, grid.height - 1], vis_mask
+                self.world, [grid.width // 2, grid.height - 1], vis_mask
             )
             for grid, vis_mask in zip(grids, vis_masks)
         ]
@@ -518,11 +525,11 @@ class MultiGridEnv(gym.Env):
         grid, vis_mask = self.grid.decode(obs)
 
         # Render the whole grid
-        img = grid.render(self.objects, tile_size, highlight_mask=vis_mask)
+        img = grid.render(self.world, tile_size, highlight_mask=vis_mask)
 
         return img
 
-    def render(self, mode="human", close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
         """
         Render the whole-grid human view
         """
@@ -532,7 +539,7 @@ class MultiGridEnv(gym.Env):
                 self.window.close()
             return
 
-        if mode == "human" and not self.window:
+        if self.render_mode == "human" and not self.window:
             self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
@@ -575,12 +582,11 @@ class MultiGridEnv(gym.Env):
 
         # Render the whole grid
         img = self.grid.render(
-            self.objects,
             tile_size,
             highlight_masks=highlight_masks if highlight else None,
         )
 
-        if mode == "human":
+        if self.render_mode == "human":
             self.window.show_img(img)
 
         return img
