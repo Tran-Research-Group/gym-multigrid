@@ -122,7 +122,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
             self.world,
             index=0,
             color="blue",
-            bg_color="light_blue",
+            bg_color="white",
             view_size=agent_view_size,
             actions=self.actions_set,
             type="agent",
@@ -138,6 +138,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
             agent_view_size=agent_view_size,
             render_mode=render_mode,
             world=self.world,
+            actions_set=self.actions_set,
         )
 
     def _set_observation_space(self) -> spaces.Dict:
@@ -191,7 +192,9 @@ class MazeSingleAgentEnv(MultiGridEnv):
             )
 
         for flag_idx, (i, j) in enumerate(self.flag):
-            self.put_obj(Flag(self.world, index=flag_idx), i, j)
+            self.put_obj(
+                Flag(self.world, index=flag_idx, color="red", bg_color="white"), i, j
+            )
 
         self.init_grid: Grid = self.grid.copy()
 
