@@ -502,7 +502,7 @@ class Ctf1v1Env(MultiGridEnv):
         else:
             pass
 
-        reward -= self.step_penalty * (self.step_count - 1)
+        reward -= self.step_penalty
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()

@@ -338,7 +338,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         else:
             pass
 
-        reward -= step_penalty * (self.step_count - 1)
+        reward -= step_penalty
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
