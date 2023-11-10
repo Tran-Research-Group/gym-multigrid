@@ -131,14 +131,16 @@ class MazeSingleAgentEnv(MultiGridEnv):
         agents: list[AgentT] = [blue_agent]
 
         super().__init__(
-            agents=agents,
             width=width,
             height=height,
             max_steps=max_steps,
+            see_through_walls=True,
+            agents=agents,
+            partial_obs=False,
             agent_view_size=agent_view_size,
-            render_mode=render_mode,
-            world=self.world,
             actions_set=self.actions_set,
+            world=self.world,
+            render_mode=render_mode,
         )
 
     def _set_observation_space(self) -> spaces.Dict:
@@ -271,7 +273,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         if next_cell is None:
             agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
         elif next_cell.can_overlap():
-            if agent.type == "red_agent" and next_cell.type == "obstacle":
+            if next_cell.type == "obstacle":
                 pass
             else:
                 agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)

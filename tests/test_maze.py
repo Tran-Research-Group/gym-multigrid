@@ -6,7 +6,9 @@ from gym_multigrid.envs.maze import MazeSingleAgentEnv
 def test_maze() -> None:
     map_path: str = "tests/assets/board_maze.txt"
 
-    env = MazeSingleAgentEnv(map_path=map_path, render_mode="human")
+    env = MazeSingleAgentEnv(
+        map_path=map_path, render_mode="human", max_steps=1000, step_penalty_ratio=0
+    )
     obs, _ = env.reset()
     env.render()
 
