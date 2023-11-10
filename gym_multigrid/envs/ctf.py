@@ -127,7 +127,7 @@ class Ctf1v1Env(MultiGridEnv):
         see_through_walls: bool = False
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.rot90(np.loadtxt(map_path), 3)
+        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
 
         height: int
         width: int
