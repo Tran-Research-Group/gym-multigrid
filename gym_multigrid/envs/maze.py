@@ -344,10 +344,6 @@ class MazeSingleAgentEnv(MultiGridEnv):
         self.agent_traj.append(agent_loc)
         self.rewards.append(reward)
 
-        if terminated or truncated:
-            print(f"Last reward: {reward}")
-            print(f"Last agent location: {agent_loc}")
-
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
 
