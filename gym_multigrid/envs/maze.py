@@ -204,7 +204,10 @@ class MazeSingleAgentEnv(MultiGridEnv):
 
         self.init_grid: Grid = self.grid.copy()
 
-        self.place_agent(self.agents[0], pos=random.choice(self.background))
+        self.place_agent(
+            self.agents[0],
+            pos=self.background[np.random.randint(0, len(self.background))],
+        )
 
     def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
         super().reset(seed)
@@ -342,6 +345,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
             pass
 
         reward -= step_penalty
+
+        self.agent_traj.append(agent_loc)
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
