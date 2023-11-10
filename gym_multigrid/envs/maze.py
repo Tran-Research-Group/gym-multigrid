@@ -98,7 +98,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         self.actions_set = MazeActions
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.rot90(np.loadtxt(map_path), 3)
+        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
 
         height: int
         width: int
@@ -190,7 +190,11 @@ class MazeSingleAgentEnv(MultiGridEnv):
 
         for i, j in self.obstacle:
             self.put_obj(
-                Obstacle(self.world, penalty=self._obstacle_penalty_ratio), i, j
+                Obstacle(
+                    self.world, penalty=self._obstacle_penalty_ratio * self._flag_reward
+                ),
+                i,
+                j,
             )
 
         for flag_idx, (i, j) in enumerate(self.flag):
@@ -259,8 +263,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
         if (
             next_pos[0] < 0
             or next_pos[1] < 0
-            or next_pos[0] >= self.width
-            or next_pos[1] >= self.height
+            or next_pos[0] >= self.height
+            or next_pos[1] >= self.width
         ):
             next_pos = agent.pos
         else:
