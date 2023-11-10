@@ -277,10 +277,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         if next_cell is None:
             agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
         elif next_cell.can_overlap():
-            if next_cell.type == "obstacle":
-                pass
-            else:
-                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
         else:
             pass
 
