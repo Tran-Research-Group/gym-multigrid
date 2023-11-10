@@ -1,21 +1,17 @@
 import enum
-from itertools import chain
-import random
-from typing import Final, Literal, TypedDict, Type
+from typing import Final, Literal, TypedDict
 
 from gymnasium import spaces
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT
+from gym_multigrid.core.agent import Agent, AgentT
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import World
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.base import AgentPolicyT
-from gym_multigrid.policy.ctf.heuristic import RwPolicy
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.map import distance_area_point, distance_points
+from gym_multigrid.utils.map import distance_area_point
 
 MazeColors: dict[str, NDArray] = {
     "red": np.array([228, 3, 3]),
@@ -216,6 +212,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
 
         assert agent.pos is not None
         self.agent_traj: list[Position] = [agent.pos]
+        self.rewards: list[float] = []
 
         obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
@@ -269,20 +266,18 @@ class MazeSingleAgentEnv(MultiGridEnv):
             or next_pos[0] >= self.height
             or next_pos[1] >= self.width
         ):
-            next_pos = agent.pos
+            pass  # Do nothing
         else:
-            pass
+            next_cell: WorldObjT | None = self.grid.get(*next_pos)
 
-        next_cell: WorldObjT | None = self.grid.get(*next_pos)
+            bg_color: str = "white"
 
-        bg_color: str = "white"
-
-        if next_cell is None:
-            agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
-        elif next_cell.can_overlap():
-            agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
-        else:
-            pass
+            if next_cell is None:
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            elif next_cell.can_overlap():
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            else:
+                pass
 
     def _move_agents(self, actions: list[int]) -> None:
         # Move agent
@@ -347,6 +342,11 @@ class MazeSingleAgentEnv(MultiGridEnv):
         reward -= step_penalty
 
         self.agent_traj.append(agent_loc)
+        self.rewards.append(reward)
+
+        if terminated or truncated:
+            print(f"Last reward: {reward}")
+            print(f"Last agent location: {agent_loc}")
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
