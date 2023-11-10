@@ -149,7 +149,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
                 "agent": spaces.Box(
                     low=np.array([-1, -1]),
                     high=np.array(self._field_map.shape) - 1,
-                    dtype=np.integer,
+                    dtype=np.int64,
                 ),
                 "background": spaces.Box(
                     low=np.array(
@@ -159,7 +159,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
                         [self._field_map.shape for _ in range(len(self.background))]
                     ).flatten()
                     - 1,
-                    dtype=np.integer,
+                    dtype=np.int64,
                 ),
                 "flag": spaces.Box(
                     low=np.array([[0, 0] for _ in range(len(self.flag))]).flatten(),
@@ -167,7 +167,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
                         [self._field_map.shape for _ in range(len(self.flag))]
                     ).flatten()
                     - 1,
-                    dtype=np.integer,
+                    dtype=np.int64,
                 ),
                 "obstacle": spaces.Box(
                     low=np.array([[0, 0] for _ in range(len(self.obstacle))]).flatten(),
@@ -175,7 +175,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
                         [self._field_map.shape for _ in range(len(self.obstacle))]
                     ).flatten()
                     - 1,
-                    dtype=np.integer,
+                    dtype=np.int64,
                 ),
             }
         )
