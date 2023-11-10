@@ -321,13 +321,13 @@ class Ctf1v1Env(MultiGridEnv):
             case self.actions_set.stay:
                 next_pos = agent.pos
             case self.actions_set.left:
-                next_pos = agent.west_pos()
+                next_pos = agent.pos + np.array([0, -1])
             case self.actions_set.down:
-                next_pos = agent.south_pos()
+                next_pos = agent.pos + np.array([-1, 0])
             case self.actions_set.right:
-                next_pos = agent.east_pos()
+                next_pos = agent.pos + np.array([0, 1])
             case self.actions_set.up:
-                next_pos = agent.north_pos()
+                next_pos = agent.pos + np.array([1, 0])
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
