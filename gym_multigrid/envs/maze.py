@@ -274,7 +274,21 @@ class MazeSingleAgentEnv(MultiGridEnv):
         return observation
 
     def _encode_map(self) -> NDArray:
-        ...
+        encoded_map: NDArray = np.zeros((self.width, self.height))
+
+        for i, j in self.background:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["background"]
+        for i, j in self.obstacle:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
+        for i, j in self.flag:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["flag"]
+
+        assert self.agents[0].pos is not None
+        encoded_map[
+            self.agents[0].pos[0], self.agents[0].pos[1]
+        ] = self.world.OBJECT_TO_IDX["agent"]
+
+        return encoded_map
 
     def _get_info(self) -> dict[str, float]:
         assert self.agents[0].pos is not None
