@@ -437,7 +437,10 @@ class Ctf1v1Env(MultiGridEnv):
         # Move blue agent
         self._move_agent(actions[0], self.agents[0])
         # Move red agent
-        self._move_agent(actions[1], self.agents[1])
+        if not self._is_red_agent_defeated:
+            self._move_agent(actions[1], self.agents[1])
+        else:
+            pass
 
     def _is_agent_in_territory(
         self,
