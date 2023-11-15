@@ -1,5 +1,5 @@
 import enum
-from typing import Final, Literal, TypedDict
+from typing import Final, Literal, TypedDict, TypeAlias
 
 from gymnasium import spaces
 import numpy as np
@@ -49,11 +49,14 @@ MazeWorld = World(
 )
 
 
-class Observation(TypedDict):
+class ObservationDict(TypedDict):
     agent: NDArray
     background: NDArray
     flag: NDArray
     obstacle: NDArray
+
+
+Observation: TypeAlias = ObservationDict | NDArray
 
 
 class MazeSingleAgentEnv(MultiGridEnv):
@@ -237,7 +240,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
             pos=self.background[np.random.randint(0, len(self.background))],
         )
 
-    def reset(self, seed=None) -> tuple[Observation | NDArray, dict[str, float]]:
+    def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
         super().reset(seed)
 
         agent: Agent = self.agents[0]
@@ -246,14 +249,16 @@ class MazeSingleAgentEnv(MultiGridEnv):
         self.agent_traj: list[Position] = [agent.pos]
         self.rewards: list[float] = []
 
-        obs: Observation | NDArray = self._get_obs()
+        obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
 
         return obs, info
 
-    def _get_obs(self) -> Observation | NDArray:
+    def _get_obs(self) -> Observation:
         for a in self.agents:
             assert a.pos is not None
+
+        observation: Observation
 
         match self.observation_option:
             case "positional":
