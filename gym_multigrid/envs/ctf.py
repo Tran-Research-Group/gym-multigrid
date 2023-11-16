@@ -87,7 +87,8 @@ class Ctf1v1Env(MultiGridEnv):
         obstacle_penalty_ratio: float = 0.0,
         step_penalty_ratio: float = 0.01,
         max_steps: int = 100,
-        observation_option: Literal["positional", "map"] = "map",
+        observation_option: Literal["positional", "map", "flattened"] = "positional",
+        observation_scaling: float = 1.0,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = ["red_agent", "blue_agent"],
     ):
@@ -124,8 +125,9 @@ class Ctf1v1Env(MultiGridEnv):
         self.step_penalty: Final[float] = step_penalty_ratio * flag_reward
 
         self.observation_option: Final[
-            Literal["positional", "map"]
+            Literal["positional", "map", "flattened"]
         ] = observation_option
+        self.observation_scaling: Final[float] = observation_scaling
 
         partial_obs: bool = False
         agent_view_size: int = 10
@@ -252,6 +254,27 @@ class Ctf1v1Env(MultiGridEnv):
                     dtype=np.int64,
                 )
 
+            case "flattened":
+                obs_high = (
+                    np.ones([8 + 200 + 1])
+                    * (np.max(self._field_map.shape) - 1)
+                    / self.observation_scaling
+                )
+                obs_high[-1] = 1
+                observation_space = spaces.Box(
+                    low=np.zeros(
+                        [
+                            8
+                            + 2 * len(self.obstacle)
+                            + 2 * len(self.blue_territory)
+                            + 2 * len(self.red_territory)
+                            + 1
+                        ]
+                    ),
+                    high=obs_high,
+                    dtype=np.int64,
+                )
+
         return observation_space
 
     def _gen_grid(self, width, height):
@@ -332,6 +355,23 @@ class Ctf1v1Env(MultiGridEnv):
                 }
             case "map":
                 observation = self._encode_map()
+            case "flattened":
+                observation = np.array(
+                    [
+                        *np.array(self.agents[0].pos),
+                        *np.array(self.agents[1].pos),
+                        *np.array(self.blue_flag),
+                        *np.array(self.red_flag),
+                        *np.array(self.blue_territory).flatten(),
+                        *np.array(self.red_territory).flatten(),
+                        *np.array(self.obstacle).flatten(),
+                        int(self._is_red_agent_defeated),
+                    ]
+                )
+            case _:
+                raise ValueError(
+                    f"Invalid observation_option: {self.observation_option}"
+                )
 
         return observation
 

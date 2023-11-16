@@ -6,7 +6,9 @@ from gym_multigrid.envs.ctf import Ctf1v1Env
 def test_ctf() -> None:
     map_path: str = "tests/assets/board.txt"
 
-    env = Ctf1v1Env(map_path=map_path, render_mode="human")
+    env = Ctf1v1Env(
+        map_path=map_path, render_mode="human", observation_option="flattened"
+    )
     obs, _ = env.reset()
     env.render()
 
