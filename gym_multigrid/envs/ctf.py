@@ -289,8 +289,14 @@ class Ctf1v1Env(MultiGridEnv):
 
         self.init_grid: Grid = self.grid.copy()
 
-        self.place_agent(self.agents[0], pos=random.choice(self.blue_territory))
-        self.place_agent(self.agents[1], pos=random.choice(self.red_territory))
+        self.place_agent(
+            self.agents[0],
+            pos=self.blue_territory[np.random.randint(0, len(self.blue_territory))],
+        )
+        self.place_agent(
+            self.agents[1],
+            pos=self.red_territory[np.random.randint(0, len(self.red_territory))],
+        )
 
     def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
         super().reset(seed)
