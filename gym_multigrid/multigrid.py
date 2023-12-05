@@ -89,7 +89,7 @@ class MultiGridEnv(gym.Env):
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, options: dict[str, any] | None = None):
         super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
@@ -161,6 +161,9 @@ class MultiGridEnv(gym.Env):
         return str
 
     def _gen_grid(self, width, height):
+        """
+        Makes a 2d grid with width and height as its parameteres
+        """
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
