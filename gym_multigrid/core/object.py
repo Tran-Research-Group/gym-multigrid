@@ -5,6 +5,8 @@ from numpy.typing import NDArray
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.typing import Position
 from ..utils.rendering import *
+from .constants import STATE_IDX_TO_COLOR_WILDFIRE
+
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
 
@@ -377,9 +379,8 @@ class Tree(WorldObj):
         self,
         world: WorldT,
         tree_state_idx: int = 0,
-        tree_state_idx_to_color={0: "green", 1: "orange", 2: "grey"},
     ):
-        super().__init__(world, "tree", tree_state_idx_to_color[tree_state_idx])
+        super().__init__(world, "tree", STATE_IDX_TO_COLOR_WILDFIRE[tree_state_idx])
         self.state = tree_state_idx
 
     def can_overlap(self):

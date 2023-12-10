@@ -36,6 +36,13 @@ STATE_TO_IDX_WILDFIRE = {
     "burnt": 2,
 }
 
+# Map of state idx to color
+STATE_IDX_TO_COLOR_WILDFIRE = {
+    0: "green",
+    1: "orange",
+    2: "grey",
+}
+
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [
     # Pointing right (positive X)
