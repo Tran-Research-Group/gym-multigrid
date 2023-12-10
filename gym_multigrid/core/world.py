@@ -62,3 +62,14 @@ CollectWorld = World(
         "agent": 3,
     },
 )
+
+WildfireWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "tree": 1,
+        "agent": 2,
+    },
+)

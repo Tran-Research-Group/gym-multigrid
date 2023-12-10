@@ -370,3 +370,30 @@ class Flag(WorldObj):
             self.world.COLORS[self.color],
             self.world.COLORS[self.bg_color] if self.bg_color else None,
         )
+
+
+class Tree(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        tree_state_idx: int = 0,
+        tree_state_idx_to_color={0: "green", 1: "orange", 2: "grey"},
+    ):
+        super().__init__(world, "tree", tree_state_idx_to_color[tree_state_idx])
+        self.state = tree_state_idx
+
+    def can_overlap(self):
+        return True
+
+    def encode(self, current_agent: bool = False):
+
+        return (
+            self.world.OBJECT_TO_IDX[self.type],
+            self.world.COLOR_TO_IDX[self.color],
+            self.state,
+        )
+
+    def render(self, img):
+        c = self.world.COLORS[self.color]
+
+        fill_coords(img, point_in_rect(0, 1, 0, 1), c)

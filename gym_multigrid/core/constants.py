@@ -29,6 +29,13 @@ STATE_TO_IDX = {
     "locked": 2,
 }
 
+# Map of state names to integers
+STATE_TO_IDX_WILDFIRE = {
+    "healthy": 0,
+    "on fire": 1,
+    "burnt": 2,
+}
+
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [
     # Pointing right (positive X)
@@ -52,6 +59,7 @@ OBJECT_TO_STR = {
     "goal": "G",
     "lava": "V",
     "agent": "a",
+    "tree": "T",
 }
 
 # Short string for opened door
