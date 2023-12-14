@@ -81,7 +81,7 @@ class WildfireEnv(MultiGridEnv):
         return obs
 
     def move_agent(self, i, next_cell, next_pos):
-        if next_cell.can_overlap():
+        if next_cell is None or next_cell.can_overlap():
             # Once reward function is decided, modify to add rewards here.
             self.grid.set(*next_pos, self.agents[i])
             self.grid.set(*self.agents[i].pos, None)
@@ -95,7 +95,8 @@ class WildfireEnv(MultiGridEnv):
         Args:
             i (int): first coordinate of tree position
             j (int): second coordinate of tree position
-        Output:
+        Returns:
+        int
             The number of neighboring trees on fire. A tree has upto 8 neighbors.
         """
         num = 0
@@ -125,7 +126,8 @@ class WildfireEnv(MultiGridEnv):
         Args:
             i (int): first coordinate of tree position
             j (int): second coordinate of tree position
-        Output:
+        Returns:
+        bool
             True, if a UAV agent is located at (i,j), otherwise, False.
         """
         bool = False
@@ -182,6 +184,10 @@ class WildfireEnv(MultiGridEnv):
                             + self.agent_above_tree(i, j) * self.delta_beta
                         ):
                             c.state == 2
+
+        if self.step_count >= self.max_steps:
+            done = True
+            truncated = True
 
         next_obs = [
             self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
