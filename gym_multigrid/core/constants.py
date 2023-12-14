@@ -40,7 +40,7 @@ STATE_TO_IDX_WILDFIRE = {
 STATE_IDX_TO_COLOR_WILDFIRE = {
     0: "green",
     1: "orange",
-    2: "grey",
+    2: "brown",
 }
 
 # Map of agent direction indices to vectors
