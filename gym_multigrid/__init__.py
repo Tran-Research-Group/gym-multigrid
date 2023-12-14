@@ -19,3 +19,10 @@ register(
     id="multigrid-collect-single-v0",
     entry_point="gym_multigrid.envs:CollectGame3ObjSingleAgent",
 )
+
+# Wildfire environment
+# ----------------------------------------
+register(
+    id="wildfire-v0",
+    entry_point="gym_multigrid.envs:WildfireEnv",
+)
