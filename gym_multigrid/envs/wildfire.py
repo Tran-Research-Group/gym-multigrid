@@ -5,6 +5,7 @@ from gym_multigrid.core.object import Tree
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.constants import STATE_TO_IDX_WILDFIRE
 import numpy as np
+from typing import Any
 
 
 class WildfireEnv(MultiGridEnv):
@@ -66,19 +67,27 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(width - 1, 0)
 
         # Insert trees to grid as per initial conditions of wildfire
-        for _ in range(self.grid_size**2):
+        num_trees = self.grid_size**2 - (
+            2 * self.grid.width + 2 * (self.grid.height - 2)
+        )
+        for _ in range(num_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 
-        # Randomize the UAV start position
-        for a in self.agents:
-            self.place_agent(a)
+        # Place UAVs at start positions
+        start_pos = [
+            (1, 1),
+            (self.grid.width - 2, self.grid.height - 2),
+        ]  # change this if more agents are added
+        for i, a in enumerate(self.agents):
+            self.place_agent(a, pos=start_pos[i])
 
-    def reset(self, seed: int | None = None):
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         # zero out wildfire specific variables, if any
 
         # reset the grid
-        obs = super().reset(seed=seed)
-        return obs
+        obs = np.array(super().reset(seed=seed))
+        info = {}
+        return obs, info
 
     def move_agent(self, i, next_cell, next_pos):
         if next_cell is None or next_cell.can_overlap():
@@ -116,7 +125,7 @@ class WildfireEnv(MultiGridEnv):
             if neighbor_pos[0] >= 0 and neighbor_pos[0] < self.grid.width:
                 if neighbor_pos[1] >= 0 and neighbor_pos[1] < self.grid.height:
                     o = self.grid.get(*neighbor_pos)
-                    if o.type == "tree":
+                    if o is not None and o.type == "tree":
                         if o.state == 1:
                             num += 1
         return num
@@ -170,7 +179,7 @@ class WildfireEnv(MultiGridEnv):
             for i in range(self.grid.width):
                 c = self.grid.get(i, j)
 
-                if c.type == "tree":
+                if c is not None and c.type == "tree":
                     if c.state == 0:
                         if np.random.rand() < 1 - self.alpha ** self.neighbors_on_fire(
                             i, j
@@ -193,6 +202,6 @@ class WildfireEnv(MultiGridEnv):
             self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
             for i in range(len(self.agents))
         ]
-        next_obs = [self.world.normalize_obs * ob for ob in next_obs]
+        next_obs = np.array([self.world.normalize_obs * ob for ob in next_obs])
         info = {}
         return next_obs, rewards, done, truncated, info

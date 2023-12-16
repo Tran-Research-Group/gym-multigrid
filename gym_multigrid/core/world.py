@@ -71,5 +71,6 @@ WildfireWorld = World(
         "empty": 0,
         "tree": 1,
         "agent": 2,
+        "wall": 3,
     },
 )
