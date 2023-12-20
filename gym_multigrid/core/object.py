@@ -387,7 +387,6 @@ class Tree(WorldObj):
         return True
 
     def encode(self, current_agent: bool = False):
-
         return (
             self.world.OBJECT_TO_IDX[self.type],
             self.world.COLOR_TO_IDX[self.color],

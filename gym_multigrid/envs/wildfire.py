@@ -6,6 +6,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.constants import (
     STATE_TO_IDX_WILDFIRE,
     TILE_PIXELS,
+    STATE_IDX_TO_COLOR_WILDFIRE,
 )
 from gym_multigrid.utils.window import Window
 from gym_multigrid.utils.misc import render_agent_tile
@@ -72,11 +73,16 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        # Insert trees to grid as per initial conditions of wildfire
-        num_trees = self.grid_size**2 - (
-            2 * self.grid.width + 2 * (self.grid.height - 2)
+        # Insert trees in grid as per initial conditions of wildfire
+        trees_on_fire = [(15, 15), (16, 15), (15, 16), (16, 16)]
+        num_healthy_trees = (
+            self.grid_size**2
+            - (2 * self.grid.width + 2 * (self.grid.height - 2))
+            - len(trees_on_fire)
         )
-        for _ in range(num_trees):
+        for pos in trees_on_fire:
+            self.put_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]), *pos)
+        for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 
         # Helper grid is a work around for grid unable to store multiple objects at a single cell.
@@ -188,20 +194,29 @@ class WildfireEnv(MultiGridEnv):
                 self.move_agent(i, next_cell, next_pos)
 
         # Update tree states
+
+        # Store number of neighboring trees on fire for each tree before updating tree states.
+        on_fire_neighbors = np.zeros((self.helper_grid.width, self.helper_grid.height))
+        for j in range(self.helper_grid.height):
+            for i in range(self.helper_grid.width):
+                on_fire_neighbors[i, j] = self.neighbors_on_fire(i, j)
+
         for j in range(self.helper_grid.height):
             for i in range(self.helper_grid.width):
                 c = self.helper_grid.get(i, j)
-
                 if c is not None and c.type == "tree":
                     if c.state == 0:
-                        if np.random.rand() < 1 - self.alpha ** self.neighbors_on_fire(
-                            i, j
-                        ):
-                            c.state == 1
+                        # transition from healthy to on fire
+                        if np.random.rand() < 1 - self.alpha ** on_fire_neighbors[i, j]:
+                            c.state = 1
+                            c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+
                             # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
                             o = self.grid.get(i, j)
-                            if o.type == "agent":
-                                o.state == 1
+                            if o.type == "tree":
+                                o.state = 1
+                                o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
+                    # transition from on fire to burnt
                     if c.state == 1:
                         if (
                             np.random.rand()
@@ -209,11 +224,13 @@ class WildfireEnv(MultiGridEnv):
                             - self.beta
                             + self.agent_above_tree(i, j) * self.delta_beta
                         ):
-                            c.state == 2
+                            c.state = 2
+                            c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
                             # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
                             o = self.grid.get(i, j)
-                            if o.type == "agent":
-                                o.state == 1
+                            if o.type == "tree":
+                                o.state = 2
+                                o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
 
         if self.step_count >= self.max_steps:
             done = True
