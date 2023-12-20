@@ -24,7 +24,8 @@ def test_wildfire() -> None:
         frames.append(env.render())
         if terminated or truncated:
             break
-    save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0)
+
+    save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=5, dpi=72)
 
 
 test_wildfire()

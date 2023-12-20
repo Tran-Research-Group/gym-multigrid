@@ -3,7 +3,12 @@ from gym_multigrid.core.world import WildfireWorld
 from gym_multigrid.core.agent import WildfireActions, Agent
 from gym_multigrid.core.object import Tree
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.constants import STATE_TO_IDX_WILDFIRE
+from gym_multigrid.core.constants import (
+    STATE_TO_IDX_WILDFIRE,
+    TILE_PIXELS,
+)
+from gym_multigrid.utils.window import Window
+from gym_multigrid.utils.misc import render_agent_tile
 import numpy as np
 from typing import Any
 
@@ -42,6 +47,7 @@ class WildfireEnv(MultiGridEnv):
                 index=i,
                 view_size=agent_view_size,
                 actions=actions_set,
+                color="light_blue",
             )
             for i in range(self.num_agents)
         ]
@@ -73,6 +79,10 @@ class WildfireEnv(MultiGridEnv):
         for _ in range(num_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 
+        # Helper grid is a work around for grid unable to store multiple objects at a single cell.
+        # Helper grid is the grid without agents.
+        self.helper_grid = self.grid.copy()
+
         # Place UAVs at start positions
         start_pos = [
             (1, 1),
@@ -93,10 +103,12 @@ class WildfireEnv(MultiGridEnv):
         if next_cell is None or next_cell.can_overlap():
             # Once reward function is decided, modify to add rewards here.
             self.grid.set(*next_pos, self.agents[i])
-            self.grid.set(*self.agents[i].pos, None)
+            self.grid.set(
+                *self.agents[i].pos, self.helper_grid.get(*self.agents[i].pos)
+            )
             self.agents[i].pos = next_pos
         else:
-            # do nothing if next cell is a Wall. Modify to add rewards here if needed.
+            # do nothing if next cell is a wall or another agent. Modify to add rewards here if needed.
             pass
 
     def neighbors_on_fire(self, i: int, j: int) -> int:
@@ -122,9 +134,9 @@ class WildfireEnv(MultiGridEnv):
         ]
         for r in relative_pos:
             neighbor_pos = tree_pos + r
-            if neighbor_pos[0] >= 0 and neighbor_pos[0] < self.grid.width:
-                if neighbor_pos[1] >= 0 and neighbor_pos[1] < self.grid.height:
-                    o = self.grid.get(*neighbor_pos)
+            if neighbor_pos[0] >= 0 and neighbor_pos[0] < self.helper_grid.width:
+                if neighbor_pos[1] >= 0 and neighbor_pos[1] < self.helper_grid.height:
+                    o = self.helper_grid.get(*neighbor_pos)
                     if o is not None and o.type == "tree":
                         if o.state == 1:
                             num += 1
@@ -175,9 +187,10 @@ class WildfireEnv(MultiGridEnv):
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(i, next_cell, next_pos)
 
-        for j in range(self.grid.height):
-            for i in range(self.grid.width):
-                c = self.grid.get(i, j)
+        # Update tree states
+        for j in range(self.helper_grid.height):
+            for i in range(self.helper_grid.width):
+                c = self.helper_grid.get(i, j)
 
                 if c is not None and c.type == "tree":
                     if c.state == 0:
@@ -185,6 +198,10 @@ class WildfireEnv(MultiGridEnv):
                             i, j
                         ):
                             c.state == 1
+                            # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
+                            o = self.grid.get(i, j)
+                            if o.type == "agent":
+                                o.state == 1
                     if c.state == 1:
                         if (
                             np.random.rand()
@@ -193,6 +210,10 @@ class WildfireEnv(MultiGridEnv):
                             + self.agent_above_tree(i, j) * self.delta_beta
                         ):
                             c.state == 2
+                            # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
+                            o = self.grid.get(i, j)
+                            if o.type == "agent":
+                                o.state == 1
 
         if self.step_count >= self.max_steps:
             done = True
@@ -205,3 +226,70 @@ class WildfireEnv(MultiGridEnv):
         next_obs = np.array([self.world.normalize_obs * ob for ob in next_obs])
         info = {}
         return next_obs, rewards, done, truncated, info
+
+    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
+        """
+        Render the whole-grid human view
+        """
+
+        if close:
+            if self.window:
+                self.window.close()
+            return
+
+        if self.render_mode == "human" and not self.window:
+            self.window = Window("gym_multigrid")
+            self.window.show(block=False)
+
+        if highlight:
+            # Compute which cells are visible to the agent
+            _, vis_masks = self.gen_obs_grid()
+
+            highlight_masks = {
+                (i, j): [] for i in range(self.width) for j in range(self.height)
+            }
+
+            for i, a in enumerate(self.agents):
+                # Compute the world coordinates of the bottom-left corner
+                # of the agent's view area
+                f_vec = a.dir_vec
+                r_vec = a.right_vec
+                top_left = (
+                    a.pos + f_vec * (a.view_size - 1) - r_vec * (a.view_size // 2)
+                )
+
+                # Mask of which cells to highlight
+
+                # For each cell in the visibility mask
+                for vis_j in range(0, a.view_size):
+                    for vis_i in range(0, a.view_size):
+                        # If this cell is not visible, don't highlight it
+                        if not vis_masks[i][vis_i, vis_j]:
+                            continue
+
+                        # Compute the world coordinates of this cell
+                        abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
+
+                        if abs_i < 0 or abs_i >= self.width:
+                            continue
+                        if abs_j < 0 or abs_j >= self.height:
+                            continue
+
+                        # Mark this cell to be highlighted
+                        highlight_masks[abs_i, abs_j].append(i)
+
+        # Render the grid with agents
+        img = self.grid.render(
+            tile_size,
+            highlight_masks=highlight_masks if highlight else None,
+            uncached_object_types=self.uncahed_object_types,
+        )
+
+        # Re-render the tiles containing agents to change background color. Agents are rendered in circular shape.
+        for a in self.agents:
+            img = render_agent_tile(img, a, self.helper_grid, self.world)
+
+        if self.render_mode == "human":
+            self.window.show_img(img)
+
+        return img
