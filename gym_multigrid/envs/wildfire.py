@@ -10,6 +10,8 @@ from gym_multigrid.core.constants import (
 )
 from gym_multigrid.utils.window import Window
 from gym_multigrid.utils.misc import render_agent_tile
+from collections import OrderedDict
+from gymnasium import spaces
 import numpy as np
 from typing import Any
 
@@ -21,11 +23,11 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.2,
+        alpha=0.1,
         beta=0.9,
         delta_beta=0.5,
-        size=32,
-        num_agents=2,
+        size=12,
+        num_agents=3,
         agent_view_size=10,
         max_steps=10000,
         partial_obs=False,
@@ -36,10 +38,13 @@ class WildfireEnv(MultiGridEnv):
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
+        if num_agents > 4:
+            raise ValueError("Number of agents cannot be greater than 4.")
         self.agent_view_size = agent_view_size
         self.max_steps = max_steps
         self.world = WildfireWorld
         self.grid_size = size
+        self.burnt_trees = 0
         # add wildfire specific variables like num_burnt trees etc.
 
         agents = [
@@ -63,6 +68,39 @@ class WildfireEnv(MultiGridEnv):
             world=self.world,
             render_mode=render_mode,
         )
+        self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
+        self.action_space = spaces.Dict(
+            {f"{a.index}": spaces.Discrete(len(self.actions)) for a in self.agents}
+        )
+
+    def _set_observation_space(self) -> spaces.Dict:
+        if self.partial_obs:
+            observation_space = spaces.Dict(
+                {
+                    f"{a.index}": spaces.Box(
+                        low=0,
+                        high=255,
+                        shape=(self.agent_view_size**2 + 2 * (self.num_agents - 1),),
+                        dtype="int64",
+                    )
+                    for a in self.agents
+                }
+            )
+
+        else:
+            observation_space = spaces.Dict(
+                {
+                    f"{a.index}": spaces.Box(
+                        low=0,
+                        high=255,
+                        shape=((self.grid_size - 2) ** 2 + 2 * (self.num_agents - 1),),
+                        dtype="int64",
+                    )
+                    for a in self.agents
+                }
+            )
+
+        return observation_space
 
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height, self.world)
@@ -73,15 +111,31 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        # Insert trees in grid as per initial conditions of wildfire
-        trees_on_fire = [(15, 15), (16, 15), (15, 16), (16, 16)]
+        # Insert trees in grid as per initial conditions of wildfire. Modify as needed.
+        # Currently, center is on fire.
+        if self.grid_size % 2 == 0:
+            size = self.grid_size - 2
+            trees_on_fire = [
+                (size / 2, size / 2),
+                (size / 2 + 1, size / 2),
+                (size / 2, size / 2 + 1),
+                (size / 2 + 1, size / 2 + 1),
+            ]
+        else:
+            size = self.grid_size - 2
+            trees_on_fire = [((size + 1) / 2, (size + 1) / 2)]
+
         num_healthy_trees = (
             self.grid_size**2
             - (2 * self.grid.width + 2 * (self.grid.height - 2))
             - len(trees_on_fire)
         )
         for pos in trees_on_fire:
-            self.put_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]), *pos)
+            self.put_obj(
+                Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
+                int(pos[0]),
+                int(pos[1]),
+            )
         for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 
@@ -92,17 +146,42 @@ class WildfireEnv(MultiGridEnv):
         # Place UAVs at start positions
         start_pos = [
             (1, 1),
+            (1, self.grid.height - 2),
+            (self.grid.width - 2, 1),
             (self.grid.width - 2, self.grid.height - 2),
-        ]  # change this if more agents are added
+        ]  # start positions for up to 4 agents. Modify as needed.
         for i, a in enumerate(self.agents):
             self.place_agent(a, pos=start_pos[i])
 
+    def _get_obs(self) -> OrderedDict:
+        obs = []
+        for i in range(self.helper_grid.width):
+            for j in range(self.helper_grid.height):
+                o = self.helper_grid.get(i, j)
+                if o is not None and o.type == "tree":
+                    obs.append(o.state)
+        obs = [[f"{a.index}", np.array(obs.copy())] for a in self.agents]
+
+        for elem in obs:
+            for b in self.agents:
+                # add other agent positions to obs
+                if int(elem[0]) != b.index:
+                    elem[1] = np.append(elem[1], b.pos[0])
+                    elem[1] = np.append(elem[1], b.pos[1])
+            elem = tuple(elem)
+        obs = OrderedDict(obs)
+        return obs
+
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         # zero out wildfire specific variables, if any
+        self.burnt_trees = 0
 
         # reset the grid
-        obs = np.array(super().reset(seed=seed))
-        info = {}
+        super().reset(seed=seed)
+
+        obs = self._get_obs()
+
+        info = {"burnt trees": self.burnt_trees}
         return obs, info
 
     def move_agent(self, i, next_cell, next_pos):
@@ -166,10 +245,10 @@ class WildfireEnv(MultiGridEnv):
 
     def step(self, actions):
         self.step_count += 1
-
+        reward = 0
+        actions = [value for value in actions.values()]
         order = np.random.permutation(len(actions))
 
-        rewards = np.zeros(len(actions))
         done = False
         truncated = False
 
@@ -226,6 +305,8 @@ class WildfireEnv(MultiGridEnv):
                         ):
                             c.state = 2
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+                            self.burnt_trees += 1
+                            reward -= 1
                             # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
                             o = self.grid.get(i, j)
                             if o.type == "tree":
@@ -236,12 +317,10 @@ class WildfireEnv(MultiGridEnv):
             done = True
             truncated = True
 
-        next_obs = [
-            self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-            for i in range(len(self.agents))
-        ]
-        next_obs = np.array([self.world.normalize_obs * ob for ob in next_obs])
-        info = {}
+        rewards = {f"{a.index}": reward for a in self.agents}
+
+        next_obs = self._get_obs()
+        info = {"burnt trees": self.burnt_trees}
         return next_obs, rewards, done, truncated, info
 
     def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):

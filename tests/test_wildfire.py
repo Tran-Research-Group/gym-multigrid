@@ -10,19 +10,19 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
 def test_wildfire() -> None:
-    env = gym.make("wildfire-v0", max_episode_steps=100)
+    env = gym.make("wildfire-v0", max_episode_steps=20)
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
 
     while True:
-        actions = [
-            np.random.choice(list(env.actions)),
-            np.random.choice(list(env.actions)),
-        ]
+        actions = {
+            f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
+        }
         obs, reward, terminated, truncated, info = env.step(actions)
         frames.append(env.render())
         if terminated or truncated:
+            print(info)
             break
 
     save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
