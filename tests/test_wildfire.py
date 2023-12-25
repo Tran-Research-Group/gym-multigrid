@@ -22,7 +22,6 @@ def test_wildfire() -> None:
         obs, reward, terminated, truncated, info = env.step(actions)
         frames.append(env.render())
         if terminated or truncated:
-            print(info)
             break
 
     save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
