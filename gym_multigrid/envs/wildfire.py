@@ -23,13 +23,13 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.1,
+        alpha=0.3,
         beta=0.9,
         delta_beta=0.5,
         size=12,
-        num_agents=3,
+        num_agents=4,
         agent_view_size=10,
-        max_steps=10000,
+        max_steps=300,
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
@@ -224,10 +224,6 @@ class WildfireEnv(MultiGridEnv):
             np.array([-1, 0]),
             np.array([0, 1]),
             np.array([0, -1]),
-            np.array([1, 1]),
-            np.array([-1, 1]),
-            np.array([1, -1]),
-            np.array([-1, -1]),
         ]
         for r in relative_pos:
             neighbor_pos = tree_pos + r
@@ -298,15 +294,16 @@ class WildfireEnv(MultiGridEnv):
                 if c is not None and c.type == "tree":
                     if c.state == 0:
                         # transition from healthy to on fire
-                        if np.random.rand() < 1 - self.alpha ** on_fire_neighbors[i, j]:
-                            c.state = 1
-                            c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+                        if on_fire_neighbors[i, j] > 0:
+                            if np.random.rand() < self.alpha ** on_fire_neighbors[i, j]:
+                                c.state = 1
+                                c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
 
-                            # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
-                            o = self.grid.get(i, j)
-                            if o.type == "tree":
-                                o.state = 1
-                                o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
+                                # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
+                                o = self.grid.get(i, j)
+                                if o.type == "tree":
+                                    o.state = 1
+                                    o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
                     # transition from on fire to burnt
                     if c.state == 1:
                         if (
