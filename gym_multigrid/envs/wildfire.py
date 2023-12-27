@@ -330,7 +330,8 @@ class WildfireEnv(MultiGridEnv):
 
         next_obs = self._get_obs()
         info = {"burnt trees": self.burnt_trees}
-        return next_obs, rewards, done, truncated, info
+        infos = {f"{a.index}": info for a in self.agents}
+        return next_obs, rewards, done, truncated, infos
 
     def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
         """
