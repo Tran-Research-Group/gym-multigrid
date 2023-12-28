@@ -23,7 +23,7 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.3,
+        alpha=0.12,
         beta=0.9,
         delta_beta=0.5,
         size=12,
@@ -294,16 +294,18 @@ class WildfireEnv(MultiGridEnv):
                 if c is not None and c.type == "tree":
                     if c.state == 0:
                         # transition from healthy to on fire
-                        if on_fire_neighbors[i, j] > 0:
-                            if np.random.rand() < self.alpha ** on_fire_neighbors[i, j]:
-                                c.state = 1
-                                c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+                        if (
+                            np.random.rand()
+                            < 1 - (1 - self.alpha) ** on_fire_neighbors[i, j]
+                        ):
+                            c.state = 1
+                            c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
 
-                                # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
-                                o = self.grid.get(i, j)
-                                if o.type == "tree":
-                                    o.state = 1
-                                    o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
+                            # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
+                            o = self.grid.get(i, j)
+                            if o.type == "tree":
+                                o.state = 1
+                                o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
                     # transition from on fire to burnt
                     if c.state == 1:
                         if (

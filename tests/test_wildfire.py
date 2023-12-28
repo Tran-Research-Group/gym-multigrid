@@ -16,6 +16,7 @@ def test_wildfire() -> None:
     frames.append(env.render())
     total_reward = 0
     steps = 0
+    dub = True
 
     while True:
         actions = {
@@ -24,9 +25,9 @@ def test_wildfire() -> None:
         obs, reward, terminated, truncated, info = env.step(actions)
         total_reward += reward["0"]
         steps += 1
-        if env.burnt_trees == 100:
+        if env.burnt_trees == 100 and dub:
             print(steps)
-            break
+            dub = False
         frames.append(env.render())
         if terminated or truncated:
             print(f"Total reward: {total_reward}")
