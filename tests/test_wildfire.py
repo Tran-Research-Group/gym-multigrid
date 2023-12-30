@@ -25,7 +25,7 @@ def test_wildfire() -> None:
         obs, reward, terminated, truncated, info = env.step(actions)
         total_reward += reward["0"]
         steps += 1
-        if env.burnt_trees == 100 and dub:
+        if env.burnt_trees == env.grid_size_without_walls**2 and dub:
             print(steps)
             dub = False
         frames.append(env.render())
@@ -33,7 +33,7 @@ def test_wildfire() -> None:
             print(f"Total reward: {total_reward}")
             break
 
-    # save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
+    save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
 
 
 test_wildfire()

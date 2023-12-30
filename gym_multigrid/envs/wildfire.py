@@ -23,10 +23,10 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.12,
-        beta=0.9,
+        alpha=0.1,
+        beta=0.987,
         delta_beta=0.5,
-        size=12,
+        size=9,
         num_agents=4,
         agent_view_size=10,
         max_steps=300,
@@ -254,6 +254,7 @@ class WildfireEnv(MultiGridEnv):
     def step(self, actions):
         self.step_count += 1
         reward = 0
+        # rewards = {}
         actions = [value for value in actions.values()]
         order = np.random.permutation(len(actions))
 
@@ -300,6 +301,7 @@ class WildfireEnv(MultiGridEnv):
                         ):
                             c.state = 1
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+                            reward -= 1
 
                             # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
                             o = self.grid.get(i, j)
@@ -317,7 +319,6 @@ class WildfireEnv(MultiGridEnv):
                             c.state = 2
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
                             self.burnt_trees += 1
-                            reward -= 1
                             # If self.grid doesn't contain an agent at (i,j), then update state of tree there.
                             o = self.grid.get(i, j)
                             if o.type == "tree":
