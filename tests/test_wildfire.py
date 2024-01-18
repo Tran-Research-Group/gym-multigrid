@@ -23,14 +23,11 @@ def test_wildfire() -> None:
             f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
         }
         obs, reward, terminated, truncated, info = env.step(actions)
-        total_reward += reward["0"]
         steps += 1
-        if env.burnt_trees == env.grid_size_without_walls**2 and dub:
-            print(steps)
-            dub = False
+        print(f"on fire:", env.trees_on_fire)
         frames.append(env.render())
         if terminated or truncated:
-            print(f"Total reward: {total_reward}")
+            print(f"burnt trees:", info["0"]["burnt trees"])
             break
 
     save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
