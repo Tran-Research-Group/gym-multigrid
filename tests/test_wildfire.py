@@ -14,9 +14,7 @@ def test_wildfire() -> None:
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
-    total_reward = 0
     steps = 0
-    dub = True
 
     while True:
         actions = {

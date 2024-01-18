@@ -1,17 +1,17 @@
-from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.core.world import WildfireWorld
-from gym_multigrid.core.agent import WildfireActions, Agent
-from gym_multigrid.core.object import Tree
-from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.constants import (
+from marllib.envs.gym_multigrid.multigrid import MultiGridEnv
+from marllib.envs.gym_multigrid.core.world import WildfireWorld
+from marllib.envs.gym_multigrid.core.agent import WildfireActions, Agent
+from marllib.envs.gym_multigrid.core.object import Tree
+from marllib.envs.gym_multigrid.core.grid import Grid
+from marllib.envs.gym_multigrid.core.constants import (
     STATE_TO_IDX_WILDFIRE,
     TILE_PIXELS,
     STATE_IDX_TO_COLOR_WILDFIRE,
 )
-from gym_multigrid.utils.window import Window
-from gym_multigrid.utils.misc import render_agent_tile
+from marllib.envs.gym_multigrid.utils.window import Window
+from marllib.envs.gym_multigrid.utils.misc import render_agent_tile
 from collections import OrderedDict
-from gymnasium.spaces import Box, Dict, Discrete
+from gym.spaces import Box, Dict, Discrete
 import numpy as np
 from typing import Any
 
@@ -23,13 +23,13 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.05,
-        beta=0.987,
+        alpha=0.3,
+        beta=0.9,
         delta_beta=0.5,
-        size=9,
+        size=12,
         num_agents=4,
         agent_view_size=10,
-        max_steps=300,
+        max_steps=10000,
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
@@ -70,7 +70,7 @@ class WildfireEnv(MultiGridEnv):
             world=self.world,
             render_mode=render_mode,
         )
-        self.observation_space: Box | Dict = self._set_observation_space()
+        self.observation_space = self._set_observation_space()
         self.action_space = Dict(
             {f"{a.index}": Discrete(len(self.actions)) for a in self.agents}
         )
@@ -146,7 +146,6 @@ class WildfireEnv(MultiGridEnv):
             self.trees_on_fire += 1
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
-
         for pos in trees_on_fire:
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
@@ -184,7 +183,7 @@ class WildfireEnv(MultiGridEnv):
         obs = OrderedDict({f"{a.index}": local_obs.copy() for a in self.agents})
         return obs
 
-    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
+    def reset(self, seed=None, options=None):
         # zero out wildfire specific variables, if any
         self.burnt_trees = 0
 
@@ -346,7 +345,7 @@ class WildfireEnv(MultiGridEnv):
         next_obs = self._get_obs()
         info = {"burnt trees": self.burnt_trees}
         infos = {f"{a.index}": info for a in self.agents}
-        return next_obs, rewards, done, truncated, infos
+        return next_obs, rewards, done or truncated, infos
 
     def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
         """
