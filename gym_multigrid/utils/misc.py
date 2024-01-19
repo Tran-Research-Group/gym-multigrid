@@ -77,3 +77,37 @@ def render_agent_tile(
         img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 1, 0, 0.031), (100, 100, 100)
     )
     return img
+
+
+def get_center_square_coordinates(N, C):
+    """
+    Takes a grid size N and a square size C, and returns the coordinates of cells in a C x C square at the center of the grid.
+
+    Args:
+      N: The size of the grid (can be even or odd).
+      C: The size of the square to be extracted.
+
+    Returns:
+      A list of tuples, where each tuple represents the (x, y) coordinates of a cell in the center square.
+
+    Raises:
+      ValueError: If C is larger than N.
+    """
+
+    if C > N:
+        raise ValueError("Square size C cannot be larger than grid size N.")
+
+    center_x = N // 2
+    center_y = N // 2
+    offset_x = (C - 1) // 2  # Offset adjustments for both even and odd squares
+    offset_y = (C - 1) // 2
+
+    start_x = center_x - offset_x  # Calculate starting coordinates without conditionals
+    start_y = center_y - offset_y
+
+    coordinates = []
+    for x in range(start_x, start_x + C):
+        for y in range(start_y, start_y + C):
+            coordinates.append((x, y))
+
+    return coordinates

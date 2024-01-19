@@ -9,7 +9,7 @@ from gym_multigrid.core.constants import (
     STATE_IDX_TO_COLOR_WILDFIRE,
 )
 from gym_multigrid.utils.window import Window
-from gym_multigrid.utils.misc import render_agent_tile
+from gym_multigrid.utils.misc import render_agent_tile, get_center_square_coordinates
 from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
@@ -23,12 +23,13 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.05,
-        beta=0.987,
-        delta_beta=0.5,
-        size=9,
+        alpha=0.7237,
+        beta=0.9048,
+        delta_beta=0.54,
+        size=10,
         num_agents=4,
         agent_view_size=10,
+        initial_fire_size=4,
         max_steps=300,
         partial_obs=False,
         actions_set=WildfireActions,
@@ -45,6 +46,7 @@ class WildfireEnv(MultiGridEnv):
         self.world = WildfireWorld
         self.grid_size = size
         self.grid_size_without_walls = size - 2
+        self.initial_fire_size = initial_fire_size
         self.burnt_trees = 0
         self.trees_on_fire = 0
         # add wildfire specific variables like num_burnt trees etc.
@@ -119,31 +121,35 @@ class WildfireEnv(MultiGridEnv):
 
         # Insert trees in grid as per initial conditions of wildfire. Modify as needed.
         # Currently, center is on fire.
-        if self.grid_size_without_walls % 2 == 0:
-            trees_on_fire = [
-                (self.grid_size_without_walls / 2, self.grid_size_without_walls / 2),
-                (
-                    self.grid_size_without_walls / 2 + 1,
-                    self.grid_size_without_walls / 2,
-                ),
-                (
-                    self.grid_size_without_walls / 2,
-                    self.grid_size_without_walls / 2 + 1,
-                ),
-                (
-                    self.grid_size_without_walls / 2 + 1,
-                    self.grid_size_without_walls / 2 + 1,
-                ),
-            ]
-            self.trees_on_fire += 4
-        else:
-            trees_on_fire = [
-                (
-                    (self.grid_size_without_walls + 1) / 2,
-                    (self.grid_size_without_walls + 1) / 2,
-                )
-            ]
-            self.trees_on_fire += 1
+        trees_on_fire = get_center_square_coordinates(
+            self.grid_size_without_walls, self.initial_fire_size
+        )
+        self.trees_on_fire += self.initial_fire_size**2
+        # if self.grid_size_without_walls % 2 == 0:
+        #     trees_on_fire = [
+        #         (self.grid_size_without_walls / 2, self.grid_size_without_walls / 2),
+        #         (
+        #             self.grid_size_without_walls / 2 + 1,
+        #             self.grid_size_without_walls / 2,
+        #         ),
+        #         (
+        #             self.grid_size_without_walls / 2,
+        #             self.grid_size_without_walls / 2 + 1,
+        #         ),
+        #         (
+        #             self.grid_size_without_walls / 2 + 1,
+        #             self.grid_size_without_walls / 2 + 1,
+        #         ),
+        #     ]
+        #     self.trees_on_fire += 4
+        # else:
+        #     trees_on_fire = [
+        #         (
+        #             (self.grid_size_without_walls + 1) / 2,
+        #             (self.grid_size_without_walls + 1) / 2,
+        #         )
+        #     ]
+        #     self.trees_on_fire += 1
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
 
