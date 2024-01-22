@@ -19,3 +19,18 @@ register(
     id="multigrid-collect-single-v0",
     entry_point="gym_multigrid.envs:CollectGame3ObjSingleAgent",
 )
+
+register(
+    id="multigrid-collect-rooms-v0",
+    entry_point="gym_multigrid.envs:CollectGameRooms",
+)
+
+register(
+    id="multigrid-collect-rooms-fixed-horizon-v0",
+    entry_point="gym_multigrid.envs:CollectGameRoomsFixedHorizon",
+)
+
+register(
+    id="multigrid-collect-rooms-respawn-v0",
+    entry_point="gym_multigrid.envs:CollectGameRoomsRespawn",
+)
