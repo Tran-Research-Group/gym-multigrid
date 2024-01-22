@@ -9,11 +9,12 @@ from gym_multigrid.core.constants import (
     STATE_IDX_TO_COLOR_WILDFIRE,
 )
 from gym_multigrid.utils.window import Window
-from gym_multigrid.utils.misc import render_agent_tile, get_center_square_coordinates
+from gym_multigrid.utils.misc import render_agent_tile, get_central_square_coordinates
 from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
 from typing import Any
+import warnings
 
 
 class WildfireEnv(MultiGridEnv):
@@ -26,14 +27,15 @@ class WildfireEnv(MultiGridEnv):
         alpha=0.7237,
         beta=0.9048,
         delta_beta=0.54,
-        size=10,
-        num_agents=4,
+        size=12,
+        num_agents=2,
         agent_view_size=10,
-        initial_fire_size=4,
-        max_steps=300,
+        initial_fire_size=2,
+        max_steps=100,
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
+        reward_normalization=True,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -49,7 +51,7 @@ class WildfireEnv(MultiGridEnv):
         self.initial_fire_size = initial_fire_size
         self.burnt_trees = 0
         self.trees_on_fire = 0
-        # add wildfire specific variables like num_burnt trees etc.
+        self.reward_normalization = reward_normalization  # Ensure correct rmin, rmax values are used in normalize reward method of WildfireEnv.
 
         agents = [
             Agent(
@@ -119,37 +121,10 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        # Insert trees in grid as per initial conditions of wildfire. Modify as needed.
-        # Currently, center is on fire.
-        trees_on_fire = get_center_square_coordinates(
+        trees_on_fire = get_central_square_coordinates(
             self.grid_size_without_walls, self.initial_fire_size
         )
         self.trees_on_fire += self.initial_fire_size**2
-        # if self.grid_size_without_walls % 2 == 0:
-        #     trees_on_fire = [
-        #         (self.grid_size_without_walls / 2, self.grid_size_without_walls / 2),
-        #         (
-        #             self.grid_size_without_walls / 2 + 1,
-        #             self.grid_size_without_walls / 2,
-        #         ),
-        #         (
-        #             self.grid_size_without_walls / 2,
-        #             self.grid_size_without_walls / 2 + 1,
-        #         ),
-        #         (
-        #             self.grid_size_without_walls / 2 + 1,
-        #             self.grid_size_without_walls / 2 + 1,
-        #         ),
-        #     ]
-        #     self.trees_on_fire += 4
-        # else:
-        #     trees_on_fire = [
-        #         (
-        #             (self.grid_size_without_walls + 1) / 2,
-        #             (self.grid_size_without_walls + 1) / 2,
-        #         )
-        #     ]
-        #     self.trees_on_fire += 1
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
 
@@ -204,14 +179,12 @@ class WildfireEnv(MultiGridEnv):
 
     def move_agent(self, i, next_cell, next_pos):
         if next_cell is None or next_cell.can_overlap():
-            # Once reward function is decided, modify to add rewards here.
             self.grid.set(*next_pos, self.agents[i])
             self.grid.set(
                 *self.agents[i].pos, self.helper_grid.get(*self.agents[i].pos)
             )
             self.agents[i].pos = next_pos
         else:
-            # do nothing if next cell is a wall or another agent. Modify to add rewards here if needed.
             pass
 
     def neighbors_on_fire(self, i: int, j: int) -> int:
@@ -299,14 +272,13 @@ class WildfireEnv(MultiGridEnv):
                 else:
                     reward -= 0.5
 
-        # Update tree states
-
-        # Store number of neighboring trees on fire for each tree before updating tree states.
+        # store number of neighboring trees on fire for each tree before updating tree states.
         on_fire_neighbors = np.zeros((self.helper_grid.width, self.helper_grid.height))
         for j in range(self.helper_grid.height):
             for i in range(self.helper_grid.width):
                 on_fire_neighbors[i, j] = self.neighbors_on_fire(i, j)
 
+        # update tree states
         for j in range(self.helper_grid.height):
             for i in range(self.helper_grid.width):
                 c = self.helper_grid.get(i, j)
@@ -346,6 +318,9 @@ class WildfireEnv(MultiGridEnv):
         if self.step_count >= self.max_steps:
             done = True
             truncated = True
+
+        if self.reward_normalization:
+            reward = self.normalize_reward(reward, -1, 4)
 
         rewards = {f"{a.index}": reward for a in self.agents}
 
@@ -420,3 +395,14 @@ class WildfireEnv(MultiGridEnv):
             self.window.show_img(img)
 
         return img
+
+    def normalize_reward(self, rcurrent, rmin, rmax) -> float:
+        """
+        Normalize reward to be between 0 and 1.
+        Args:
+            reward (float): reward value
+        Returns:
+            float
+                Normalized reward value
+        """
+        return (rcurrent - rmin) / (rmax - rmin)
