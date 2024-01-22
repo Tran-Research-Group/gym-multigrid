@@ -339,7 +339,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
     def toroid(self, idx):
         # transform grid into toroidal, agent-centric obs
         pos = (idx // self.grid.width, idx % self.grid.width)
-        depth = self.num_ball_types + 1
+        depth = self.num_ball_types + len(self.agents)
         obs = np.zeros((self.grid.width, self.grid.height, depth), dtype="float32")
         for i in range(self.grid.width):
             for j in range(self.grid.height):
@@ -357,8 +357,18 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                     obs[
                         new_coords[1], new_coords[0], self.world.COLOR_TO_IDX[obj.color]
                     ] = 1
+                elif obj.type == "agent" and not np.array_equal(obj.pos, pos):
+                    obs[new_coords[1], new_coords[0], depth - 2] = 1
         return obs
-
+    
+    def get_toroids(self):
+        obs = []
+        for a in self.agents:
+            agent_pos = a.pos
+            idx = self.grid.width * agent_pos[0] + agent_pos[1]
+            obs.append(self.toroid(idx))
+        return obs
+    
     def gaussian(self, idx):
         phi_obs = np.zeros((self.grid.width, self.grid.height), dtype="float32")
         pos = (idx // self.grid.width, idx % self.grid.width)
@@ -434,3 +444,119 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
 class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(agents_index=[3])
+
+class CollectGameRooms(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__(size=11)
+
+    def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
+
+        # Generate the surrounding walls
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
+
+        # generate inner walls of rooms
+        wall_size = self.width // 2 - 1
+        self.grid.horz_wall(0, width // 2, wall_size)
+        self.grid.horz_wall(width - wall_size, width // 2, wall_size)
+        self.grid.vert_wall(width // 2, 0, wall_size)
+        self.grid.vert_wall(width // 2, width - wall_size, wall_size)
+
+        # place agents
+        possible_coords = [
+            (width // 2, width // 2),
+            (width // 2 - 1, width // 2 - 1),
+            (width // 2 - 1, width // 2 + 1),
+            (width // 2 + 1, width // 2 + 1),
+            (width // 2 + 1, width // 2 - 1),
+        ]
+        for a in self.agents:
+            location = self._rand_elem(possible_coords)
+            self.place_agent(agent=a, pos=location)
+
+        # place balls
+        partitions = [
+            (0, 0),
+            (width // 2 + 1, width // 2 + 1),
+            (width // 2 + 1, 0),
+            (0, width // 2 + 1),
+        ]
+        partition_size = (width // 2 - 1, width // 2 - 1)
+        index = 0
+        for ball in range(self.num_balls):
+            if ball % 5 == 0:
+                top = partitions[ball // 5]
+                index = ball // 5
+                self.place_obj(
+                    Ball(self.world, index, 1), top=partitions[3], size=partition_size
+                )
+            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
+
+class CollectGameRoomsFixedHorizon(CollectGameRooms):
+    def __init__(self):
+        super().__init__()
+    
+    def step(self, actions):
+        order = np.random.permutation(len(actions))
+        rewards = np.zeros(len(actions))
+        done = False
+        truncated = False
+        self.step_count += 1
+        for i in order:
+            if actions[i] == self.actions.north:
+                next_pos = self.agents[i].north_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.east:
+                next_pos = self.agents[i].east_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.south:
+                next_pos = self.agents[i].south_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.west:
+                next_pos = self.agents[i].west_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.still:
+                self._reward(i, rewards, -0.01)
+
+        obs = self.grid.encode()
+        return obs, rewards, done, truncated, self.info
+
+class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
+    def __init__(self):
+        super().__init__()
+
+    def _respawn(self, color):
+        self.place_obj(Ball(self.world, color, 1))
+    
+    def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
+        if fwd_cell:
+            if fwd_cell.can_pickup():
+                fwd_cell.pos = np.array([-1, -1])
+                ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
+                self.grid.set(*fwd_pos, None)
+                self._respawn(ball_idx)
+                self.collected_balls += 1
+                self._reward(i, rewards, fwd_cell.reward)
+                self.info[self.keys[3 * i + ball_idx]] += 1
+    
+    def move_agent(self, rewards, i, next_cell, next_pos):
+        if next_cell is not None:
+            if next_cell.type == "ball":
+                self._handle_pickup(i, rewards, next_pos, next_cell)
+                # move agent to cell
+                self.grid.set(*next_pos, self.agents[i])
+                self.grid.set(*self.agents[i].pos, None)
+                # update agent position variable
+                self.agents[i].pos = next_pos
+            #self._reward(i, rewards, -0.01)
+        elif next_cell is None or next_cell.can_overlap():
+            self.grid.set(*next_pos, self.agents[i])
+            self.grid.set(*self.agents[i].pos, None)
+            self.agents[i].pos = next_pos
