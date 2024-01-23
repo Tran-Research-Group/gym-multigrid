@@ -14,7 +14,6 @@ from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
 from typing import Any
-import warnings
 
 
 class WildfireEnv(MultiGridEnv):
@@ -286,7 +285,7 @@ class WildfireEnv(MultiGridEnv):
                 else:
                     reward -= 0.5
 
-        # store number of neighboring trees on fire for each tree before updating tree states.
+        # store number of neighboring trees on fire for each tree before updating tree states
         on_fire_neighbors = np.zeros((self.helper_grid.width, self.helper_grid.height))
         for j in range(self.helper_grid.height):
             for i in range(self.helper_grid.width):
