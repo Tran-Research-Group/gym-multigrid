@@ -36,6 +36,7 @@ class WildfireEnv(MultiGridEnv):
         actions_set=WildfireActions,
         render_mode="rgb_array",
         reward_normalization=True,
+        obs_normalization=True,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -51,7 +52,8 @@ class WildfireEnv(MultiGridEnv):
         self.initial_fire_size = initial_fire_size
         self.burnt_trees = 0
         self.trees_on_fire = 0
-        self.reward_normalization = reward_normalization  # Ensure correct rmin, rmax values are used in normalize reward method of WildfireEnv.
+        self.reward_normalization = reward_normalization  # Ensure correct rmin, rmax values are used in normalize reward method of WildfireEnv
+        self.obs_normalization = obs_normalization  # Ensure correct omin, omax values are used in normalize observation method of WildfireEnv
 
         agents = [
             Agent(
@@ -81,9 +83,9 @@ class WildfireEnv(MultiGridEnv):
 
     def _set_observation_space(self) -> Dict:
         low = np.full(self.grid_size_without_walls**2, 0)
-        low = np.append(low, np.full(2 * self.num_agents, 1))
+        low = np.append(low, np.full(2 * self.num_agents, 0))
         high = np.full(self.grid_size_without_walls**2, 2)
-        high = np.append(high, np.full(2 * self.num_agents, self.grid_size - 1))
+        high = np.append(high, np.full(2 * self.num_agents, self.grid_size - 2))
         if (
             self.partial_obs
         ):  # right now partial obs is not supported. Modify to shorten low and high arrays.
@@ -92,7 +94,7 @@ class WildfireEnv(MultiGridEnv):
                     f"{a.index}": Box(
                         low=low,
                         high=high,
-                        dtype=np.int16,
+                        dtype=np.float32,
                     )
                     for a in self.agents
                 }
@@ -104,7 +106,7 @@ class WildfireEnv(MultiGridEnv):
                     f"{a.index}": Box(
                         low=low,
                         high=high,
-                        dtype=np.int16,
+                        dtype=np.float32,
                     )
                     for a in self.agents
                 }
@@ -153,21 +155,33 @@ class WildfireEnv(MultiGridEnv):
 
     def _get_obs(self) -> OrderedDict:
         local_obs = []
+
         for i in range(self.helper_grid.width):
             for j in range(self.helper_grid.height):
                 o = self.helper_grid.get(i, j)
                 if o is not None and o.type == "tree":
                     local_obs.append(o.state)
+
         for a in self.agents:
             local_obs.append(a.pos[0])
             local_obs.append(a.pos[1])
-        local_obs = np.array(local_obs, dtype=np.int16)
+
+        if self.obs_normalization:
+            omin = np.full(self.grid_size_without_walls**2, 0)
+            omin = np.append(omin, np.full(2 * self.num_agents, 1))
+            local_obs = self.normalize_obs(
+                local_obs,
+                omin,
+                self.observation_space["0"].high,
+            )  # this assumes same obs space for all agents. Change if needed.
+        local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
         obs = OrderedDict({f"{a.index}": local_obs.copy() for a in self.agents})
         return obs
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         # zero out wildfire specific variables, if any
         self.burnt_trees = 0
+        self.trees_on_fire = 0
 
         # reset the grid
         super().reset(seed=seed)
@@ -396,7 +410,7 @@ class WildfireEnv(MultiGridEnv):
 
         return img
 
-    def normalize_reward(self, rcurrent, rmin, rmax) -> float:
+    def normalize_reward(self, rcurrent, rmin, rmax):
         """
         Normalize reward to be between 0 and 1.
         Args:
@@ -406,3 +420,14 @@ class WildfireEnv(MultiGridEnv):
                 Normalized reward value
         """
         return (rcurrent - rmin) / (rmax - rmin)
+
+    def normalize_obs(self, obs, omin, omax):
+        """
+        Normalize observation to be between 0 and 1.
+        Args:
+            obs (ndarray): observation value
+        Returns:
+            ndarray
+                Normalized observation value
+        """
+        return (obs - omin) / (omax - omin)
