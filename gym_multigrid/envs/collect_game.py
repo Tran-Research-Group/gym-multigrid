@@ -217,11 +217,11 @@ class CollectGameEnv(MultiGridEnv):
 
 
 class CollectGame3Obj2Agent(CollectGameEnv):
-    def __init__(self):
+    def __init__(self, size=10, agents_index=[3, 5]):
         super().__init__(
-            size=10,
+            size=size,
             num_balls=15,
-            agents_index=[3, 5],
+            agents_index=agents_index,
             balls_index=[0],
             balls_reward=[1],
             zero_sum=True,
@@ -360,7 +360,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                 elif obj.type == "agent" and not np.array_equal(obj.pos, pos):
                     obs[new_coords[1], new_coords[0], depth - 2] = 1
         return obs
-    
+
     def get_toroids(self):
         obs = []
         for a in self.agents:
@@ -368,7 +368,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
             idx = self.grid.width * agent_pos[0] + agent_pos[1]
             obs.append(self.toroid(idx))
         return obs
-    
+
     def gaussian(self, idx):
         phi_obs = np.zeros((self.grid.width, self.grid.height), dtype="float32")
         pos = (idx // self.grid.width, idx % self.grid.width)
@@ -445,6 +445,7 @@ class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(agents_index=[3])
 
+
 class CollectGameRooms(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(size=11)
@@ -495,10 +496,11 @@ class CollectGameRooms(CollectGame3Obj2Agent):
                 )
             self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
 
+
 class CollectGameRoomsFixedHorizon(CollectGameRooms):
     def __init__(self):
         super().__init__()
-    
+
     def step(self, actions):
         order = np.random.permutation(len(actions))
         rewards = np.zeros(len(actions))
@@ -528,13 +530,14 @@ class CollectGameRoomsFixedHorizon(CollectGameRooms):
         obs = self.grid.encode()
         return obs, rewards, done, truncated, self.info
 
+
 class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
     def __init__(self):
         super().__init__()
 
     def _respawn(self, color):
         self.place_obj(Ball(self.world, color, 1))
-    
+
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         if fwd_cell:
             if fwd_cell.can_pickup():
@@ -545,7 +548,7 @@ class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
                 self.collected_balls += 1
                 self._reward(i, rewards, fwd_cell.reward)
                 self.info[self.keys[3 * i + ball_idx]] += 1
-    
+
     def move_agent(self, rewards, i, next_cell, next_pos):
         if next_cell is not None:
             if next_cell.type == "ball":
@@ -555,7 +558,7 @@ class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
                 self.grid.set(*self.agents[i].pos, None)
                 # update agent position variable
                 self.agents[i].pos = next_pos
-            #self._reward(i, rewards, -0.01)
+            # self._reward(i, rewards, -0.01)
         elif next_cell is None or next_cell.can_overlap():
             self.grid.set(*next_pos, self.agents[i])
             self.grid.set(*self.agents[i].pos, None)
