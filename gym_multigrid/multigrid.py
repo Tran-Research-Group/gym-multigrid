@@ -236,7 +236,7 @@ class MultiGridEnv(gym.Env):
         """
 
         lst = list(iterable)
-        idx = self._rand_int(0, len(lst))
+        idx = self._rand_int(0, len(lst) - 1)
         return lst[idx]
 
     def _rand_subset(self, iterable, num_elems):
