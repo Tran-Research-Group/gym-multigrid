@@ -1,10 +1,15 @@
+import random
+from typing import Literal, Type
+
+import numpy as np
+from numpy.typing import NDArray
+
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import CollectWorld
-from gym_multigrid.core.agent import CollectActions, Agent
-from gym_multigrid.core.object import Ball
+from gym_multigrid.core.agent import ActionsT, AgentT, CollectActions, Agent
+from gym_multigrid.core.object import Ball, WorldObjT
 from gym_multigrid.core.grid import Grid
-import random
-import numpy as np
+from gym_multigrid.typing import Position
 
 
 class CollectGameEnv(MultiGridEnv):
@@ -14,18 +19,18 @@ class CollectGameEnv(MultiGridEnv):
 
     def __init__(
         self,
-        size=10,
-        width=None,
-        height=None,
-        num_balls=[],
-        agents_index=[],
-        balls_index=[],
-        balls_reward=[],
-        zero_sum=False,
-        partial_obs=False,
-        view_size=7,
-        actions_set=CollectActions,
-        render_mode="rgb_array",
+        size: int = 10,
+        width: int | None = None,
+        height: int | None = None,
+        num_balls: list[int] | int = [],
+        agents_index: list[int] = [],
+        balls_index: list[int] = [],
+        balls_reward: list[float] = [],
+        zero_sum: bool = False,
+        partial_obs: bool = False,
+        view_size: int = 7,
+        actions_set: Type[ActionsT] = CollectActions,
+        render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         self.num_balls = num_balls
         self.collected_balls = 0
@@ -43,7 +48,7 @@ class CollectGameEnv(MultiGridEnv):
             "agent2ball3",
         ]
 
-        agents = []
+        agents: list[AgentT] = []
         for i in agents_index:
             agents.append(Agent(self.world, i, view_size=view_size))
 
@@ -58,10 +63,10 @@ class CollectGameEnv(MultiGridEnv):
             partial_obs=partial_obs,
             agent_view_size=view_size,
             actions_set=actions_set,
-            render_mode="rgb_array",
+            render_mode=render_mode,
         )
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -69,6 +74,8 @@ class CollectGameEnv(MultiGridEnv):
         self.grid.horz_wall(0, height - 1)
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
+
+        assert self.num_balls is list[int]
 
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
@@ -80,7 +87,7 @@ class CollectGameEnv(MultiGridEnv):
         for a in self.agents:
             self.place_agent(a)
 
-    def reset(self, seed=None):
+    def reset(self, seed: int | None = None):
         self.collected_balls = 0
         self.info = {
             "agent1ball1": 0,
@@ -90,17 +97,25 @@ class CollectGameEnv(MultiGridEnv):
             "agent2ball2": 0,
             "agent2ball3": 0,
         }
-        super().reset()
+        super().reset(seed=seed)
         state = self.grid.encode()
         return state, {}
 
-    def _reward(self, i, rewards, reward=1):
+    def _reward(
+        self, agent_index: int, rewards: NDArray[np.float_], reward: float = 1
+    ) -> None:
         """
         Compute the reward to be given upon success
         """
-        rewards[i] += reward
+        rewards[agent_index] += reward
 
-    def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
+    def _handle_pickup(
+        self,
+        i,
+        rewards: NDArray[np.float_],
+        fwd_pos: Position,
+        fwd_cell: WorldObjT | None,
+    ) -> None:
         if fwd_cell:
             if fwd_cell.can_pickup():
                 fwd_cell.pos = np.array([-1, -1])
@@ -115,26 +130,34 @@ class CollectGameEnv(MultiGridEnv):
                     self._reward(i, rewards, fwd_cell.reward)
                 self.info[self.keys[3 * i + ball_idx]] += 1
 
-    def move_agent(self, rewards, i, next_cell, next_pos):
+    def move_agent(
+        self,
+        rewards: NDArray[np.float_],
+        agent_index: int,
+        next_cell: WorldObjT | None,
+        next_pos: Position,
+    ) -> None:
         if next_cell is not None:
             if next_cell.type == "ball":
-                self._handle_pickup(i, rewards, next_pos, next_cell)
-                self.grid.set(*next_pos, self.agents[i])
-                self.grid.set(*self.agents[i].pos, None)
-                self.agents[i].pos = next_pos
+                self._handle_pickup(agent_index, rewards, next_pos, next_cell)
+                self.grid.set(*next_pos, self.agents[agent_index])
+                self.grid.set(*self.agents[agent_index].pos, None)
+                self.agents[agent_index].pos = next_pos
             else:
-                self._reward(i, rewards, -0.01)
+                self._reward(agent_index, rewards, -0.01)
         elif next_cell is None or next_cell.can_overlap():
-            self.grid.set(*next_pos, self.agents[i])
-            self.grid.set(*self.agents[i].pos, None)
-            self.agents[i].pos = next_pos
-            self._reward(i, rewards, -0.01)
+            self.grid.set(*next_pos, self.agents[agent_index])
+            self.grid.set(*self.agents[agent_index].pos, None)
+            self.agents[agent_index].pos = next_pos
+            self._reward(agent_index, rewards, -0.01)
 
-    def step(self, actions):
-        order = np.random.permutation(len(actions))
-        rewards = np.zeros(len(actions))
-        done = False
-        truncated = False
+    def step(
+        self, actions: list[int] | NDArray[np.int_]
+    ) -> tuple[NDArray[np.int_], NDArray[np.float_], bool, bool, dict]:
+        order: list[int] = np.random.permutation(len(actions)).tolist()
+        rewards: NDArray[np.float_] = np.zeros(len(actions))
+        done: bool = False
+        truncated: bool = False
         self.step_count += 1
         for i in order:
             if actions[i] == self.actions.north:
@@ -217,7 +240,7 @@ class CollectGameEnv(MultiGridEnv):
 
 
 class CollectGame3Obj2Agent(CollectGameEnv):
-    def __init__(self, size=10, agents_index=[3, 5]):
+    def __init__(self, size: int = 10, agents_index: list[int] = [3, 5]):
         super().__init__(
             size=size,
             num_balls=15,
@@ -227,10 +250,11 @@ class CollectGame3Obj2Agent(CollectGameEnv):
             zero_sum=True,
             render_mode="rgb_array",
         )
+        assert self.num_balls is int
         self.num_ball_types = self.num_balls // 5
         self.sigma = 0.1
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width: int, height: int) -> None:
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -402,14 +426,14 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__()
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(self.world, 0, 0)
-        self.grid.horz_wall(self.world, 0, height - 1)
-        self.grid.vert_wall(self.world, 0, 0)
-        self.grid.vert_wall(self.world, width - 1, 0)
+        self.grid.horz_wall(world, 0, 0)
+        self.grid.horz_wall(world, 0, height - 1)
+        self.grid.vert_wall(world, 0, 0)
+        self.grid.vert_wall(world, width - 1, 0)
 
         index = 0
         ball_pos = [
@@ -430,6 +454,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
             (7, 6),
         ]
         random.shuffle(ball_pos)
+        assert self.num_balls is int
         for ball in range(self.num_balls):
             if ball % 5 == 0:
                 index = ball // 5
@@ -450,7 +475,7 @@ class CollectGameRooms(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(size=11)
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -487,6 +512,7 @@ class CollectGameRooms(CollectGame3Obj2Agent):
         ]
         partition_size = (width // 2 - 1, width // 2 - 1)
         index = 0
+        assert self.num_balls is int
         for ball in range(self.num_balls):
             if ball % 5 == 0:
                 top = partitions[ball // 5]
@@ -502,10 +528,10 @@ class CollectGameRoomsFixedHorizon(CollectGameRooms):
         super().__init__()
 
     def step(self, actions):
-        order = np.random.permutation(len(actions))
-        rewards = np.zeros(len(actions))
-        done = False
-        truncated = False
+        order: list[int] = np.random.permutation(len(actions)).tolist()
+        rewards: NDArray[np.float_] = np.zeros(len(actions))
+        done: bool = False
+        truncated: bool = False
         self.step_count += 1
         for i in order:
             if actions[i] == self.actions.north:
