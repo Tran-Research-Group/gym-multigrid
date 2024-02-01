@@ -31,6 +31,7 @@ class CollectGameEnv(MultiGridEnv):
         view_size: int = 7,
         actions_set: Type[ActionsT] = CollectActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        max_steps: int = 100,
     ):
         self.num_balls = num_balls
         self.collected_balls = 0
@@ -56,7 +57,7 @@ class CollectGameEnv(MultiGridEnv):
             grid_size=size,
             width=width,
             height=height,
-            max_steps=100,
+            max_steps=max_steps,
             world=self.world,
             see_through_walls=False,
             agents=agents,
@@ -240,15 +241,36 @@ class CollectGameEnv(MultiGridEnv):
 
 
 class CollectGame3Obj2Agent(CollectGameEnv):
-    def __init__(self, size: int = 10, agents_index: list[int] = [3, 5]):
+    def __init__(
+        self,
+        size: int = 10,
+        agents_index: list[int] = [3, 5],
+        width: int | None = None,
+        height: int | None = None,
+        num_balls: int = 15,
+        balls_index: list[int] = [0],
+        balls_reward: list[float] = [1],
+        zero_sum: bool = True,
+        partial_obs: bool = False,
+        view_size: int = 7,
+        actions_set: Type[ActionsT] = CollectActions,
+        render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        max_steps: int = 100,
+    ):
         super().__init__(
             size=size,
-            num_balls=15,
+            num_balls=num_balls,
             agents_index=agents_index,
-            balls_index=[0],
-            balls_reward=[1],
-            zero_sum=True,
-            render_mode="rgb_array",
+            balls_index=balls_index,
+            balls_reward=balls_reward,
+            zero_sum=zero_sum,
+            render_mode=render_mode,
+            width=width,
+            height=height,
+            max_steps=max_steps,
+            partial_obs=partial_obs,
+            view_size=view_size,
+            actions_set=actions_set,
         )
         assert self.num_balls is int
         self.num_ball_types = self.num_balls // 5
@@ -266,6 +288,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
         # partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
+        assert self.num_balls is int
         for ball in range(self.num_balls):
             if ball % 5 == 0:
                 # top = partitions[ball // 5]
@@ -430,10 +453,10 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(world, 0, 0)
-        self.grid.horz_wall(world, 0, height - 1)
-        self.grid.vert_wall(world, 0, 0)
-        self.grid.vert_wall(world, width - 1, 0)
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
 
         index = 0
         ball_pos = [
@@ -467,13 +490,13 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
 
 
 class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
-    def __init__(self):
-        super().__init__(agents_index=[3])
+    def __init__(self, agents_index: list[int] = [3], *args, **kwargs):
+        super().__init__(agents_index=agents_index, *args, **kwargs)
 
 
 class CollectGameRooms(CollectGame3Obj2Agent):
-    def __init__(self):
-        super().__init__(size=11)
+    def __init__(self, size: int = 11, *args, **kwargs):
+        super().__init__(size=size, *args, **kwargs)
 
     def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height, self.world)
@@ -524,8 +547,8 @@ class CollectGameRooms(CollectGame3Obj2Agent):
 
 
 class CollectGameRoomsFixedHorizon(CollectGameRooms):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def step(self, actions):
         order: list[int] = np.random.permutation(len(actions)).tolist()
@@ -558,8 +581,8 @@ class CollectGameRoomsFixedHorizon(CollectGameRooms):
 
 
 class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def _respawn(self, color):
         self.place_obj(Ball(self.world, color, 1))
