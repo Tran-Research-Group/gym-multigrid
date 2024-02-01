@@ -76,7 +76,7 @@ class CollectGameEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        assert self.num_balls is list[int]
+        assert type(self.num_balls) is list
 
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
@@ -272,7 +272,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
             view_size=view_size,
             actions_set=actions_set,
         )
-        assert self.num_balls is int
+        assert type(self.num_balls) is int
         self.num_ball_types = self.num_balls // 5
         self.sigma = 0.1
 
@@ -288,7 +288,7 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
         # partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
-        assert self.num_balls is int
+        assert type(self.num_balls) is int
         num_colors: int = len(self.balls_index)
         assert len(self.balls_reward) == num_colors
         num_ball: int = round(self.num_balls / num_colors)
@@ -480,7 +480,7 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
             (7, 6),
         ]
         random.shuffle(ball_pos)
-        assert self.num_balls is int
+        assert type(self.num_balls) is int
         num_colors: int = len(self.balls_index)
         assert len(self.balls_reward) == num_colors
         num_ball: int = round(self.num_balls / num_colors)
@@ -545,7 +545,7 @@ class CollectGameRooms(CollectGame3Obj2Agent):
         ]
         partition_size = (width // 2 - 1, width // 2 - 1)
         index = 0
-        assert self.num_balls is int
+        assert type(self.num_balls) is int
         num_colors: int = len(self.balls_index)
         assert len(self.balls_reward) == num_colors
         num_ball: int = round(self.num_balls / num_colors)
