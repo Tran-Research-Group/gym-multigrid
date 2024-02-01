@@ -558,7 +558,11 @@ class CollectGameRooms(CollectGame3Obj2Agent):
                     top=partitions[3],
                     size=partition_size,
                 )
-            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
+            self.place_obj(
+                Ball(self.world, self.balls_index[index], self.balls_reward[index]),
+                top=top,
+                size=partition_size,
+            )
 
 
 class CollectGameRoomsFixedHorizon(CollectGameRooms):
