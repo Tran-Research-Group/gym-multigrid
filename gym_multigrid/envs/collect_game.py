@@ -248,8 +248,8 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         width: int | None = None,
         height: int | None = None,
         num_balls: int = 15,
-        balls_index: list[int] = [0],
-        balls_reward: list[float] = [1],
+        balls_index: list[int] = [0, 1, 2],
+        balls_reward: list[float] = [1, 1, 1],
         zero_sum: bool = True,
         partial_obs: bool = False,
         view_size: int = 7,
@@ -289,12 +289,15 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         # partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
         assert self.num_balls is int
+        num_colors: int = len(self.balls_index)
+        assert len(self.balls_reward) == num_colors
+        num_ball: int = round(self.num_balls / num_colors)
         for ball in range(self.num_balls):
-            if ball % 5 == 0:
+            if ball % num_ball == 0:
                 # top = partitions[ball // 5]
-                index = ball // 5
+                index = ball // num_ball
             self.place_obj(
-                Ball(self.world, index, 1)
+                Ball(self.world, self.balls_index[index], self.balls_reward[index])
             )  # , top=top, size=partition_size)
         # agent_pos = (1, height - 2)
         for a in self.agents:
@@ -446,8 +449,8 @@ class CollectGame3Obj2Agent(CollectGameEnv):
 
 
 class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height, self.world)
@@ -478,11 +481,18 @@ class CollectGame3ObjFixed2Agent(CollectGame3Obj2Agent):
         ]
         random.shuffle(ball_pos)
         assert self.num_balls is int
+        num_colors: int = len(self.balls_index)
+        assert len(self.balls_reward) == num_colors
+        num_ball: int = round(self.num_balls / num_colors)
         for ball in range(self.num_balls):
-            if ball % 5 == 0:
-                index = ball // 5
+            if ball % num_ball == 0:
+                index = ball // num_ball
             loc = ball_pos[ball]
-            self.put_obj(Ball(self.world, index, 1), loc[0], loc[1])
+            self.put_obj(
+                Ball(self.world, self.balls_index[index], self.balls_reward[index]),
+                loc[0],
+                loc[1],
+            )
         agent_pos = (1, height - 2)
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
@@ -536,12 +546,17 @@ class CollectGameRooms(CollectGame3Obj2Agent):
         partition_size = (width // 2 - 1, width // 2 - 1)
         index = 0
         assert self.num_balls is int
+        num_colors: int = len(self.balls_index)
+        assert len(self.balls_reward) == num_colors
+        num_ball: int = round(self.num_balls / num_colors)
         for ball in range(self.num_balls):
-            if ball % 5 == 0:
-                top = partitions[ball // 5]
-                index = ball // 5
+            if ball % num_ball == 0:
+                top = partitions[ball // num_ball]
+                index = ball // num_ball
                 self.place_obj(
-                    Ball(self.world, index, 1), top=partitions[3], size=partition_size
+                    Ball(self.world, self.balls_index[index], self.balls_reward[index]),
+                    top=partitions[3],
+                    size=partition_size,
                 )
             self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
 
