@@ -10,7 +10,7 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
 def test_wildfire() -> None:
-    env = gym.make("wildfire-v0", max_episode_steps=10)
+    env = gym.make("wildfire-v0", max_episode_steps=1)
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
@@ -24,9 +24,10 @@ def test_wildfire() -> None:
         steps += 1
         frames.append(env.render())
         if terminated or truncated:
+            print("burnt trees: ", info["0"]["burnt trees"])
             break
 
-    # save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
+    save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=72)
 
 
 test_wildfire()

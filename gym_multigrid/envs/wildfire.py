@@ -23,19 +23,19 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.7237,
-        beta=0.9048,
-        delta_beta=0.54,
-        size=12,
-        num_agents=2,
+        alpha=0.03,
+        beta=1,
+        delta_beta=0,
+        size=4,
+        num_agents=3,
         agent_view_size=10,
         initial_fire_size=2,
         max_steps=100,
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
-        reward_normalization=True,
-        obs_normalization=True,
+        reward_normalization=False,
+        obs_normalization=False,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -43,6 +43,9 @@ class WildfireEnv(MultiGridEnv):
         self.num_agents = num_agents
         if num_agents > 4:
             raise ValueError("Number of agents cannot be greater than 4.")
+        self.obs_depth = (self.num_agents - 1) + len(
+            STATE_IDX_TO_COLOR_WILDFIRE
+        )  # agent centered obs doesn't include agent's own position
         self.agent_view_size = agent_view_size
         self.max_steps = max_steps
         self.world = WildfireWorld
@@ -53,6 +56,8 @@ class WildfireEnv(MultiGridEnv):
         self.trees_on_fire = 0
         self.reward_normalization = reward_normalization  # Ensure correct rmin, rmax values are used in normalize reward method of WildfireEnv
         self.obs_normalization = obs_normalization  # Ensure correct omin, omax values are used in normalize observation method of WildfireEnv
+        self.rmin = -1
+        self.rmax = 0.5
 
         agents = [
             Agent(
@@ -81,10 +86,8 @@ class WildfireEnv(MultiGridEnv):
         )
 
     def _set_observation_space(self) -> Dict:
-        low = np.full(self.grid_size_without_walls**2, 0)
-        low = np.append(low, np.full(2 * self.num_agents, 0))
-        high = np.full(self.grid_size_without_walls**2, 2)
-        high = np.append(high, np.full(2 * self.num_agents, self.grid_size - 2))
+        low = np.full(self.obs_depth * (self.grid_size_without_walls**2), 0)
+        high = np.full(self.obs_depth * (self.grid_size_without_walls**2), 1)
         if (
             self.partial_obs
         ):  # right now partial obs is not supported. Modify to shorten low and high arrays.
@@ -152,30 +155,65 @@ class WildfireEnv(MultiGridEnv):
         for i, a in enumerate(self.agents):
             self.place_agent(a, pos=start_pos[i])
 
-    def _get_obs(self) -> OrderedDict:
-        local_obs = []
+    def _get_obs(self, agent_pos, agent_index) -> OrderedDict:
+        local_obs = np.zeros(
+            (
+                self.grid_size_without_walls,
+                self.grid_size_without_walls,
+                self.obs_depth,
+            ),
+            dtype=np.float32,
+        )
 
         for i in range(self.helper_grid.width):
             for j in range(self.helper_grid.height):
+                new_coords = [
+                    i - agent_pos[0],
+                    j - agent_pos[1],
+                ]  # agent centered coords
+                new_coords = [
+                    new_coords[0] - 1,
+                    new_coords[1] - 1,
+                ]  # new coords in grid without walls. because obs dimensions are without walls.
                 o = self.helper_grid.get(i, j)
-                if o is not None and o.type == "tree":
-                    local_obs.append(o.state)
+                if new_coords[0] < 0:
+                    new_coords[0] += self.grid_size_without_walls
+                    # wrap around. assuming grid is square.
+                if new_coords[1] < 0:
+                    new_coords[1] += self.grid_size_without_walls
+                if o is None:
+                    continue
+                elif o.type == "tree":
+                    local_obs[new_coords[0], new_coords[1], o.state] = 1
 
-        for a in self.agents:
-            local_obs.append(a.pos[0])
-            local_obs.append(a.pos[1])
+        for o in self.agents:
+            if o.index != agent_index:
+                if o.index > agent_index:
+                    id = o.index - 1
+                else:
+                    id = o.index
+
+                new_coords = [
+                    o.pos[0] - agent_pos[0],
+                    o.pos[1] - agent_pos[1],
+                ]  # agent centered coords
+                new_coords = [
+                    new_coords[0] - 1,
+                    new_coords[1] - 1,
+                ]  # new coords in grid without walls. because obs dimensions are without walls.
+
+                local_obs[
+                    new_coords[0],
+                    new_coords[1],
+                    len(STATE_IDX_TO_COLOR_WILDFIRE) + id,
+                ] = 1
 
         if self.obs_normalization:
-            omin = np.full(self.grid_size_without_walls**2, 0)
-            omin = np.append(omin, np.full(2 * self.num_agents, 1))
-            local_obs = self.normalize_obs(
-                local_obs,
-                omin,
-                self.observation_space["0"].high,
-            )  # this assumes same obs space for all agents. Change if needed.
-        local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
-        obs = OrderedDict({f"{a.index}": local_obs.copy() for a in self.agents})
-        return obs
+            raise NotImplementedError(
+                "Observation normalization is not currently implemented because they are already normalized (1-hot encoded)."
+            )
+        # local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
+        return local_obs.flatten("F")
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         # zero out wildfire specific variables, if any
@@ -185,7 +223,9 @@ class WildfireEnv(MultiGridEnv):
         # reset the grid
         super().reset(seed=seed)
 
-        obs = self._get_obs()
+        obs = OrderedDict(
+            {f"{a.index}": self._get_obs(a.pos, a.index) for a in self.agents}
+        )
 
         info = {"burnt trees": self.burnt_trees}
         return obs, info
@@ -273,17 +313,18 @@ class WildfireEnv(MultiGridEnv):
                 self.move_agent(i, next_cell, next_pos)
 
         # Calculate reward.
-        for a in self.agents:
-            o = self.helper_grid.get(*a.pos)
-            if self.trees_on_fire == 0:
-                reward += 2
-            elif (
-                o is not None and o.type == "tree"
-            ):  # this check is redundant. to be safe against future changes or oversight.
-                if o.state == 1:
-                    reward += 0.25
-                else:
-                    reward -= 0.5
+        if self.trees_on_fire == 0:
+            reward += 0.5
+        else:
+            for a in self.agents:
+                o = self.helper_grid.get(*a.pos)
+                if (
+                    o is not None and o.type == "tree"
+                ):  # this check is redundant. to be safe against future changes or oversight.
+                    if o.state == 1:
+                        reward += 0.25
+                    else:
+                        reward -= 0.5
 
         # store number of neighboring trees on fire for each tree before updating tree states
         on_fire_neighbors = np.zeros((self.helper_grid.width, self.helper_grid.height))
@@ -333,11 +374,13 @@ class WildfireEnv(MultiGridEnv):
             truncated = True
 
         if self.reward_normalization:
-            reward = self.normalize_reward(reward, -1, 4)
+            reward = self.normalize_reward(reward, self.rmin, self.rmax)
 
         rewards = {f"{a.index}": reward for a in self.agents}
 
-        next_obs = self._get_obs()
+        next_obs = OrderedDict(
+            {f"{a.index}": self._get_obs(a.pos, a.index) for a in self.agents}
+        )
         info = {"burnt trees": self.burnt_trees}
         infos = {f"{a.index}": info for a in self.agents}
         return next_obs, rewards, done, truncated, infos
