@@ -23,13 +23,13 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.03,
-        beta=1,
+        alpha=0.05,
+        beta=0.99,
         delta_beta=0,
-        size=4,
+        size=17,
         num_agents=3,
         agent_view_size=10,
-        initial_fire_size=2,
+        initial_fire_size=1,
         max_steps=100,
         partial_obs=False,
         actions_set=WildfireActions,
