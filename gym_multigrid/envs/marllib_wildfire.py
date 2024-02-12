@@ -40,22 +40,11 @@ class WildfireEnv(MultiGridEnv):
         reward_normalization=False,
         obs_normalization=False,
         cooperative_reward=False,
-        selfish_region_xmin=[
-            6,
-            6,
-        ],
-        selfish_region_xmax=[
-            10,
-            10,
-        ],
-        selfish_region_ymin=[
-            1,
-            13,
-        ],
-        selfish_region_ymax=[
-            3,
-            15,
-        ],
+        log_selfish_region_metrics=False,
+        selfish_region_xmin=None,
+        selfish_region_xmax=None,
+        selfish_region_ymin=None,
+        selfish_region_ymax=None,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -79,15 +68,30 @@ class WildfireEnv(MultiGridEnv):
         self.rmin = -1
         self.rmax = 0.5
         self.cooperative_reward = cooperative_reward
+        if self.cooperative_reward:
+            self.log_selfish_region_metrics = log_selfish_region_metrics
+        else:
+            self.log_selfish_region_metrics = True
         if (
-            not self.cooperative_reward
+            self.log_selfish_region_metrics
         ):  # all selfish list elements are in ascending order of indices of selfish agents
-            self.selfish_xmin = selfish_region_xmin  # x-coordinate minimum of regions of interest for each selfish agent. List length = number of selfish agents.
-            self.selfish_xmax = selfish_region_xmax  # x-coordinate maximum of regions of interest for each selfish agent. List length = number of selfish agents.
-            self.selfish_ymin = selfish_region_ymin  # y-coordinate minimum of regions of interest for each selfish agent. List length = number of selfish agents.
-            self.selfish_ymax = selfish_region_ymax  # y-coordinate maximum of regions of interest for each selfish agent. List length = number of selfish agents.
+            self.selfish_xmin = np.array(
+                selfish_region_xmin
+            )  # x-coordinate minimum of regions of interest for each selfish agent. List length = number of selfish agents.
+            self.selfish_xmax = np.array(
+                selfish_region_xmax
+            )  # x-coordinate maximum of regions of interest for each selfish agent. List length = number of selfish agents.
+            self.selfish_ymin = np.array(
+                selfish_region_ymin
+            )  # y-coordinate minimum of regions of interest for each selfish agent. List length = number of selfish agents.
+            self.selfish_ymax = np.array(
+                selfish_region_ymax
+            )  # y-coordinate maximum of regions of interest for each selfish agent. List length = number of selfish agents.
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
+            self.selfish_region_size = (
+                self.selfish_xmax - self.selfish_xmin + np.ones(2)
+            ) * (self.selfish_ymax - self.selfish_ymin + np.ones(2))
 
         agents = [
             Agent(
@@ -250,7 +254,7 @@ class WildfireEnv(MultiGridEnv):
         # zero out wildfire specific variables, if any
         self.burnt_trees = 0
         self.trees_on_fire = 0
-        if not self.cooperative_reward:
+        if self.log_selfish_region_metrics:
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
 
@@ -387,7 +391,7 @@ class WildfireEnv(MultiGridEnv):
                             c.state = 1
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
                             self.trees_on_fire += 1
-                            if not self.cooperative_reward:
+                            if self.log_selfish_region_metrics:
                                 for a in self.agents:
                                     if self.in_selfish_region(i, j, a.index):
                                         self.selfish_region_trees_on_fire[a.index] += 1
@@ -408,7 +412,7 @@ class WildfireEnv(MultiGridEnv):
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
                             self.burnt_trees += 1
                             self.trees_on_fire -= 1
-                            if not self.cooperative_reward:
+                            if self.log_selfish_region_metrics:
                                 for a in self.agents:
                                     if self.in_selfish_region(i, j, a.index):
                                         self.selfish_region_burnt_trees[a.index] += 1
