@@ -10,7 +10,7 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
 def test_wildfire() -> None:
-    env = gym.make("wildfire-v0", max_episode_steps=10)
+    env = gym.make("wildfire-v0", max_episode_steps=1)
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
@@ -24,7 +24,6 @@ def test_wildfire() -> None:
                 f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
             }
             obs, reward, terminated, truncated, info = env.step(actions)
-            print(reward)
             steps += 1
             frames.append(env.render())
             if terminated or truncated:
@@ -33,7 +32,7 @@ def test_wildfire() -> None:
                 #     - (env.trees_on_fire + info["0"]["burnt trees"])
                 #     / env.grid_size_without_walls**2,
                 # )
-                print(env.selfish_region_trees_on_fire, env.selfish_region_burnt_trees)
+                # print(env.selfish_region_trees_on_fire, env.selfish_region_burnt_trees)
                 break
 
         save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=32)

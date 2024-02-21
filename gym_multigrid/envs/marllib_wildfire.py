@@ -50,8 +50,6 @@ class WildfireEnv(MultiGridEnv):
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
-        if num_agents > 4:
-            raise ValueError("Number of agents cannot be greater than 4.")
         self.obs_depth = (self.num_agents - 1) + len(
             STATE_IDX_TO_COLOR_WILDFIRE
         )  # agent centered obs doesn't include agent's own position
@@ -181,12 +179,19 @@ class WildfireEnv(MultiGridEnv):
         self.helper_grid = self.grid.copy()
 
         # Place UAVs at start positions
+        # start_pos = [
+        #     (1, 1),
+        #     (self.grid.width - 2, self.grid.height - 2),
+        #     (1, self.grid.height - 2),
+        #     (self.grid.width - 2, 1),
+        # ]  # start positions for up to 4 agents. Modify as needed.
         start_pos = [
-            (1, 1),
-            (self.grid.width - 2, self.grid.height - 2),
-            (1, self.grid.height - 2),
-            (self.grid.width - 2, 1),
-        ]  # start positions for up to 4 agents. Modify as needed.
+            (
+                np.random.choice(range(1, self.grid.width - 1)),
+                np.random.choice(range(1, self.grid.height - 1)),
+            )
+            for _ in range(self.num_agents)
+        ]  # random start positions for agents
         for i, a in enumerate(self.agents):
             self.place_agent(a, pos=start_pos[i])
 
@@ -390,11 +395,25 @@ class WildfireEnv(MultiGridEnv):
                         ):
                             c.state = 1
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+
+                            # negative reward for tree transitioning to on fire state
+                            if self.cooperative_reward:
+                                for a in self.agents:
+                                    rewards[f"{a.index}"] -= 1
+                            else:
+                                for a in self.agents:
+                                    if self.in_selfish_region(i, j, a.index):
+                                        rewards[f"{a.index}"] -= 0.5
+                                    else:
+                                        rewards[f"{a.index}"] -= 0.1
+
+                            # update count of trees on fire
                             self.trees_on_fire += 1
                             if self.log_selfish_region_metrics:
                                 for a in self.agents:
                                     if self.in_selfish_region(i, j, a.index):
                                         self.selfish_region_trees_on_fire[a.index] += 1
+
                             # update self.grid if object at (i,j) is a tree
                             o = self.grid.get(i, j)
                             if o.type == "tree":
@@ -410,6 +429,8 @@ class WildfireEnv(MultiGridEnv):
                         ):
                             c.state = 2
                             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
+
+                            # update count of burnt trees and trees on fire
                             self.burnt_trees += 1
                             self.trees_on_fire -= 1
                             if self.log_selfish_region_metrics:
@@ -417,6 +438,7 @@ class WildfireEnv(MultiGridEnv):
                                     if self.in_selfish_region(i, j, a.index):
                                         self.selfish_region_burnt_trees[a.index] += 1
                                         self.selfish_region_trees_on_fire[a.index] -= 1
+
                             # update self.grid if object at (i,j) is a tree
                             o = self.grid.get(i, j)
                             if o.type == "tree":
@@ -437,9 +459,7 @@ class WildfireEnv(MultiGridEnv):
     def _reward(self, agent=None):
         reward = 0
         if self.cooperative_reward:
-            if self.trees_on_fire == 0:
-                reward += 0.5
-            else:
+            if self.trees_on_fire > 0:
                 for a in self.agents:
                     o = self.helper_grid.get(*a.pos)
                     if (
@@ -448,7 +468,7 @@ class WildfireEnv(MultiGridEnv):
                         if o.state == 1:
                             reward += 0.25
                         else:
-                            reward -= 0.5
+                            pass
         else:
             if self.trees_on_fire > 0:
                 o = self.helper_grid.get(*agent.pos)
@@ -461,9 +481,9 @@ class WildfireEnv(MultiGridEnv):
                         ):
                             reward += 0.5
                         else:
-                            reward += 0.25
+                            reward += 0.1
                     else:
-                        reward -= 1
+                        pass
 
         if self.reward_normalization:
             reward = self._normalize_reward(reward, self.rmin, self.rmax)
