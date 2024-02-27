@@ -46,6 +46,7 @@ class WildfireEnv(MultiGridEnv):
         selfish_region_xmax=None,
         selfish_region_ymin=None,
         selfish_region_ymax=None,
+        two_initial_fires=False,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -67,6 +68,7 @@ class WildfireEnv(MultiGridEnv):
         self.rmin = -1
         self.rmax = 0.5
         self.cooperative_reward = cooperative_reward
+        self.two_initial_fires = two_initial_fires
         if self.cooperative_reward:
             self.log_selfish_region_metrics = log_selfish_region_metrics
         else:
@@ -184,13 +186,23 @@ class WildfireEnv(MultiGridEnv):
         # assuming selfish regions don't coincide with initial fire region. If not true, update selfish_region_trees_on_fire accordingly.
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
+        if self.two_initial_fires:
+            self.trees_on_fire += self.initial_fire_size**2
+            num_healthy_trees -= len(trees_on_fire)
 
         for pos in trees_on_fire:
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
-                int(pos[0]),
+                int(pos[0]) - 4,
                 int(pos[1]),
             )
+        if self.two_initial_fires:
+            for pos in trees_on_fire:
+                self.put_obj(
+                    Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
+                    int(pos[0]) + 4,
+                    int(pos[1]),
+                )
         for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 

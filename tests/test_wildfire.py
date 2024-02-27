@@ -17,6 +17,7 @@ def test_wildfire() -> None:
         selfish_region_xmax=[7, 15],
         selfish_region_ymin=[9, 9],
         selfish_region_ymax=[15, 15],
+        two_initial_fires=True,
     )
     obs, _ = env.reset()
     frames = []
