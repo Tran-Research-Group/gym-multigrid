@@ -10,7 +10,14 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
 def test_wildfire() -> None:
-    env = gym.make("wildfire-v0", max_episode_steps=1)
+    env = gym.make(
+        "wildfire-v0",
+        max_episode_steps=1,
+        selfish_region_xmin=[1, 9],
+        selfish_region_xmax=[7, 15],
+        selfish_region_ymin=[9, 9],
+        selfish_region_ymax=[15, 15],
+    )
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())

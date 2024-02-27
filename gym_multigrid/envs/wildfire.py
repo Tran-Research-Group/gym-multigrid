@@ -7,6 +7,7 @@ from gym_multigrid.core.constants import (
     STATE_TO_IDX_WILDFIRE,
     TILE_PIXELS,
     STATE_IDX_TO_COLOR_WILDFIRE,
+    COLOR_NAMES,
 )
 from gym_multigrid.utils.window import Window
 from gym_multigrid.utils.misc import render_agent_tile, get_central_square_coordinates
@@ -27,7 +28,7 @@ class WildfireEnv(MultiGridEnv):
         beta=0.99,
         delta_beta=0,
         size=17,
-        num_agents=10,
+        num_agents=2,
         agent_view_size=10,
         initial_fire_size=0,
         max_steps=100,
@@ -36,7 +37,7 @@ class WildfireEnv(MultiGridEnv):
         render_mode="rgb_array",
         reward_normalization=False,
         obs_normalization=False,
-        cooperative_reward=True,
+        cooperative_reward=False,
         log_selfish_region_metrics=False,
         selfish_region_xmin=None,
         selfish_region_xmax=None,
@@ -88,16 +89,35 @@ class WildfireEnv(MultiGridEnv):
                 self.selfish_xmax - self.selfish_xmin + np.ones(2)
             ) * (self.selfish_ymax - self.selfish_ymin + np.ones(2))
 
-        agents = [
-            Agent(
-                world=self.world,
-                index=i,
-                view_size=agent_view_size,
-                actions=actions_set,
-                color="light_blue",
-            )
-            for i in range(self.num_agents)
-        ]
+        if self.cooperative_reward:
+            agents = [
+                Agent(
+                    world=self.world,
+                    index=i,
+                    view_size=agent_view_size,
+                    actions=actions_set,
+                    color="light_blue",
+                )
+                for i in range(self.num_agents)
+            ]
+        else:
+            if num_agents > 6:
+                raise NotImplementedError("add more colors in constants.py")
+            COLOR_NAMES.remove("orange")
+            COLOR_NAMES.remove("green")
+            COLOR_NAMES.remove("brown")
+            COLOR_NAMES.remove("grey")
+            agent_colors = ["red", "blue"]
+            agents = [
+                Agent(
+                    world=self.world,
+                    index=i,
+                    view_size=agent_view_size,
+                    actions=actions_set,
+                    color=agent_colors[i],
+                )
+                for i in range(self.num_agents)
+            ]
 
         super().__init__(
             agents=agents,
@@ -396,7 +416,7 @@ class WildfireEnv(MultiGridEnv):
                             # negative reward for tree transitioning to on fire state
                             if self.cooperative_reward:
                                 for a in self.agents:
-                                    rewards[f"{a.index}"] -= 1
+                                    rewards[f"{a.index}"] -= 0.5
                             else:
                                 for a in self.agents:
                                     if self.in_selfish_region(i, j, a.index):
@@ -463,7 +483,7 @@ class WildfireEnv(MultiGridEnv):
                         o is not None and o.type == "tree"
                     ):  # this check is redundant. to be safe against future changes or oversight.
                         if o.state == 1:
-                            reward += 0.25
+                            reward += 0.5
                         else:
                             pass
         else:

@@ -7,6 +7,7 @@ from marllib.envs.gym_multigrid.core.constants import (
     STATE_TO_IDX_WILDFIRE,
     TILE_PIXELS,
     STATE_IDX_TO_COLOR_WILDFIRE,
+    COLOR_NAMES,
 )
 from marllib.envs.gym_multigrid.utils.window import Window
 from marllib.envs.gym_multigrid.utils.misc import (
@@ -91,16 +92,35 @@ class WildfireEnv(MultiGridEnv):
                 self.selfish_xmax - self.selfish_xmin + np.ones(2)
             ) * (self.selfish_ymax - self.selfish_ymin + np.ones(2))
 
-        agents = [
-            Agent(
-                world=self.world,
-                index=i,
-                view_size=agent_view_size,
-                actions=actions_set,
-                color="light_blue",
-            )
-            for i in range(self.num_agents)
-        ]
+        if self.cooperative_reward:
+            agents = [
+                Agent(
+                    world=self.world,
+                    index=i,
+                    view_size=agent_view_size,
+                    actions=actions_set,
+                    color="light_blue",
+                )
+                for i in range(self.num_agents)
+            ]
+        else:
+            if num_agents > 6:
+                raise NotImplementedError("add more colors in constants.py")
+            COLOR_NAMES.remove("orange")
+            COLOR_NAMES.remove("green")
+            COLOR_NAMES.remove("brown")
+            COLOR_NAMES.remove("grey")
+            agent_colors = ["red", "blue"]
+            agents = [
+                Agent(
+                    world=self.world,
+                    index=i,
+                    view_size=agent_view_size,
+                    actions=actions_set,
+                    color=agent_colors[i],
+                )
+                for i in range(self.num_agents)
+            ]
 
         super().__init__(
             agents=agents,
@@ -184,7 +204,7 @@ class WildfireEnv(MultiGridEnv):
         #     (self.grid.width - 2, self.grid.height - 2),
         #     (1, self.grid.height - 2),
         #     (self.grid.width - 2, 1),
-        # ]  # start positions for up to 4 agents. Modify as needed.
+        # ]  # start positions for up to 4 agents.
         start_pos = [
             (
                 np.random.choice(range(1, self.grid.width - 1)),
@@ -399,7 +419,7 @@ class WildfireEnv(MultiGridEnv):
                             # negative reward for tree transitioning to on fire state
                             if self.cooperative_reward:
                                 for a in self.agents:
-                                    rewards[f"{a.index}"] -= 1
+                                    rewards[f"{a.index}"] -= 0.5
                             else:
                                 for a in self.agents:
                                     if self.in_selfish_region(i, j, a.index):
@@ -466,7 +486,7 @@ class WildfireEnv(MultiGridEnv):
                         o is not None and o.type == "tree"
                     ):  # this check is redundant. to be safe against future changes or oversight.
                         if o.state == 1:
-                            reward += 0.25
+                            reward += 0.5
                         else:
                             pass
         else:
