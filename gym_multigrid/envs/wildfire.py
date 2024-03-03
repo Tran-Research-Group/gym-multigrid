@@ -184,21 +184,24 @@ class WildfireEnv(MultiGridEnv):
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
         if self.two_initial_fires:
-            self.trees_on_fire += self.initial_fire_size**2
-            num_healthy_trees -= len(trees_on_fire)
+            self.trees_on_fire += 9
+            num_healthy_trees -= 9
 
         for pos in trees_on_fire:
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
-                int(pos[0]) - 4,
-                int(pos[1]),
+                int(pos[0]),
+                int(pos[1]) + 4,
             )
         if self.two_initial_fires:
-            for pos in trees_on_fire:
+            trees_on_fire_region2 = get_central_square_coordinates(
+                self.grid_size_without_walls, 3
+            )
+            for pos in trees_on_fire_region2:
                 self.put_obj(
                     Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
-                    int(pos[0]) + 4,
-                    int(pos[1]),
+                    int(pos[0]),
+                    int(pos[1]) - 4,
                 )
         for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
