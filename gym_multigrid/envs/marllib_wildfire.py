@@ -18,6 +18,7 @@ from collections import OrderedDict
 from gym.spaces import Box, Dict, Discrete
 import numpy as np
 from typing import Any
+import random
 
 
 class WildfireEnv(MultiGridEnv):
@@ -52,9 +53,9 @@ class WildfireEnv(MultiGridEnv):
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
-        self.obs_depth = (self.num_agents - 1) + len(
-            STATE_IDX_TO_COLOR_WILDFIRE
-        )  # agent centered obs doesn't include agent's own position
+        self.obs_depth = (
+            (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE) + 1
+        )  # agent centered obs doesn't include agent's own position. +1 at end for people to rescue.
         self.agent_view_size = agent_view_size
         self.max_steps = max_steps
         self.world = WildfireWorld
@@ -69,10 +70,7 @@ class WildfireEnv(MultiGridEnv):
         self.rmax = 0.5
         self.cooperative_reward = cooperative_reward
         self.two_initial_fires = two_initial_fires
-        if self.cooperative_reward:
-            self.log_selfish_region_metrics = log_selfish_region_metrics
-        else:
-            self.log_selfish_region_metrics = True
+        self.log_selfish_region_metrics = log_selfish_region_metrics
         if (
             self.log_selfish_region_metrics
         ):  # all selfish list elements are in ascending order of indices of selfish agents
@@ -138,6 +136,7 @@ class WildfireEnv(MultiGridEnv):
         self.action_space = Dict(
             {f"{a.index}": Discrete(len(self.actions)) for a in self.agents}
         )
+        self.cells_to_rescue = []
 
     def _set_observation_space(self) -> Dict:
         low = np.full(self.obs_depth * (self.grid_size_without_walls**2), 0)
@@ -194,7 +193,7 @@ class WildfireEnv(MultiGridEnv):
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
                 int(pos[0]),
-                int(pos[1]) + 4,
+                int(pos[1]),
             )
         if self.two_initial_fires:
             trees_on_fire_region2 = get_central_square_coordinates(
@@ -214,12 +213,6 @@ class WildfireEnv(MultiGridEnv):
         self.helper_grid = self.grid.copy()
 
         # Place UAVs at start positions
-        # start_pos = [
-        #     (1, 1),
-        #     (self.grid.width - 2, self.grid.height - 2),
-        #     (1, self.grid.height - 2),
-        #     (self.grid.width - 2, 1),
-        # ]  # start positions for up to 4 agents.
         start_pos = [
             (
                 np.random.choice(range(1, self.grid.width - 1)),
@@ -229,6 +222,17 @@ class WildfireEnv(MultiGridEnv):
         ]  # random start positions for agents
         for i, a in enumerate(self.agents):
             self.place_agent(a, pos=start_pos[i])
+
+        all_cells = [
+            (i, j)
+            for i in range(1, self.grid.width - 1)
+            for j in range(1, self.grid.height - 1)
+        ]
+
+        available_cells = list(set(all_cells) - set(start_pos) - set(trees_on_fire))
+
+        self.cells_to_rescue = [random.choice(available_cells) for _ in range(4)]
+        self.time_to_rescue = np.zeros(len(self.cells_to_rescue))
 
     def _get_obs(self, agent_pos, agent_index) -> OrderedDict:
         local_obs = np.zeros(
@@ -260,6 +264,8 @@ class WildfireEnv(MultiGridEnv):
                     continue
                 elif o.type == "tree":
                     local_obs[new_coords[0], new_coords[1], o.state] = 1
+                if (i, j) in self.cells_to_rescue:
+                    local_obs[new_coords[0], new_coords[1], -1] = 1
 
         for o in self.agents:
             if o.index != agent_index:
@@ -380,7 +386,6 @@ class WildfireEnv(MultiGridEnv):
 
     def step(self, actions):
         self.step_count += 1
-        reward = 0
         actions = [value for value in actions.values()]
         order = np.random.permutation(len(actions))
 
@@ -437,10 +442,11 @@ class WildfireEnv(MultiGridEnv):
                                     rewards[f"{a.index}"] -= 0.5
                             else:
                                 for a in self.agents:
-                                    if self.in_selfish_region(i, j, a.index):
-                                        rewards[f"{a.index}"] -= 0.5
-                                    else:
-                                        rewards[f"{a.index}"] -= 0.1
+                                    # if self.in_selfish_region(i, j, a.index):
+                                    #     rewards[f"{a.index}"] -= 0.5
+                                    # else:
+                                    #     rewards[f"{a.index}"] -= 0.1
+                                    rewards[f"{a.index}"] -= 0.5
 
                             # update count of trees on fire
                             self.trees_on_fire += 1
@@ -511,14 +517,22 @@ class WildfireEnv(MultiGridEnv):
                     o is not None and o.type == "tree"
                 ):  # this check is redundant. to be safe against future changes or oversight.
                     if o.state == 1:
-                        if self.in_selfish_region(
-                            agent.pos[0], agent.pos[1], agent.index
-                        ):
-                            reward += 0.5
-                        else:
-                            reward += 0.1
+                        # if self.in_selfish_region(
+                        #     agent.pos[0], agent.pos[1], agent.index
+                        # ):
+                        #     reward += 0.5
+                        # else:
+                        #     reward += 0.1
+                        reward += 0.5
                     else:
                         pass
+
+            if tuple(agent.pos) in self.cells_to_rescue:
+                reward += 1
+                self.time_to_rescue[self.cells_to_rescue.index(tuple(agent.pos))] = (
+                    self.step_count
+                )
+                self.cells_to_rescue.remove(tuple(agent.pos))
 
         if self.reward_normalization:
             reward = self._normalize_reward(reward, self.rmin, self.rmax)

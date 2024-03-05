@@ -12,12 +12,9 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 def test_wildfire() -> None:
     env = gym.make(
         "wildfire-v0",
-        max_episode_steps=1,
-        selfish_region_xmin=[1, 9],
-        selfish_region_xmax=[7, 15],
-        selfish_region_ymin=[9, 9],
-        selfish_region_ymax=[15, 15],
-        two_initial_fires=True,
+        max_episode_steps=100,
+        log_selfish_region_metrics=False,
+        two_initial_fires=False,
     )
     obs, _ = env.reset()
     frames = []
@@ -35,12 +32,7 @@ def test_wildfire() -> None:
             steps += 1
             frames.append(env.render())
             if terminated or truncated:
-                # ep_metric.append(
-                #     1
-                #     - (env.trees_on_fire + info["0"]["burnt trees"])
-                #     / env.grid_size_without_walls**2,
-                # )
-                # print(env.selfish_region_trees_on_fire, env.selfish_region_burnt_trees)
+                print(env.time_to_rescue)
                 break
 
         save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=32)
