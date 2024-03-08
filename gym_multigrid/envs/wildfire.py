@@ -10,7 +10,11 @@ from gym_multigrid.core.constants import (
     COLOR_NAMES,
 )
 from gym_multigrid.utils.window import Window
-from gym_multigrid.utils.misc import render_agent_tile, get_central_square_coordinates
+from gym_multigrid.utils.misc import (
+    render_agent_tile,
+    get_central_square_coordinates,
+    render_rescue_tile,
+)
 from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
@@ -45,6 +49,8 @@ class WildfireEnv(MultiGridEnv):
         selfish_region_ymin=None,
         selfish_region_ymax=None,
         two_initial_fires=False,
+        search_and_rescue=False,
+        num_rescues=None,
     ):
         self.alpha = alpha
         self.beta = beta
@@ -67,6 +73,8 @@ class WildfireEnv(MultiGridEnv):
         self.rmax = 0.5
         self.cooperative_reward = cooperative_reward
         self.two_initial_fires = two_initial_fires
+        self.search_and_rescue = search_and_rescue
+        self.num_rescues = num_rescues
         self.log_selfish_region_metrics = log_selfish_region_metrics
         if (
             self.log_selfish_region_metrics
@@ -103,10 +111,14 @@ class WildfireEnv(MultiGridEnv):
         else:
             if num_agents > 6:
                 raise NotImplementedError("add more colors in constants.py")
-            COLOR_NAMES.remove("orange")
-            COLOR_NAMES.remove("green")
-            COLOR_NAMES.remove("brown")
-            COLOR_NAMES.remove("grey")
+            # agent_colors = [
+            #     "red",
+            #     "yellow",
+            #     "blue",
+            #     "purple",
+            #     "light_red",
+            #     "light_blue",
+            # ]
             agent_colors = ["red", "blue"]
             agents = [
                 Agent(
@@ -228,7 +240,9 @@ class WildfireEnv(MultiGridEnv):
 
         available_cells = list(set(all_cells) - set(start_pos) - set(trees_on_fire))
 
-        self.cells_to_rescue = [random.choice(available_cells) for _ in range(4)]
+        self.cells_to_rescue = [
+            random.choice(available_cells) for _ in range(self.num_rescues)
+        ]
         self.time_to_rescue = np.zeros(len(self.cells_to_rescue))
 
     def _get_obs(self, agent_pos, agent_index) -> OrderedDict:
@@ -596,6 +610,9 @@ class WildfireEnv(MultiGridEnv):
         # Re-render the tiles containing agents to change background color. Agents are rendered in circular shape.
         for a in self.agents:
             img = render_agent_tile(img, a, self.helper_grid, self.world)
+
+        for cell in self.cells_to_rescue:
+            img = render_rescue_tile(img, cell, self.helper_grid, self.world)
 
         if self.render_mode == "human":
             self.window.show_img(img)

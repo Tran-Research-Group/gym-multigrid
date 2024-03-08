@@ -79,6 +79,44 @@ def render_agent_tile(
     return img
 
 
+def render_rescue_tile(
+    img: NDArray, pos: tuple, helper_grid: Grid, world: WorldT
+) -> NDArray:
+    """
+    Render tile containing agent with background color corresponding to the state of tree in that cell.
+
+    :param img: image of wildfire grid with trees missing at agent locations
+    :param agent: agent
+    :param helper_grid: helper grid containing all trees including missing trees
+    :param world: wildfire world
+    :return: image with all trees and agents rendered
+    """
+
+    o = helper_grid.get(*pos)
+    s = o.state
+
+    tile_size = TILE_PIXELS
+    ymin = pos[1] * tile_size
+    ymax = (pos[1] + 1) * tile_size
+    xmin = pos[0] * tile_size
+    xmax = (pos[0] + 1) * tile_size
+
+    tree_color = world.COLORS[STATE_IDX_TO_COLOR_WILDFIRE[s]]
+    fill_coords(
+        img[ymin:ymax, xmin:xmax, :],
+        point_in_circle(0.5, 0.5, 0.1),
+        world.COLORS["black"],
+        bg_color=tree_color,
+    )
+    fill_coords(
+        img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 0.031, 0, 1), (100, 100, 100)
+    )
+    fill_coords(
+        img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 1, 0, 0.031), (100, 100, 100)
+    )
+    return img
+
+
 def get_central_square_coordinates(N, C):
     """
     Takes a grid size N and a square size C, and returns the coordinates of cells in a C x C square at the center of the grid.

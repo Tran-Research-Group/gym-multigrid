@@ -15,6 +15,7 @@ COLORS = {
     "grey": np.array([100, 100, 100]),
     "light_red": np.array([234, 153, 153]),
     "light_blue": np.array([90, 170, 223]),
+    "black": np.array([0, 0, 0]),
 }
 
 COLOR_NAMES = sorted(list(COLORS.keys()))
