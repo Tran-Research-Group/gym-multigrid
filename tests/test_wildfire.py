@@ -12,9 +12,11 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 def test_wildfire() -> None:
     env = gym.make(
         "wildfire-v0",
-        max_episode_steps=1,
+        max_episode_steps=100,
         log_selfish_region_metrics=False,
         two_initial_fires=False,
+        search_and_rescue=True,
+        num_rescues=5,
     )
     obs, _ = env.reset()
     frames = []
@@ -37,7 +39,7 @@ def test_wildfire() -> None:
                 print(env.time_to_rescue)
                 break
 
-        save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=64)
+        save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=5, dpi=64)
 
     # print(f"Average metric: {np.mean(ep_metric)}")
 
