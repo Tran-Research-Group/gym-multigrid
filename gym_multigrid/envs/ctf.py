@@ -1,7 +1,7 @@
 import enum
 from itertools import chain
 import random
-from typing import Final, Literal, TypedDict, Type
+from typing import Final, Literal, TypeAlias, TypedDict, Type
 
 from gymnasium import spaces
 import numpy as np
@@ -57,7 +57,7 @@ Ctf1v1World = World(
 )
 
 
-class Observation(TypedDict):
+class ObservationDict(TypedDict):
     blue_agent: NDArray
     red_agent: NDArray
     blue_flag: NDArray
@@ -66,6 +66,9 @@ class Observation(TypedDict):
     red_territory: NDArray
     obstacle: NDArray
     is_red_agent_defeated: int
+
+
+Observation: TypeAlias = ObservationDict | NDArray
 
 
 class Ctf1v1Env(MultiGridEnv):
@@ -84,6 +87,8 @@ class Ctf1v1Env(MultiGridEnv):
         obstacle_penalty_ratio: float = 0.0,
         step_penalty_ratio: float = 0.01,
         max_steps: int = 100,
+        observation_option: Literal["positional", "map", "flattened"] = "positional",
+        observation_scaling: float = 1.0,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = ["red_agent", "blue_agent"],
     ):
@@ -119,6 +124,11 @@ class Ctf1v1Env(MultiGridEnv):
         self.obstacle_penalty: Final[float] = obstacle_penalty_ratio * flag_reward
         self.step_penalty: Final[float] = step_penalty_ratio * flag_reward
 
+        self.observation_option: Final[Literal["positional", "map", "flattened"]] = (
+            observation_option
+        )
+        self.observation_scaling: Final[float] = observation_scaling
+
         partial_obs: bool = False
         agent_view_size: int = 10
 
@@ -133,15 +143,27 @@ class Ctf1v1Env(MultiGridEnv):
         width: int
         height, width = self._field_map.shape
 
-        self.obstacle: Final[list[Position]] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["obstacle"])))  # type: ignore
+        self.obstacle: Final[list[Position]] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["obstacle"]))
+        )
 
-        self.blue_flag: Final[Position] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_flag"])))[0]  # type: ignore
+        self.blue_flag: Final[Position] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_flag"]))
+        )[0]
 
-        self.red_flag: Final[Position] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_flag"])))[0]  # type: ignore
+        self.red_flag: Final[Position] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_flag"]))
+        )[0]
 
-        self.blue_territory: Final[list[Position]] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_territory"]))) + [self.blue_flag]  # type: ignore
+        self.blue_territory: Final[list[Position]] = list(
+            zip(
+                *np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_territory"])
+            )
+        ) + [self.blue_flag]
 
-        self.red_territory: Final[list[Position]] = list(zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_territory"]))) + [self.red_flag]  # type: ignore
+        self.red_territory: Final[list[Position]] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_territory"]))
+        ) + [self.red_flag]
 
         blue_agent = Agent(
             self.world,
@@ -180,47 +202,78 @@ class Ctf1v1Env(MultiGridEnv):
             uncached_object_types=uncached_object_types,
         )
 
-    def _set_observation_space(self) -> spaces.Dict:
-        observation_space = spaces.Dict(
-            {
-                "blue_agent": spaces.Box(
-                    low=np.array([-1, -1]),
-                    high=np.array(self._field_map.shape) - 1,
+    def _set_observation_space(self) -> spaces.Dict | spaces.Box:
+        match self.observation_option:
+            case "positional":
+                observation_space = spaces.Dict(
+                    {
+                        "blue_agent": spaces.Box(
+                            low=np.array([-1, -1]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "red_agent": spaces.Box(
+                            low=np.array([-1, -1]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "blue_flag": spaces.Box(
+                            low=np.array([0, 0]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "red_flag": spaces.Box(
+                            low=np.array([0, 0]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "blue_territory": spaces.Box(
+                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.blue_territory))]))),  # type: ignore
+                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.blue_territory))]))).flatten() - 1,  # type: ignore
+                            dtype=np.int64,
+                        ),
+                        "red_territory": spaces.Box(
+                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.red_territory))]))),  # type: ignore
+                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.red_territory))]))).flatten() - 1,  # type: ignore
+                            dtype=np.int64,
+                        ),
+                        "obstacle": spaces.Box(
+                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.obstacle))]))),  # type: ignore
+                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.obstacle))]))).flatten() - 1,  # type: ignore
+                            dtype=np.int64,
+                        ),
+                        "is_red_agent_defeated": spaces.Discrete(2),
+                    }
+                )
+
+            case "map":
+                observation_space = spaces.Box(
+                    low=0,
+                    high=len(self.world.OBJECT_TO_IDX) - 1,
+                    shape=self._field_map.shape,
                     dtype=np.int64,
-                ),
-                "red_agent": spaces.Box(
-                    low=np.array([-1, -1]),
-                    high=np.array(self._field_map.shape) - 1,
+                )
+
+            case "flattened":
+                obs_high = (
+                    np.ones([8 + 200 + 1])
+                    * (np.max(self._field_map.shape) - 1)
+                    / self.observation_scaling
+                )
+                obs_high[-1] = 1
+                observation_space = spaces.Box(
+                    low=np.zeros(
+                        [
+                            8
+                            + 2 * len(self.obstacle)
+                            + 2 * len(self.blue_territory)
+                            + 2 * len(self.red_territory)
+                            + 1
+                        ]
+                    ),
+                    high=obs_high,
                     dtype=np.int64,
-                ),
-                "blue_flag": spaces.Box(
-                    low=np.array([0, 0]),
-                    high=np.array(self._field_map.shape) - 1,
-                    dtype=np.int64,
-                ),
-                "red_flag": spaces.Box(
-                    low=np.array([0, 0]),
-                    high=np.array(self._field_map.shape) - 1,
-                    dtype=np.int64,
-                ),
-                "blue_territory": spaces.Box(
-                    low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.blue_territory))]))),  # type: ignore
-                    high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.blue_territory))]))).flatten() - 1,  # type: ignore
-                    dtype=np.int64,
-                ),
-                "red_territory": spaces.Box(
-                    low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.red_territory))]))),  # type: ignore
-                    high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.red_territory))]))).flatten() - 1,  # type: ignore
-                    dtype=np.int64,
-                ),
-                "obstacle": spaces.Box(
-                    low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.obstacle))]))),  # type: ignore
-                    high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.obstacle))]))).flatten() - 1,  # type: ignore
-                    dtype=np.int64,
-                ),
-                "is_red_agent_defeated": spaces.Discrete(2),
-            }
-        )
+                )
 
         return observation_space
 
@@ -259,11 +312,24 @@ class Ctf1v1Env(MultiGridEnv):
 
         self.init_grid: Grid = self.grid.copy()
 
-        self.place_agent(self.agents[0], pos=random.choice(self.blue_territory))
-        self.place_agent(self.agents[1], pos=random.choice(self.red_territory))
+        self.place_agent(
+            self.agents[0],
+            pos=self.blue_territory[
+                self.np_random.integers(0, len(self.blue_territory))
+            ],
+        )
+        self.place_agent(
+            self.agents[1],
+            pos=self.red_territory[self.np_random.integers(0, len(self.red_territory))],
+        )
 
-    def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
-        super().reset(seed)
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[Observation, dict[str, float]]:
+        super().reset(seed=seed)
         self._is_red_agent_defeated: bool = False
 
         assert self.agents[0].pos is not None
@@ -280,18 +346,76 @@ class Ctf1v1Env(MultiGridEnv):
         for a in self.agents:
             assert a.pos is not None
 
-        observation: Observation = {
-            "blue_agent": np.array(self.agents[0].pos),
-            "red_agent": np.array(self.agents[1].pos),
-            "blue_flag": np.array(self.blue_flag),
-            "red_flag": np.array(self.red_flag),
-            "blue_territory": np.array(self.blue_territory).flatten(),
-            "red_territory": np.array(self.red_territory).flatten(),
-            "obstacle": np.array(self.obstacle).flatten(),
-            "is_red_agent_defeated": int(self._is_red_agent_defeated),
-        }
+        observation: Observation
+
+        match self.observation_option:
+            case "positional":
+                observation = {
+                    "blue_agent": np.array(self.agents[0].pos),
+                    "red_agent": np.array(self.agents[1].pos),
+                    "blue_flag": np.array(self.blue_flag),
+                    "red_flag": np.array(self.red_flag),
+                    "blue_territory": np.array(self.blue_territory).flatten(),
+                    "red_territory": np.array(self.red_territory).flatten(),
+                    "obstacle": np.array(self.obstacle).flatten(),
+                    "is_red_agent_defeated": int(self._is_red_agent_defeated),
+                }
+            case "map":
+                observation = self._encode_map()
+            case "flattened":
+                observation = np.array(
+                    [
+                        *np.array(self.agents[0].pos),
+                        *np.array(self.agents[1].pos),
+                        *np.array(self.blue_flag),
+                        *np.array(self.red_flag),
+                        *np.array(self.blue_territory).flatten(),
+                        *np.array(self.red_territory).flatten(),
+                        *np.array(self.obstacle).flatten(),
+                        int(self._is_red_agent_defeated),
+                    ]
+                )
+            case _:
+                raise ValueError(
+                    f"Invalid observation_option: {self.observation_option}"
+                )
 
         return observation
+
+    def _encode_map(self) -> NDArray:
+        encoded_map: NDArray = np.zeros(self._field_map.shape, dtype=np.int64)
+
+        for i, j in self.blue_territory:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["blue_territory"]
+
+        for i, j in self.red_territory:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["red_territory"]
+
+        for i, j in self.obstacle:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
+
+        encoded_map[self.blue_flag[0], self.blue_flag[1]] = self.world.OBJECT_TO_IDX[
+            "blue_flag"
+        ]
+
+        encoded_map[self.red_flag[0], self.red_flag[1]] = self.world.OBJECT_TO_IDX[
+            "red_flag"
+        ]
+
+        assert self.agents[0].pos is not None
+        assert self.agents[1].pos is not None
+
+        encoded_map[self.agents[0].pos[0], self.agents[0].pos[1]] = (
+            self.world.OBJECT_TO_IDX["blue_agent"]
+        )
+
+        encoded_map[self.agents[1].pos[0], self.agents[1].pos[1]] = (
+            self.world.OBJECT_TO_IDX["red_agent"]
+            if not self._is_red_agent_defeated
+            else self.world.OBJECT_TO_IDX["obstacle"]
+        )
+
+        return encoded_map.T
 
     def _get_info(self) -> dict[str, float]:
         assert self.agents[0].pos is not None
@@ -337,39 +461,39 @@ class Ctf1v1Env(MultiGridEnv):
             or next_pos[0] >= self.width
             or next_pos[1] >= self.height
         ):
-            next_pos = agent.pos
-
-        next_cell: WorldObjT | None = self.grid.get(*next_pos)
-
-        is_agent_in_blue_territory: bool = self._is_agent_in_territory(
-            agent.type, "blue", next_pos
-        )
-        is_agent_in_red_territory: bool = self._is_agent_in_territory(
-            agent.type, "red", next_pos
-        )
-
-        if is_agent_in_blue_territory:
-            bg_color = "light_blue"
-        elif is_agent_in_red_territory:
-            bg_color = "light_red"
-        else:
-            bg_color = None
-
-        if next_cell is None:
-            agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
-        elif next_cell.can_overlap():
-            if agent.type == "red_agent" or next_cell.type == "obstacle":
-                pass
-            else:
-                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
-        else:
             pass
+        else:
+            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+
+            is_agent_in_blue_territory: bool = self._is_agent_in_territory(
+                agent.type, "blue", next_pos
+            )
+            is_agent_in_red_territory: bool = self._is_agent_in_territory(
+                agent.type, "red", next_pos
+            )
+
+            if is_agent_in_blue_territory:
+                bg_color = "light_blue"
+            elif is_agent_in_red_territory:
+                bg_color = "light_red"
+            else:
+                bg_color = None
+
+            if next_cell is None:
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            elif next_cell.can_overlap():
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            else:
+                pass
 
     def _move_agents(self, actions: list[int]) -> None:
         # Move blue agent
         self._move_agent(actions[0], self.agents[0])
         # Move red agent
-        self._move_agent(actions[1], self.agents[1])
+        if not self._is_red_agent_defeated:
+            self._move_agent(actions[1], self.agents[1])
+        else:
+            pass
 
     def _is_agent_in_territory(
         self,
@@ -466,18 +590,18 @@ class Ctf1v1Env(MultiGridEnv):
 
             match (blue_agent_in_blue_territory, red_agent_in_red_territory):
                 case (True, True):
-                    blue_win = np.random.choice([True, False])
+                    blue_win = self.np_random.choice([True, False])
                 case (True, False):
-                    blue_win = np.random.choice(
+                    blue_win = self.np_random.choice(
                         [True, False], p=[self.randomness, 1 - self.randomness]
                     )
                 case (False, True):
-                    blue_win = np.random.choice(
+                    blue_win = self.np_random.choice(
                         [True, False], p=[1 - self.randomness, self.randomness]
                     )
 
                 case (False, False):
-                    blue_win = np.random.choice([True, False])
+                    blue_win = self.np_random.choice([True, False])
 
                 case (_, _):
                     raise ValueError(
