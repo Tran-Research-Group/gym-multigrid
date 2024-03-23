@@ -241,7 +241,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         )
 
     def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
-        super().reset(seed)
+        super().reset(seed=seed)
 
         agent: Agent = self.agents[0]
 
