@@ -314,15 +314,20 @@ class Ctf1v1Env(MultiGridEnv):
 
         self.place_agent(
             self.agents[0],
-            pos=self.blue_territory[np.random.randint(0, len(self.blue_territory))],
+            pos=self.blue_territory[self.np_random.integers(0, len(self.blue_territory))],
         )
         self.place_agent(
             self.agents[1],
-            pos=self.red_territory[np.random.randint(0, len(self.red_territory))],
+            pos=self.red_territory[self.np_random.integers(0, len(self.red_territory))],
         )
 
-    def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
-        super().reset(seed)
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[Observation, dict[str, float]]:
+        super().reset(seed=seed)
         self._is_red_agent_defeated: bool = False
 
         assert self.agents[0].pos is not None
@@ -583,18 +588,18 @@ class Ctf1v1Env(MultiGridEnv):
 
             match (blue_agent_in_blue_territory, red_agent_in_red_territory):
                 case (True, True):
-                    blue_win = np.random.choice([True, False])
+                    blue_win = self.np_random.choice([True, False])
                 case (True, False):
-                    blue_win = np.random.choice(
+                    blue_win = self.np_random.choice(
                         [True, False], p=[self.randomness, 1 - self.randomness]
                     )
                 case (False, True):
-                    blue_win = np.random.choice(
+                    blue_win = self.np_random.choice(
                         [True, False], p=[1 - self.randomness, self.randomness]
                     )
 
                 case (False, False):
-                    blue_win = np.random.choice([True, False])
+                    blue_win = self.np_random.choice([True, False])
 
                 case (_, _):
                     raise ValueError(
