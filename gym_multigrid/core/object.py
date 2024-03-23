@@ -306,7 +306,7 @@ class Key(WorldObj):
 
 
 class Ball(WorldObj):
-    def __init__(self, world, index=0, reward=2):
+    def __init__(self, world: WorldT, index: int = 0, reward: float = 2):
         super().__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
