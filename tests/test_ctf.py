@@ -19,6 +19,7 @@ def test_ctf() -> None:
         if terminated or truncated:
             break
 
+
 # TODO: might be good idea to include seeding test for other environments
 def test_ctf_random_seeding() -> None:
     map_path: str = "tests/assets/board.txt"

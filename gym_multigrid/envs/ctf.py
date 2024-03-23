@@ -124,9 +124,9 @@ class Ctf1v1Env(MultiGridEnv):
         self.obstacle_penalty: Final[float] = obstacle_penalty_ratio * flag_reward
         self.step_penalty: Final[float] = step_penalty_ratio * flag_reward
 
-        self.observation_option: Final[
-            Literal["positional", "map", "flattened"]
-        ] = observation_option
+        self.observation_option: Final[Literal["positional", "map", "flattened"]] = (
+            observation_option
+        )
         self.observation_scaling: Final[float] = observation_scaling
 
         partial_obs: bool = False
@@ -314,7 +314,9 @@ class Ctf1v1Env(MultiGridEnv):
 
         self.place_agent(
             self.agents[0],
-            pos=self.blue_territory[self.np_random.integers(0, len(self.blue_territory))],
+            pos=self.blue_territory[
+                self.np_random.integers(0, len(self.blue_territory))
+            ],
         )
         self.place_agent(
             self.agents[1],
@@ -403,9 +405,9 @@ class Ctf1v1Env(MultiGridEnv):
         assert self.agents[0].pos is not None
         assert self.agents[1].pos is not None
 
-        encoded_map[
-            self.agents[0].pos[0], self.agents[0].pos[1]
-        ] = self.world.OBJECT_TO_IDX["blue_agent"]
+        encoded_map[self.agents[0].pos[0], self.agents[0].pos[1]] = (
+            self.world.OBJECT_TO_IDX["blue_agent"]
+        )
 
         encoded_map[self.agents[1].pos[0], self.agents[1].pos[1]] = (
             self.world.OBJECT_TO_IDX["red_agent"]
