@@ -3,7 +3,7 @@ from typing import TypedDict
 import numpy as np
 
 from gym_multigrid.core.agent import ActionsT
-from gym_multigrid.policy.base import BaseAgentPolicy
+from gym_multigrid.policy.base import BaseAgentPolicy, ObservationT
 
 
 class RwPolicy(BaseAgentPolicy):
@@ -15,5 +15,5 @@ class RwPolicy(BaseAgentPolicy):
         super().__init__()
         self.name = "rw"
 
-    def act(self, observation: TypedDict, actions: ActionsT) -> int:
+    def act(self, observation: ObservationT, actions: ActionsT) -> int:
         return np.random.choice(list(actions))

@@ -3,6 +3,7 @@ from abc import abstractmethod, ABC
 from typing import TypeVar, TypedDict, Type
 
 AgentPolicyT = TypeVar("AgentPolicyT", bound="BaseAgentPolicy")
+ObservationT = TypeVar("ObservationT")
 
 
 class BaseAgentPolicy(ABC):
@@ -15,5 +16,4 @@ class BaseAgentPolicy(ABC):
         self.name: str = "base"
 
     @abstractmethod
-    def act(self, observation: TypedDict, actions: Type[enum.IntEnum]) -> int:
-        ...
+    def act(self, observation: ObservationT, actions: Type[enum.IntEnum]) -> int: ...
