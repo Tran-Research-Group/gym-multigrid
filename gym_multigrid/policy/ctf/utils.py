@@ -1,13 +1,16 @@
 from heapq import heapify, heappop, heappush
-from gym_multigrid.typing import Position
+from typing import NamedTuple, Union
+
 from numpy.typing import NDArray
+
+from gym_multigrid.typing import Position
 
 
 class AStarNode(NamedTuple):
     f: int
     g: int
     h: int
-    parent: "AStarNode" | None
+    parent: Union["AStarNode", None]
     loc: Position
 
 
