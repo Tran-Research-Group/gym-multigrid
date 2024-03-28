@@ -349,16 +349,7 @@ class Ctf1v1Env(MultiGridEnv):
 
         match self.observation_option:
             case "positional":
-                observation = {
-                    "blue_agent": np.array(self.agents[0].pos),
-                    "red_agent": np.array(self.agents[1].pos),
-                    "blue_flag": np.array(self.blue_flag),
-                    "red_flag": np.array(self.red_flag),
-                    "blue_territory": np.array(self.blue_territory).flatten(),
-                    "red_territory": np.array(self.red_territory).flatten(),
-                    "obstacle": np.array(self.obstacle).flatten(),
-                    "is_red_agent_defeated": int(self._is_red_agent_defeated),
-                }
+                observation = self._get_dict_obs()
             case "map":
                 observation = self._encode_map()
             case "flattened":
@@ -378,6 +369,25 @@ class Ctf1v1Env(MultiGridEnv):
                 raise ValueError(
                     f"Invalid observation_option: {self.observation_option}"
                 )
+
+        return observation
+
+    def _get_dict_obs(self) -> ObservationDict:
+        for a in self.agents:
+            assert a.pos is not None
+
+        observation: ObservationDict
+
+        observation = {
+            "blue_agent": np.array(self.agents[0].pos),
+            "red_agent": np.array(self.agents[1].pos),
+            "blue_flag": np.array(self.blue_flag),
+            "red_flag": np.array(self.red_flag),
+            "blue_territory": np.array(self.blue_territory).flatten(),
+            "red_territory": np.array(self.red_territory).flatten(),
+            "obstacle": np.array(self.obstacle).flatten(),
+            "is_red_agent_defeated": int(self._is_red_agent_defeated),
+        }
 
         return observation
 
@@ -539,7 +549,7 @@ class Ctf1v1Env(MultiGridEnv):
         self.step_count += 1
 
         assert type(self.agents[1]) is PolicyAgent
-        red_action: int = self.agents[1].policy.act(self._get_obs())
+        red_action: int = self.agents[1].policy.act(self._get_dict_obs())
 
         actions: list[int] = [action, red_action]
 
