@@ -9,7 +9,7 @@ from gym_multigrid.policy.base import BaseAgentPolicy, ObservationT
 from gym_multigrid.policy.ctf.utils import a_star
 from gym_multigrid.typing import Position
 
-ObservationDictT = TypeVar("ObservationDictT", bound=TypedDict)
+ObservationDictT = TypeVar("ObservationDictT", bound=dict)
 
 
 class RwPolicy(BaseAgentPolicy):
@@ -45,9 +45,9 @@ class RwPolicy(BaseAgentPolicy):
         return self.random_generator.integers(0, len(self.action_set))
 
 
-class FightPolicy(BaseAgentPolicy):
+class DestinationPolicy(BaseAgentPolicy):
     """
-    Policy that always tries to fight
+    Policy that always tries to reach a destination with possible randomness in action selection.
 
     Attributes:
         name: str
@@ -74,9 +74,42 @@ class FightPolicy(BaseAgentPolicy):
             Probability of taking an optimal action.
         """
         super().__init__(action_set, random_generator)
-        self.name = "fight"
+        self.name = "destination"
         self.field_map: NDArray | None = field_map
         self.randomness: float = randomness
+
+    def get_target(self, observation: ObservationDictT) -> Position:
+        """
+        Get the target position of the agent.
+
+        Parameters
+        ----------
+        observation : ObservationDictT
+            Observation dictionary (dict from the env).
+
+        Returns
+        -------
+        Position
+            Target position of the agent.
+        """
+        # Implement this method
+        ...
+
+    def get_start(self, observation: ObservationDictT) -> Position:
+        """
+        Get the start position of the agent.
+
+        Parameters
+        ----------
+        observation : ObservationDictT
+            Observation dictionary (dict from the env).
+
+        Returns
+        -------
+        Position
+            Start position of the agent.
+        """
+        ...
 
     def act(self, observation: ObservationDictT) -> int:
         """
@@ -85,7 +118,7 @@ class FightPolicy(BaseAgentPolicy):
         Parameters
         ----------
         observation : ObservationDictT
-            Observation dictionary (typed dict from the env).
+            Observation dictionary (dict from the env).
 
         Returns
         -------
@@ -93,14 +126,10 @@ class FightPolicy(BaseAgentPolicy):
             Action to take.
         """
 
-        # Assert the observation dict has items "red_agent" and "blue_agent"
-        assert "red_agent" in observation and "blue_agent" in observation
-        shortest_path = a_star(
-            observation["red_agent"], observation["blue_agent"], self.field_map
-        )
-        optimal_loc: Position = (
-            shortest_path[1] if len(shortest_path) > 1 else observation["blue_agent"]
-        )
+        start: Position = self.get_start(observation)
+        target: Position = self.get_target(observation)
+        shortest_path = a_star(start, target, self.field_map)
+        optimal_loc: Position = shortest_path[1] if len(shortest_path) > 1 else target
 
         # Determine if the agent should take the optimal action
         is_action_optimal: bool = self.random_generator.choice(
@@ -110,7 +139,7 @@ class FightPolicy(BaseAgentPolicy):
         # If the optimal action is not taken, return a random action
         action: int
         if is_action_optimal:
-            action_dir: NDArray = np.array(optimal_loc) - observation["red_agent"]
+            action_dir: NDArray = np.array(optimal_loc) - np.array(target)
 
             # Convert the direction to an action
             # stay: (0,0), left: (0,-1), down: (-1,0), right: (0,1), up: (1,0)
@@ -130,3 +159,87 @@ class FightPolicy(BaseAgentPolicy):
             action = self.random_generator.integers(0, len(self.action_set))
 
         return action
+
+
+class FightPolicy(DestinationPolicy):
+    """
+    Policy that always tries to fight
+
+    Attributes:
+        name: str
+            Policy name
+    """
+
+    def __init__(
+        self,
+        field_map: NDArray | None = None,
+        action_set: ActionsT = CtfActions,
+        random_generator: Generator | None = None,
+        randomness: float = 0.75,
+    ) -> None:
+        """
+        Initialize the policy.
+
+        Parameters
+        ----------
+        field_map : numpy.typing.NDArray
+            Field map of the environment.
+        actions : gym_multigrid.core.agent.ActionsT
+            Actions available to the agent.
+        randomness : float
+            Probability of taking an optimal action.
+
+        """
+
+        super().__init__(field_map, action_set, random_generator, randomness)
+        self.name = "fight"
+
+    def get_target(self, observation: ObservationDictT) -> Position:
+        assert "blue_agent" in observation
+        return observation["blue_agent"]
+
+    def get_start(self, observation: ObservationDictT) -> Position:
+        assert "red_agent" in observation
+        return observation["red_agent"]
+
+
+class CapturePolicy(DestinationPolicy):
+    """
+    Policy that always tries to capture the flag
+
+    Attributes:
+        name: str
+            Policy name
+    """
+
+    def __init__(
+        self,
+        field_map: NDArray | None = None,
+        action_set: ActionsT = CtfActions,
+        random_generator: Generator | None = None,
+        randomness: float = 0.75,
+    ) -> None:
+        """
+        Initialize the policy.
+
+        Parameters
+        ----------
+        field_map : numpy.typing.NDArray
+            Field map of the environment.
+        actions : gym_multigrid.core.agent.ActionsT
+            Actions available to the agent.
+        randomness : float
+            Probability of taking an optimal action.
+
+        """
+
+        super().__init__(field_map, action_set, random_generator, randomness)
+        self.name = "capture"
+
+    def get_target(self, observation: ObservationDictT) -> Position:
+        assert "flag" in observation
+        return observation["flag"]
+
+    def get_start(self, observation: ObservationDictT) -> Position:
+        assert "red_agent" in observation
+        return observation["red_agent"]
