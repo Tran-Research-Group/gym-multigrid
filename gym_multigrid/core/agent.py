@@ -51,6 +51,14 @@ class MineActions(enum.IntEnum):
     build = 4
 
 
+class CtfActions(enum.IntEnum):
+    stay = 0
+    left = 1
+    down = 2
+    right = 3
+    up = 4
+
+
 AgentT = TypeVar("AgentT", bound="Agent")
 
 

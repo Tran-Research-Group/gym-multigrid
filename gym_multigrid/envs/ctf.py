@@ -7,7 +7,7 @@ from gymnasium import spaces
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT
+from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import World
@@ -31,14 +31,6 @@ CtfColors: dict[str, NDArray] = {
     "light_blue": np.array([240, 248, 255]),
     "white": np.array([255, 250, 250]),
 }
-
-
-class CtfActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
 
 
 Ctf1v1World = World(
@@ -201,6 +193,13 @@ class Ctf1v1Env(MultiGridEnv):
             render_mode=render_mode,
             uncached_object_types=uncached_object_types,
         )
+
+        # Set the random generator and action set of the red agent from the env.
+        if type(self.agents[1]) is PolicyAgent:
+            self.agents[1].policy.random_generator = self.np_random
+            self.agents[1].policy.action_set = self.actions_set
+        else:
+            pass
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
@@ -540,7 +539,7 @@ class Ctf1v1Env(MultiGridEnv):
         self.step_count += 1
 
         assert type(self.agents[1]) is PolicyAgent
-        red_action: int = self.agents[1].policy.act(self._get_obs(), self.actions_set)
+        red_action: int = self.agents[1].policy.act(self._get_obs())
 
         actions: list[int] = [action, red_action]
 
