@@ -79,6 +79,20 @@ class FightPolicy(BaseAgentPolicy):
         self.randomness: float = randomness
 
     def act(self, observation: ObservationDictT) -> int:
+        """
+        Determine the action to take.
+
+        Parameters
+        ----------
+        observation : ObservationDictT
+            Observation dictionary (typed dict from the env).
+
+        Returns
+        -------
+        int
+            Action to take.
+        """
+
         # Assert the observation dict has items "red_agent" and "blue_agent"
         assert "red_agent" in observation and "blue_agent" in observation
         shortest_path = a_star(
