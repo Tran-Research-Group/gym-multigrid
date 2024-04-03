@@ -197,10 +197,12 @@ class WildfireEnv(MultiGridEnv):
         # trees_on_fire = get_central_square_coordinates(
         #     self.grid_size_without_walls, self.initial_fire_size
         # )
-        trees_on_fire = (
-            random.randint(1, self.grid_size_without_walls),
-            random.randint(1, self.grid_size_without_walls),
-        )
+        trees_on_fire = [
+            (
+                random.randint(1, self.grid_size_without_walls),
+                random.randint(1, self.grid_size_without_walls),
+            )
+        ]
         self.trees_on_fire += self.initial_fire_size**2
         # assuming selfish regions don't coincide with initial fire region. If not true, update selfish_region_trees_on_fire accordingly.
 
@@ -216,7 +218,7 @@ class WildfireEnv(MultiGridEnv):
             self.trees_on_fire += 9
             num_healthy_trees -= 9
             cells_to_avoid = get_3x3_square_coordinates(
-                *trees_on_fire, self.grid_size_without_walls
+                *(trees_on_fire[0]), self.grid_size_without_walls
             )
             while True:
                 fire_square_center = (
@@ -452,9 +454,9 @@ class WildfireEnv(MultiGridEnv):
 
         # Move agents
         for i in order:
-            if actions[i] == self.actions.still:
-                continue
-            elif actions[i] == self.actions.north:
+            # if actions[i] == self.actions.still:
+            #     continue
+            if actions[i] == self.actions.north:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(i, next_cell, next_pos)
@@ -679,8 +681,9 @@ class WildfireEnv(MultiGridEnv):
         for a in self.agents:
             img = render_agent_tile(img, a, self.helper_grid, self.world)
 
-        for cell in self.cells_to_rescue:
-            img = render_rescue_tile(img, cell, self.helper_grid, self.world)
+        if self.search_and_rescue:
+            for cell in self.cells_to_rescue:
+                img = render_rescue_tile(img, cell, self.helper_grid, self.world)
 
         if self.render_mode == "human":
             self.window.show_img(img)
