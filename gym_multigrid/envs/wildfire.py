@@ -14,6 +14,7 @@ from gym_multigrid.utils.misc import (
     render_agent_tile,
     get_central_square_coordinates,
     render_rescue_tile,
+    get_3x3_square_coordinates,
 )
 from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
@@ -56,14 +57,15 @@ class WildfireEnv(MultiGridEnv):
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
+        self.search_and_rescue = search_and_rescue
         if search_and_rescue:
             self.obs_depth = (
                 (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE) + 1
             )  # agent centered obs doesn't include agent's own position. +1 at end for people to rescue.
             self.cells_to_rescue = []
-            self.search_and_rescue = search_and_rescue
             self.num_rescues = num_rescues  # number of people to rescue
             self.num_rescued = 0  # number of people rescued
+            self.time_to_rescue = np.zeros(len(self.cells_to_rescue) + 1)
         else:
             self.obs_depth = (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE)
         self.agent_view_size = agent_view_size
@@ -192,16 +194,19 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        trees_on_fire = get_central_square_coordinates(
-            self.grid_size_without_walls, self.initial_fire_size
-        )
+        # trees_on_fire = get_central_square_coordinates(
+        #     self.grid_size_without_walls, self.initial_fire_size
+        # )
+        trees_on_fire = [
+            (
+                random.randint(1, self.grid_size_without_walls),
+                random.randint(1, self.grid_size_without_walls),
+            )
+        ]
         self.trees_on_fire += self.initial_fire_size**2
         # assuming selfish regions don't coincide with initial fire region. If not true, update selfish_region_trees_on_fire accordingly.
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
-        if self.two_initial_fires:
-            self.trees_on_fire += 9
-            num_healthy_trees -= 9
 
         for pos in trees_on_fire:
             self.put_obj(
@@ -210,14 +215,26 @@ class WildfireEnv(MultiGridEnv):
                 int(pos[1]),
             )
         if self.two_initial_fires:
-            trees_on_fire_region2 = get_central_square_coordinates(
-                self.grid_size_without_walls, 3
+            self.trees_on_fire += 9
+            num_healthy_trees -= 9
+            cells_to_avoid = get_3x3_square_coordinates(
+                *(trees_on_fire[0]), self.grid_size_without_walls
+            )
+            while True:
+                fire_square_center = (
+                    random.randint(2, self.grid_size_without_walls - 1),
+                    random.randint(2, self.grid_size_without_walls - 1),
+                )
+                if fire_square_center not in cells_to_avoid:
+                    break
+            trees_on_fire_region2 = get_3x3_square_coordinates(
+                *fire_square_center, self.grid_size_without_walls
             )
             for pos in trees_on_fire_region2:
                 self.put_obj(
                     Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
                     int(pos[0]),
-                    int(pos[1]) - 4,
+                    int(pos[1]),
                 )
         for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
@@ -300,6 +317,40 @@ class WildfireEnv(MultiGridEnv):
         # local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
         return local_obs.flatten("F")
 
+    def get_state(self) -> OrderedDict:
+        local_obs = np.zeros(
+            (
+                self.grid_size_without_walls,
+                self.grid_size_without_walls,
+                self.obs_depth + 1,
+            ),
+            dtype=np.float32,
+        )
+
+        for i in range(self.helper_grid.width):
+            for j in range(self.helper_grid.height):
+                o = self.helper_grid.get(i, j)
+                if o is None:
+                    continue
+                elif o.type == "tree":
+                    local_obs[i - 1, j - 1, o.state] = 1
+                # search and rescue not implemented right now
+                # if self.search_and_rescue:
+                #     if (i, j) in self.cells_to_rescue:
+                #         local_obs[new_coords[0], new_coords[1], -1] = 1
+
+        for o in self.agents:
+            local_obs[
+                o.pos[0] - 1, o.pos[1] - 1, len(STATE_IDX_TO_COLOR_WILDFIRE) + o.index
+            ] = 1
+
+        if self.obs_normalization:
+            raise NotImplementedError(
+                "Observation normalization is not currently implemented because they are already normalized (1-hot encoded)."
+            )
+        # local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
+        return local_obs.flatten("F")
+
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         # zero out wildfire specific variables, if any
         self.burnt_trees = 0
@@ -308,6 +359,7 @@ class WildfireEnv(MultiGridEnv):
         if self.search_and_rescue:
             self.cells_to_rescue = []
             self.cells_to_rescue_chosen = False
+            self.time_to_rescue = np.zeros(len(self.cells_to_rescue) + 1)
         if self.log_selfish_region_metrics:
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
@@ -402,9 +454,9 @@ class WildfireEnv(MultiGridEnv):
 
         # Move agents
         for i in order:
-            if actions[i] == self.actions.still:
-                continue
-            elif actions[i] == self.actions.north:
+            # if actions[i] == self.actions.still:
+            #     continue
+            if actions[i] == self.actions.north:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(i, next_cell, next_pos)
@@ -450,11 +502,11 @@ class WildfireEnv(MultiGridEnv):
                                     rewards[f"{a.index}"] -= 0.5
                             else:
                                 for a in self.agents:
-                                    # if self.in_selfish_region(i, j, a.index):
-                                    #     rewards[f"{a.index}"] -= 0.5
-                                    # else:
-                                    #     rewards[f"{a.index}"] -= 0.1
-                                    rewards[f"{a.index}"] -= 0.5
+                                    if self.in_selfish_region(i, j, a.index):
+                                        rewards[f"{a.index}"] -= 0.5
+                                    else:
+                                        rewards[f"{a.index}"] -= 0.1
+                                    # rewards[f"{a.index}"] -= 0.5
 
                             # update count of trees on fire
                             self.trees_on_fire += 1
@@ -498,24 +550,25 @@ class WildfireEnv(MultiGridEnv):
         if self.step_count >= self.max_steps:
             done = True
             truncated = True
-            self.num_rescued = (
-                self.num_rescues - len(self.cells_to_rescue)
-                if self.cells_to_rescue_chosen
-                else 0
-            )  # zero if no rescue mission was initiated or if mission was initiated but no one was rescued.
-        elif (
-            self.search_and_rescue
-            and self.burnt_trees >= self.num_rescues
-            and not self.cells_to_rescue_chosen
-        ):
-            self.cells_to_rescue = random.sample(
-                self.burnt_tree_positions, self.num_rescues
-            )
-            self.time_to_rescue = np.zeros(len(self.cells_to_rescue) + 1)
-            self.time_to_rescue[0] = (
-                self.step_count
-            )  # first element of self.time_to_rescue is the rescue mission start time
-            self.cells_to_rescue_chosen = True
+            if self.search_and_rescue:
+                self.num_rescued = (
+                    self.num_rescues - len(self.cells_to_rescue)
+                    if self.cells_to_rescue_chosen
+                    else 0
+                )  # zero if no rescue mission was initiated or if mission was initiated but no one was rescued.
+        elif self.search_and_rescue:
+            if self.burnt_trees >= self.num_rescues and not self.cells_to_rescue_chosen:
+                possible_rescue_cells = self.burnt_tree_positions
+                for a in self.agents:
+                    if a.pos in self.burnt_tree_positions:
+                        possible_rescue_cells.remove(a.pos)
+                self.cells_to_rescue = random.sample(
+                    possible_rescue_cells, self.num_rescues
+                )
+                self.time_to_rescue[0] = (
+                    self.step_count
+                )  # first element of self.time_to_rescue is the rescue mission start time
+                self.cells_to_rescue_chosen = True
 
         next_obs = OrderedDict(
             {f"{a.index}": self._get_obs(a.pos, a.index) for a in self.agents}
@@ -544,19 +597,19 @@ class WildfireEnv(MultiGridEnv):
                     o is not None and o.type == "tree"
                 ):  # this check is redundant. to be safe against future changes or oversight.
                     if o.state == 1:
-                        # if self.in_selfish_region(
-                        #     agent.pos[0], agent.pos[1], agent.index
-                        # ):
-                        #     reward += 0.5
-                        # else:
-                        #     reward += 0.1
-                        reward += 0.5
+                        if self.in_selfish_region(
+                            agent.pos[0], agent.pos[1], agent.index
+                        ):
+                            reward += 0.5
+                        else:
+                            reward += 0.1
+                        # reward += 0.5
                     else:
                         pass
 
             if self.search_and_rescue:
                 if tuple(agent.pos) in self.cells_to_rescue:
-                    reward += 1
+                    reward += 20
                     self.time_to_rescue = np.append(
                         self.time_to_rescue, self.step_count
                     )
@@ -628,8 +681,9 @@ class WildfireEnv(MultiGridEnv):
         for a in self.agents:
             img = render_agent_tile(img, a, self.helper_grid, self.world)
 
-        for cell in self.cells_to_rescue:
-            img = render_rescue_tile(img, cell, self.helper_grid, self.world)
+        if self.search_and_rescue:
+            for cell in self.cells_to_rescue:
+                img = render_rescue_tile(img, cell, self.helper_grid, self.world)
 
         if self.render_mode == "human":
             self.window.show_img(img)
