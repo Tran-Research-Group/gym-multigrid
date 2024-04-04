@@ -825,6 +825,14 @@ class CtFMvNEnv(MultiGridEnv):
             uncached_object_types=uncached_object_types,
         )
 
+        self.action_space = spaces.Box(
+            low=np.array([0 for _ in range(self.num_blue_agents)]),
+            high=np.array([len(self.actions_set) for _ in range(self.num_blue_agents)])
+            - 1,
+            dtype=np.int64,
+        )
+        self.ac_dim = self.action_space.shape
+
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
             case "positional":
@@ -944,12 +952,20 @@ class CtFMvNEnv(MultiGridEnv):
             case "flattened":
                 obs_high = (
                     np.ones(
-                        [2 * (self.num_blue_agents + self.num_red_agents) + 4 + 200]
+                        [
+                            2 * (self.num_blue_agents + self.num_red_agents)
+                            + 4
+                            + 2 * len(self.obstacle)
+                            + 2 * len(self.blue_territory)
+                            + 2 * len(self.red_territory)
+                            + self.num_blue_agents
+                            + self.num_red_agents
+                        ]
                     )
                     * (np.max(self._field_map.shape) - 1)
                     / self.observation_scaling
                 )
-                obs_high[-1] = 1
+                obs_high[-(self.num_blue_agents + self.num_red_agents) :] = 1
                 observation_space = spaces.Box(
                     low=np.zeros(
                         [
@@ -1059,7 +1075,7 @@ class CtFMvNEnv(MultiGridEnv):
                         ).flatten(),
                         *np.array(
                             [agent.pos for agent in self.agents[self.num_blue_agents :]]
-                        ),
+                        ).flatten(),
                         *np.array(self.blue_flag),
                         *np.array(self.red_flag),
                         *np.array(self.blue_territory).flatten(),
@@ -1262,7 +1278,8 @@ class CtFMvNEnv(MultiGridEnv):
             red_action: int = red_agent.policy.act(self._get_dict_obs())
             red_actions.append(red_action)
 
-        actions: Final[list[int]] = blue_actions + red_actions
+        # Concatenate the blue and red actions as 1D array
+        actions: Final[list[int]] = np.array(blue_actions).tolist() + red_actions
 
         self._move_agents(actions)
 
