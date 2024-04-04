@@ -355,3 +355,4 @@ class PolicyAgent(Agent):
             world, index, view_size, actions, dir_to_vec, color, bg_color, type
         )
         self.policy: AgentPolicyT = policy
+        self.defeated: bool = False
