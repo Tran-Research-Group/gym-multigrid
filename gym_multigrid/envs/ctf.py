@@ -346,8 +346,6 @@ class Ctf1v1Env(MultiGridEnv):
         super().reset(seed=seed)
         self._is_red_agent_defeated: bool = False
 
-        assert self.agents[0].pos is not None
-        assert self.agents[1].pos is not None
         self.blue_traj: list[Position] = [self.agents[0].pos]
         self.red_traj: list[Position] = [self.agents[1].pos]
 
@@ -658,9 +656,9 @@ class Ctf1v1Env(MultiGridEnv):
         return observation, reward, terminated, truncated, info
 
 
-class MultiAgentCtfEnv(Ctf1v1Env):
+class NvMCtfEnv(MultiGridEnv):
     """
-    Environment for capture the flag with multiple agents.
+    Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
 
     def __init__(
@@ -913,6 +911,25 @@ class MultiAgentCtfEnv(Ctf1v1Env):
                             - 1,
                             dtype=np.int64,
                         ),
+                        "terminated_agents": spaces.Box(
+                            low=np.array(
+                                [
+                                    0
+                                    for _ in range(
+                                        self.num_blue_agents + self.num_red_agents
+                                    )
+                                ]
+                            ),
+                            high=np.array(
+                                [
+                                    1
+                                    for _ in range(
+                                        self.num_blue_agents + self.num_red_agents
+                                    )
+                                ]
+                            ),
+                            dtype=np.int64,
+                        ),
                     }
                 )
 
@@ -941,7 +958,8 @@ class MultiAgentCtfEnv(Ctf1v1Env):
                             + 2 * len(self.obstacle)
                             + 2 * len(self.blue_territory)
                             + 2 * len(self.red_territory)
-                            + 1
+                            + self.num_blue_agents
+                            + self.num_red_agents
                         ]
                     ),
                     high=obs_high,
@@ -1001,3 +1019,355 @@ class MultiAgentCtfEnv(Ctf1v1Env):
                 self.agents[self.num_blue_agents + i],
                 pos=self.red_territory[red_indices[i]],
             )
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[Observation, dict[str, float]]:
+        super().reset(seed=seed, options=options)
+
+        self.blue_traj: list[list[Position]] = [
+            [agent.pos] for agent in self.agents[0 : self.num_blue_agents]
+        ]
+        self.red_traj: list[list[Position]] = [
+            [agent.pos] for agent in self.agents[self.num_blue_agents :]
+        ]
+
+        obs: Observation = self._get_obs()
+        info: dict[str, float] = self._get_info()
+
+        return obs, info
+
+    def _get_obs(self) -> Observation:
+        observation: Observation
+
+        match self.observation_option:
+            case "positional":
+                observation = self._get_dict_obs()
+            case "map":
+                observation = self._encode_map()
+            case "flattened":
+                observation = np.array(
+                    [
+                        *np.array(
+                            [
+                                agent.pos
+                                for agent in self.agents[0 : self.num_blue_agents]
+                            ]
+                        ).flatten(),
+                        *np.array(
+                            [agent.pos for agent in self.agents[self.num_blue_agents :]]
+                        ),
+                        *np.array(self.blue_flag),
+                        *np.array(self.red_flag),
+                        *np.array(self.blue_territory).flatten(),
+                        *np.array(self.red_territory).flatten(),
+                        *np.array(self.obstacle).flatten(),
+                        *[int(agent.terminated) for agent in self.agents],
+                    ]
+                )
+            case _:
+                raise ValueError(
+                    f"Invalid observation_option: {self.observation_option}"
+                )
+
+        return observation
+
+    def _get_dict_obs(self) -> ObservationDict:
+        for a in self.agents:
+            assert a.pos is not None
+
+        observation: ObservationDict
+
+        observation = {
+            "blue_agent": np.array(self.agents[0].pos),
+            "red_agent": np.array(self.agents[1].pos),
+            "blue_flag": np.array(self.blue_flag),
+            "red_flag": np.array(self.red_flag),
+            "blue_territory": np.array(self.blue_territory).flatten(),
+            "red_territory": np.array(self.red_territory).flatten(),
+            "obstacle": np.array(self.obstacle).flatten(),
+            "terminated_agents": np.array(
+                [int(agent.terminated) for agent in self.agents]
+            ),
+        }
+
+        return observation
+
+    def _encode_map(self) -> NDArray:
+        encoded_map: NDArray = np.zeros(self._field_map.shape, dtype=np.int64)
+
+        for i, j in self.blue_territory:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["blue_territory"]
+
+        for i, j in self.red_territory:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["red_territory"]
+
+        for i, j in self.obstacle:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
+
+        encoded_map[self.blue_flag[0], self.blue_flag[1]] = self.world.OBJECT_TO_IDX[
+            "blue_flag"
+        ]
+
+        encoded_map[self.red_flag[0], self.red_flag[1]] = self.world.OBJECT_TO_IDX[
+            "red_flag"
+        ]
+
+        for agent in self.agents:
+            assert agent.pos is not None
+            encoded_map[agent.pos[0], agent.pos[1]] = self.world.OBJECT_TO_IDX[
+                agent.type if not agent.terminated else "obstacle"
+            ]
+
+        return encoded_map.T
+
+    def _get_info(self) -> dict[str, float]:
+        assert self.agents[0].pos is not None
+        assert self.agents[1].pos is not None
+
+        info = {
+            "d_ba_ra": distance_points(self.agents[0].pos, self.agents[1].pos),
+            "d_ba_bf": distance_points(self.agents[0].pos, self.blue_flag),
+            "d_ba_rf": distance_points(self.agents[0].pos, self.red_flag),
+            "d_ra_bf": distance_points(self.agents[1].pos, self.blue_flag),
+            "d_ra_rf": distance_points(self.agents[1].pos, self.red_flag),
+            "d_bf_rf": distance_points(self.blue_flag, self.red_flag),
+            "d_ba_bb": distance_area_point(self.agents[0].pos, self.blue_territory),
+            "d_ba_rb": distance_area_point(self.agents[0].pos, self.red_territory),
+            "d_ra_bb": distance_area_point(self.agents[1].pos, self.blue_territory),
+            "d_ra_rb": distance_area_point(self.agents[1].pos, self.red_territory),
+            "d_ba_ob": distance_area_point(self.agents[0].pos, self.obstacle),
+        }
+        return info
+
+    def _move_agent(self, action: int, agent: AgentT) -> None:
+        next_pos: Position
+
+        assert agent.pos is not None
+
+        match action:
+            case self.actions_set.stay:
+                next_pos = agent.pos
+            case self.actions_set.left:
+                next_pos = agent.pos + np.array([0, -1])
+            case self.actions_set.down:
+                next_pos = agent.pos + np.array([-1, 0])
+            case self.actions_set.right:
+                next_pos = agent.pos + np.array([0, 1])
+            case self.actions_set.up:
+                next_pos = agent.pos + np.array([1, 0])
+            case _:
+                raise ValueError(f"Invalid action: {action}")
+
+        if (
+            next_pos[0] < 0
+            or next_pos[1] < 0
+            or next_pos[0] >= self.width
+            or next_pos[1] >= self.height
+        ):
+            pass
+        else:
+            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+
+            is_agent_in_blue_territory: bool = self._is_agent_in_territory(
+                agent.type, "blue", next_pos
+            )
+            is_agent_in_red_territory: bool = self._is_agent_in_territory(
+                agent.type, "red", next_pos
+            )
+
+            if is_agent_in_blue_territory:
+                bg_color = "light_blue"
+            elif is_agent_in_red_territory:
+                bg_color = "light_red"
+            else:
+                bg_color = None
+
+            if next_cell is None:
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            elif next_cell.can_overlap():
+                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+            elif self.obstacle_penalty != 0 and (
+                next_cell.type == "obstacle"
+                or next_cell.type == "red_agent"
+                or next_cell.type == "blue_agent"
+            ):
+                agent.collided = True
+            else:
+                pass
+
+    def _move_agents(self, actions: list[int]) -> None:
+        # Randomly generate the order of the agents by indices using self.np_random.
+        agent_indices: list[int] = list(
+            range(self.num_blue_agents + self.num_red_agents)
+        )
+        self.np_random.shuffle(agent_indices)
+        for i in agent_indices:
+            if self.agents[i].terminated:
+                # Defeated agent doesn't move, sadly.
+                pass
+            else:
+                self._move_agent(actions[i], self.agents[i])
+
+    def _is_agent_in_territory(
+        self,
+        agent_type: Literal["blue_agent", "red_agent"],
+        territory_name: Literal["blue", "red"],
+        agent_loc: Position | None = None,
+    ) -> bool:
+        in_territory: bool = False
+
+        territory: list[Position]
+        if agent_loc is None:
+            match agent_type:
+                case "blue_agent":
+                    assert self.agents[0].pos is not None
+                    agent_loc = self.agents[0].pos
+                case "red_agent":
+                    assert self.agents[1].pos is not None
+                    agent_loc = self.agents[1].pos
+                case _:
+                    raise ValueError(f"Invalid agent_name: {agent_type}")
+        else:
+            pass
+
+        match territory_name:
+            case "blue":
+                territory = self.blue_territory
+            case "red":
+                territory = self.red_territory
+            case _:
+                raise ValueError(f"Invalid territory_name: {territory_name}")
+
+        for i, j in territory:
+            if agent_loc[0] == i and agent_loc[1] == j:
+                in_territory = True
+                break
+            else:
+                pass
+
+        return in_territory
+
+    def step(
+        self, blue_actions: list[int]
+    ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
+        self.step_count += 1
+
+        red_actions: list[int] = []
+        for red_agent in self.agents[self.num_blue_agents :]:
+            assert type(red_agent) is PolicyAgent
+            red_action: int = red_agent.policy.act(self._get_dict_obs())
+            red_actions.append(red_action)
+
+        actions: Final[list[int]] = blue_actions + red_actions
+
+        self._move_agents(actions)
+
+        terminated: bool = False
+        truncated: Final[bool] = self.step_count >= self.max_steps
+
+        reward: float = 0.0
+
+        # Calculate the collision penalty for the blue agents.
+        if self.obstacle_penalty != 0:
+            for blue_agent in self.agents[0 : self.num_blue_agents]:
+                if blue_agent.collided:
+                    reward -= self.obstacle_penalty
+                    terminated = True
+                else:
+                    pass
+        else:
+            pass
+
+        # Calculate the flag rewards of the blue agents
+        for blue_agent in self.agents[0 : self.num_blue_agents]:
+            if (
+                blue_agent.pos[0] == self.red_flag[0]
+                and blue_agent.pos[1] == self.red_flag[1]
+            ):
+                reward += self.flag_reward
+                terminated = True
+            else:
+                pass
+
+        # Calculate the flag rewards (penalties) of the red agents
+        for red_agent in self.agents[self.num_blue_agents :]:
+            if (
+                red_agent.pos[0] == self.blue_flag[0]
+                and red_agent.pos[1] == self.blue_flag[1]
+            ):
+                reward -= self.flag_reward
+                terminated = True
+            else:
+                pass
+
+        # Calculate the distances between the blue and red agents and the battle outcomes if they are within the battle range.
+        blue_agent_locs: list[Position] = [
+            agent.pos for agent in self.agents[0 : self.num_blue_agents]
+        ]
+        red_agent_locs: list[Position] = [
+            agent.pos for agent in self.agents[self.num_blue_agents :]
+        ]
+        blue_agent_locs_np: NDArray[np.float_] = np.array(blue_agent_locs)
+        red_agent_locs_np: NDArray[np.float_] = np.array(red_agent_locs)
+
+        distances: NDArray[np.float_] = np.linalg.norm(
+            blue_agent_locs_np[:, np.newaxis] - red_agent_locs_np, axis=2
+        )
+
+        # Get the indices of distances that are less than the battle range.
+        battle_indices: tuple[NDArray[np.int_], NDArray[np.int_]] = np.where(
+            distances <= self.battle_range
+        )
+        # Iterate over the indices and perform the battles.
+        for blue_agent_idx, red_agent_idx in zip(*battle_indices):
+            # Battle only takes place if both agents are not defeated (terminated).
+            if (
+                not self.agents[blue_agent_idx].terminated
+                and not self.agents[self.num_blue_agents + red_agent_idx].terminated
+            ):
+                blue_agent_in_blue_territory: bool = self._is_agent_in_territory(
+                    "blue_agent", "blue", blue_agent_locs[blue_agent_idx]
+                )
+                red_agent_in_red_territory: bool = self._is_agent_in_territory(
+                    "red_agent", "red", red_agent_locs[red_agent_idx]
+                )
+
+                blue_win: bool
+                match (blue_agent_in_blue_territory, red_agent_in_red_territory):
+                    case (True, True):
+                        blue_win = self.np_random.choice([True, False])
+                    case (True, False):
+                        blue_win = self.np_random.choice(
+                            [True, False], p=[self.randomness, 1 - self.randomness]
+                        )
+                    case (False, True):
+                        blue_win = self.np_random.choice(
+                            [True, False], p=[1 - self.randomness, self.randomness]
+                        )
+                    case (False, False):
+                        blue_win = self.np_random.choice([True, False])
+                    case (_, _):
+                        raise ValueError(
+                            f"Invalid combination of blue_agent_in_blue_territory: {blue_agent_in_blue_territory} and red_agent_in_red_territory: {red_agent_in_red_territory}"
+                        )
+
+                if blue_win:
+                    reward += self.battle_reward
+                    self.agents[self.num_blue_agents + red_agent_idx].terminated = True
+                else:
+                    reward -= self.battle_reward
+                    self.agents[blue_agent_idx].terminated = True
+                    terminated = True
+            else:
+                pass
+
+        reward -= self.step_penalty * self.num_blue_agents
+
+        observation: Observation = self._get_obs()
+        info: dict[str, float] = self._get_info()
+
+        return observation, reward, terminated, truncated, info
