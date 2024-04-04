@@ -48,6 +48,21 @@ Ctf1v1World = World(
     },
 )
 
+CtfMAWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=CtfColors,
+    OBJECT_TO_IDX={
+        "blue_territory": 0,
+        "red_territory": 1,
+        "blue_agent": 2,
+        "red_agent": 3,
+        "blue_flag": 4,
+        "red_flag": 5,
+        "obstacle": 6,
+    },
+)
+
 
 class ObservationDict(TypedDict):
     blue_agent: NDArray
@@ -641,3 +656,348 @@ class Ctf1v1Env(MultiGridEnv):
         info: dict[str, float] = self._get_info()
 
         return observation, reward, terminated, truncated, info
+
+
+class MultiAgentCtfEnv(Ctf1v1Env):
+    """
+    Environment for capture the flag with multiple agents.
+    """
+
+    def __init__(
+        self,
+        map_path: str,
+        num_blue_agents: int = 2,
+        num_red_agents: int = 2,
+        enemy_policies: list[AgentPolicyT] | AgentPolicyT = RwPolicy(),
+        battle_range: float = 1,
+        randomness: float = 0.75,
+        flag_reward: float = 1,
+        battle_reward_ratio: float = 0.25,
+        obstacle_penalty_ratio: float = 0,
+        step_penalty_ratio: float = 0.01,
+        max_steps: int = 100,
+        observation_option: Literal["positional", "map", "flattened"] = "positional",
+        observation_scaling: float = 1,
+        render_mode: Literal["human"] | Literal["rgb_array"] = "rgb_array",
+        uncached_object_types: list[str] = ["red_agent", "blue_agent"],
+    ) -> None:
+        """
+        Initialize a new capture the flag environment.
+
+        Parameters
+        ----------
+        map_path : str
+            Path to the map file.
+        num_blue_agents : int = 2
+            Number of blue (friendly) agents.
+        num_red_agents : int = 2
+            Number of red (enemy) agents.
+        enemy_policies : list[Type[AgentPolicyT]]=[RwwPolicy()]
+            Policies of the enemy agents. If there is only one policy, it will be used for all enemy agents.
+        battle_range : float = 1
+            Range within which battles can occur.
+        randomness : float = 0.75
+            Probability of the enemy agent winning a battle within its territory.
+        flag_reward : float = 1
+            Reward for capturing the enemy flag.
+        battle_reward_ratio : float = 0.25
+            Ratio of the flag reward for winning a battle.
+        obstacle_penalty_ratio : float=0
+            Ratio of the flag reward for colliding with an obstacle.
+        step_penalty_ratio : float = 0.01
+            Ratio of the flag reward for taking a step.
+        max_steps : int=100
+            Maximum number of steps per episode.
+        observation_option : Literal["positional", "map", "flattened"] = "positional"
+            Observation option.
+        observation_scaling : float = 1
+            Scaling factor for the observation.
+        render_mode : Literal["human", "rgb_array"] = "rgb_array"
+            Rendering mode.
+        uncached_object_types : list[str] = ["red_agent", "blue_agent"]
+            Types of objects that should not be cached.
+        """
+
+        self.num_blue_agents: Final[int] = num_blue_agents
+        self.num_red_agents: Final[int] = num_red_agents
+
+        self.battle_range: Final[float] = battle_range
+        self.randomness: Final[float] = randomness
+        self.flag_reward: Final[float] = flag_reward
+        self.battle_reward: Final[float] = battle_reward_ratio * flag_reward
+        self.obstacle_penalty: Final[float] = obstacle_penalty_ratio * flag_reward
+        self.step_penalty: Final[float] = step_penalty_ratio * flag_reward
+
+        self.observation_option: Final[Literal["positional", "map", "flattened"]] = (
+            observation_option
+        )
+        self.observation_scaling: Final[float] = observation_scaling
+
+        partial_obs: bool = False
+        agent_view_size: int = 10
+
+        self.world = CtfMAWorld
+        self.actions_set = CtfActions
+        see_through_walls: bool = False
+
+        self._map_path: Final[str] = map_path
+        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
+
+        height: int
+        width: int
+        height, width = self._field_map.shape
+
+        self.obstacle: Final[list[Position]] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["obstacle"]))
+        )
+
+        self.blue_flag: Final[Position] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_flag"]))
+        )[0]
+
+        self.red_flag: Final[Position] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_flag"]))
+        )[0]
+
+        self.blue_territory: Final[list[Position]] = list(
+            zip(
+                *np.where(self._field_map == self.world.OBJECT_TO_IDX["blue_territory"])
+            )
+        ) + [self.blue_flag]
+
+        self.red_territory: Final[list[Position]] = list(
+            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_territory"]))
+        ) + [self.red_flag]
+
+        blue_agents: list[AgentT] = [
+            Agent(
+                self.world,
+                index=i,
+                color="blue",
+                bg_color="light_blue",
+                view_size=agent_view_size,
+                actions=self.actions_set,
+                type="blue_agent",
+            )
+            for i in range(num_blue_agents)
+        ]
+
+        # Check if there is only one policy for all enemy agents.
+        if type(enemy_policies) is not list:
+            enemy_policies = [enemy_policies for _ in range(num_red_agents)]
+        else:
+            # Check if the number of policies is equal to the number of enemy agents.
+            assert len(enemy_policies) == num_red_agents
+
+        red_agents: list[AgentT] = [
+            PolicyAgent(
+                enemy_policies[i],
+                self.world,
+                index=self.num_blue_agents + i,
+                color="red",
+                bg_color="light_red",
+                view_size=agent_view_size,
+                actions=self.actions_set,
+                type="red_agent",
+            )
+            for i in range(num_red_agents)
+        ]
+
+        agents: list[AgentT] = blue_agents + red_agents
+
+        # Set the random generator and action set of the red agent from the env.
+        for agent in agents:
+            if type(agent) is PolicyAgent:
+                agent.policy.random_generator = self.np_random
+                agent.policy.action_set = self.actions_set
+            else:
+                pass
+
+        super().__init__(
+            width=width,
+            height=height,
+            max_steps=max_steps,
+            see_through_walls=see_through_walls,
+            agents=agents,
+            partial_obs=partial_obs,
+            agent_view_size=agent_view_size,
+            actions_set=self.actions_set,
+            world=self.world,
+            render_mode=render_mode,
+            uncached_object_types=uncached_object_types,
+        )
+
+    def _set_observation_space(self) -> spaces.Dict | spaces.Box:
+        match self.observation_option:
+            case "positional":
+                observation_space = spaces.Dict(
+                    {
+                        "blue_agents": spaces.Box(
+                            low=np.array(
+                                [[-1, -1] for _ in range(self.num_blue_agents)]
+                            ).flatten(),
+                            high=np.array(
+                                [
+                                    self._field_map.shape
+                                    for _ in range(self.num_blue_agents)
+                                ]
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "red_agents": spaces.Box(
+                            low=np.array(
+                                [[-1, -1] for _ in range(self.num_red_agents)]
+                            ).flatten(),
+                            high=np.array(
+                                [
+                                    self._field_map.shape
+                                    for _ in range(self.num_red_agents)
+                                ]
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "blue_flag": spaces.Box(
+                            low=np.array([0, 0]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "red_flag": spaces.Box(
+                            low=np.array([0, 0]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "blue_territory": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.blue_territory))]
+                            ).flatten(),
+                            high=np.array(
+                                np.array(
+                                    [
+                                        self._field_map.shape
+                                        for _ in range(len(self.blue_territory))
+                                    ]
+                                )
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "red_territory": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.red_territory))]
+                            ).flatten(),
+                            high=np.array(
+                                np.array(
+                                    [
+                                        self._field_map.shape
+                                        for _ in range(len(self.red_territory))
+                                    ]
+                                )
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "obstacle": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.obstacle))]
+                            ).flatten(),
+                            high=np.array(
+                                np.array(
+                                    [
+                                        self._field_map.shape
+                                        for _ in range(len(self.obstacle))
+                                    ]
+                                )
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                    }
+                )
+
+            case "map":
+                observation_space = spaces.Box(
+                    low=0,
+                    high=len(self.world.OBJECT_TO_IDX) - 1,
+                    shape=self._field_map.shape,
+                    dtype=np.int64,
+                )
+
+            case "flattened":
+                obs_high = (
+                    np.ones(
+                        [2 * (self.num_blue_agents + self.num_red_agents) + 4 + 200]
+                    )
+                    * (np.max(self._field_map.shape) - 1)
+                    / self.observation_scaling
+                )
+                obs_high[-1] = 1
+                observation_space = spaces.Box(
+                    low=np.zeros(
+                        [
+                            2 * (self.num_blue_agents + self.num_red_agents)
+                            + 4
+                            + 2 * len(self.obstacle)
+                            + 2 * len(self.blue_territory)
+                            + 2 * len(self.red_territory)
+                            + 1
+                        ]
+                    ),
+                    high=obs_high,
+                    dtype=np.int64,
+                )
+
+        return observation_space
+
+    def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
+
+        for i, j in self.blue_territory:
+            self.put_obj(
+                Floor(self.world, color="light_blue", type="blue_territory"), i, j
+            )
+
+        for i, j in self.red_territory:
+            self.put_obj(
+                Floor(self.world, color="light_red", type="red_territory"), i, j
+            )
+
+        for i, j in self.obstacle:
+            self.put_obj(Obstacle(self.world, penalty=self.obstacle_penalty), i, j)
+
+        self.put_obj(
+            Flag(
+                self.world,
+                index=0,
+                color="blue",
+                type="blue_flag",
+                bg_color="light_blue",
+            ),
+            *self.blue_flag,
+        )
+        self.put_obj(
+            Flag(
+                self.world, index=1, color="red", type="red_flag", bg_color="light_red"
+            ),
+            *self.red_flag,
+        )
+
+        self.init_grid: Grid = self.grid.copy()
+
+        # Choose non-overlapping indices for the blue agents and place them in the blue territory.
+        blue_indices: list[int] = self.np_random.choice(
+            len(self.blue_territory), self.num_blue_agents, replace=False
+        )
+        for i in range(self.num_blue_agents):
+            self.place_agent(self.agents[i], pos=self.blue_territory[blue_indices[i]])
+
+        # Choose non-overlapping indices for the red agents and place them in the red territory.
+        red_indices: list[int] = self.np_random.choice(
+            len(self.red_territory), self.num_red_agents, replace=False
+        )
+        for i in range(self.num_red_agents):
+            self.place_agent(
+                self.agents[self.num_blue_agents + i],
+                pos=self.red_territory[red_indices[i]],
+            )
