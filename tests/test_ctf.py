@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from gym_multigrid.envs.ctf import Ctf1v1Env
+from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
 
 
 def test_ctf() -> None:
@@ -32,3 +32,24 @@ def test_ctf_random_seeding() -> None:
     array2 = env.np_random.random(10)
 
     np.testing.assert_allclose(array1, array2)
+
+
+# MvN CtF test
+def test_ctf_mvn() -> None:
+    map_path: str = "tests/assets/board.txt"
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+    )
+    obs, _ = env.reset()
+    env.render()
+
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        env.render()
+        if terminated or truncated:
+            break
