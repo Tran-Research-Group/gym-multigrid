@@ -89,6 +89,7 @@ class Agent(WorldObj):
         self.terminated = False
         self.started = True
         self.paused = False
+        self.collided: bool = False
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec
@@ -355,4 +356,3 @@ class PolicyAgent(Agent):
             world, index, view_size, actions, dir_to_vec, color, bg_color, type
         )
         self.policy: AgentPolicyT = policy
-        self.defeated: bool = False
