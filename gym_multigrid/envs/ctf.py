@@ -48,7 +48,7 @@ Ctf1v1World = World(
     },
 )
 
-CtfMAWorld = World(
+CtFMvNWorld = World(
     encode_dim=3,
     normalize_obs=1,
     COLORS=CtfColors,
@@ -656,7 +656,7 @@ class Ctf1v1Env(MultiGridEnv):
         return observation, reward, terminated, truncated, info
 
 
-class NvMCtfEnv(MultiGridEnv):
+class CtFMvNEnv(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -734,7 +734,7 @@ class NvMCtfEnv(MultiGridEnv):
         partial_obs: bool = False
         agent_view_size: int = 10
 
-        self.world = CtfMAWorld
+        self.world = CtFMvNWorld
         self.actions_set = CtfActions
         see_through_walls: bool = False
 
