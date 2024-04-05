@@ -1,3 +1,5 @@
+import os
+
 from stable_baselines3 import PPO
 import torch
 import imageio
@@ -18,16 +20,21 @@ env = CtFMvNEnv(
     observation_option="flattened",
 )
 
+print("GPU available: ", torch.cuda.is_available())
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Create the RL model
-model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=tb_log_dir)
+if os.path.exists(model_save_path + ".zip"):
+    model = PPO.load(model_save_path, env=env, device=device)
+else:
+    # Create the RL model
+    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=tb_log_dir)
 
-# Train the model
-model.learn(total_timesteps=total_timesteps, tb_log_name=tb_log_name)
+    # Train the model
+    model.learn(total_timesteps=total_timesteps, tb_log_name=tb_log_name)
 
-# Save the model
-model.save(model_save_path)
+    # Save the model
+    model.save(model_save_path)
 
 # Save an animation
 obs, _ = env.reset()
@@ -35,11 +42,11 @@ obs, _ = env.reset()
 imgs = [env.render()]
 
 while True:
-    actions = model.predict(obs)
+    actions, _ = model.predict(obs)
     obs, reward, terminated, truncated, info = env.step(actions)
     imgs.append(env.render())
 
     if terminated or truncated:
         break
 
-imageio.mimsave("out/animations/ctf_ppo.gif", imgs, fps=0.5)
+imageio.mimsave("out/animations/ctf_ppo.gif", imgs, fps=5)
