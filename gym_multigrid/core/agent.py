@@ -51,6 +51,14 @@ class MineActions(enum.IntEnum):
     build = 4
 
 
+class CtfActions(enum.IntEnum):
+    stay = 0
+    left = 1
+    down = 2
+    right = 3
+    up = 4
+
+
 AgentT = TypeVar("AgentT", bound="Agent")
 
 
@@ -81,6 +89,7 @@ class Agent(WorldObj):
         self.terminated = False
         self.started = True
         self.paused = False
+        self.collided: bool = False
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec

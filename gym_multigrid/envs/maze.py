@@ -11,7 +11,7 @@ from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.map import distance_area_point
+from gym_multigrid.utils.map import distance_area_point, load_text_map
 
 MazeColors: dict[str, NDArray] = {
     "red": np.array([228, 3, 3]),
@@ -100,7 +100,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         self.actions_set = MazeActions
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
+        self._field_map: Final[NDArray] = load_text_map(map_path)
 
         height: int
         width: int
@@ -116,9 +116,9 @@ class MazeSingleAgentEnv(MultiGridEnv):
             zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["flag"]))
         )
 
-        self.observation_option: Final[
-            Literal["positional", "map"]
-        ] = observation_option
+        self.observation_option: Final[Literal["positional", "map"]] = (
+            observation_option
+        )
 
         self._flag_reward: Final[float] = flag_reward
         self._obstacle_penalty_ratio: Final[float] = obstacle_penalty_ratio
@@ -289,9 +289,9 @@ class MazeSingleAgentEnv(MultiGridEnv):
             encoded_map[i, j] = self.world.OBJECT_TO_IDX["flag"]
 
         assert self.agents[0].pos is not None
-        encoded_map[
-            self.agents[0].pos[0], self.agents[0].pos[1]
-        ] = self.world.OBJECT_TO_IDX["agent"]
+        encoded_map[self.agents[0].pos[0], self.agents[0].pos[1]] = (
+            self.world.OBJECT_TO_IDX["agent"]
+        )
 
         return encoded_map
 

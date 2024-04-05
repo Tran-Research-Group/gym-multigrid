@@ -1,6 +1,18 @@
 import pytest
+import os
+
 import numpy as np
-from gym_multigrid.envs.ctf import Ctf1v1Env
+import imageio
+from stable_baselines3 import PPO
+
+from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
+from gym_multigrid.policy.ctf.heuristic import (
+    FightPolicy,
+    CapturePolicy,
+    PatrolPolicy,
+    RwPolicy,
+)
+from gym_multigrid.utils.map import load_text_map
 
 
 def test_ctf() -> None:
@@ -32,3 +44,139 @@ def test_ctf_random_seeding() -> None:
     array2 = env.np_random.random(10)
 
     np.testing.assert_allclose(array1, array2)
+
+
+# MvN CtF test
+def test_ctf_mvn_human() -> None:
+    map_path: str = "tests/assets/board.txt"
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+    )
+    obs, _ = env.reset()
+    env.render()
+
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        env.render()
+        if terminated or truncated:
+            break
+
+    assert terminated or truncated
+
+
+def test_ctf_mvn_rgb() -> None:
+    map_path: str = "tests/assets/board.txt"
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="rgb_array",
+        observation_option="flattened",
+    )
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave("tests/out/animations/ctf_mvn.gif", frames, duration=0.5)
+
+    assert os.path.exists("tests/out/animations/ctf_mvn.gif")
+
+
+def test_fight_policy() -> None:
+    animation_path: str = "tests/out/animations/ctf_mvn_fight_policy.gif"
+    map_path: str = "tests/assets/board.txt"
+
+    field_map = load_text_map(map_path)
+    enemy_policy = FightPolicy(field_map)
+
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+        enemy_policies=[enemy_policy, RwPolicy()],
+    )
+
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave(animation_path, frames, duration=0.5)
+
+    assert os.path.exists(animation_path)
+
+
+def test_capture_policy() -> None:
+    animation_path: str = "tests/out/animations/ctf_mvn_capture_policy.gif"
+    map_path: str = "tests/assets/board.txt"
+
+    field_map = load_text_map(map_path)
+    enemy_policy = CapturePolicy(field_map)
+
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+        enemy_policies=[enemy_policy, RwPolicy()],
+    )
+
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave(animation_path, frames, duration=0.5)
+
+    assert os.path.exists(animation_path)
+
+
+def test_patrol_policy() -> None:
+    animation_path: str = "tests/out/animations/ctf_mvn_patrol_policy.gif"
+    map_path: str = "tests/assets/board.txt"
+
+    field_map = load_text_map(map_path)
+    enemy_policy = PatrolPolicy(field_map)
+
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+        enemy_policies=enemy_policy,
+    )
+
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave(animation_path, frames, duration=0.5)
+
+    assert os.path.exists(animation_path)
