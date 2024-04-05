@@ -37,3 +37,23 @@ def load_text_map(map_path: str) -> NDArray:
     field_map: NDArray = np.loadtxt(map_path).T
 
     return field_map
+
+
+def position_in_positions(position: Position, positions: list[Position]) -> bool:
+    """Check if a position is in a list of positions"""
+    in_positions: bool = False
+
+    for pos in positions:
+        if position[0] == pos[0] and position[1] == pos[1]:
+            in_positions = True
+            break
+        else:
+            pass
+
+
+def closest_area_pos(pos: Position, area: list[Position]) -> Position:
+    """Calculate the squared distance of an area and a point"""
+    pos_np: NDArray[np.int_] = np.array(pos)
+
+    distances = [np.linalg.norm(pos_np - np.array(node)) for node in area]
+    return area[np.argmin(distances)]

@@ -1,12 +1,14 @@
-from typing import TypeVar, TypedDict
+from typing import Literal, TypeVar
 
 import numpy as np
 from numpy.random import Generator
 from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import ActionsT, CtfActions
+from gym_multigrid.core.world import WorldT, CtfWorld
 from gym_multigrid.policy.base import BaseAgentPolicy, ObservationT
 from gym_multigrid.policy.ctf.utils import a_star
+from gym_multigrid.utils.map import position_in_positions, closest_area_pos
 from gym_multigrid.typing import Position
 
 ObservationDictT = TypeVar("ObservationDictT", bound=dict)
@@ -176,31 +178,44 @@ class FightPolicy(DestinationPolicy):
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.75,
+        ego_agent: Literal["red", "blue"] = "red",
     ) -> None:
         """
         Initialize the policy.
 
         Parameters
         ----------
-        field_map : numpy.typing.NDArray
+        field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT
+        actions : gym_multigrid.core.agent.ActionsT = CtfActions
             Actions available to the agent.
-        randomness : float
+        randomness : float = 0.75
             Probability of taking an optimal action.
-
+        ego_agent : Literal["red", "blue"] = "red"
+            Controlled agent.
         """
 
         super().__init__(field_map, action_set, random_generator, randomness)
         self.name = "fight"
+        self.ego_agent: Literal["red", "blue"] = ego_agent
 
     def get_target(self, observation: ObservationDictT) -> Position:
-        assert "blue_agent" in observation
-        return observation["blue_agent"]
+        match self.ego_agent:
+            case "red":
+                assert "blue_agent" in observation
+                return observation["blue_agent"]
+            case "blue":
+                assert "red_agent" in observation
+                return observation["red_agent"]
 
     def get_start(self, observation: ObservationDictT) -> Position:
-        assert "red_agent" in observation
-        return observation["red_agent"]
+        match self.ego_agent:
+            case "red":
+                assert "red_agent" in observation
+                return observation["red_agent"]
+            case "blue":
+                assert "blue_agent" in observation
+                return observation["blue_agent"]
 
 
 class CapturePolicy(DestinationPolicy):
@@ -218,28 +233,170 @@ class CapturePolicy(DestinationPolicy):
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.75,
+        ego_agent: Literal["red", "blue"] = "red",
     ) -> None:
         """
         Initialize the policy.
 
         Parameters
         ----------
-        field_map : numpy.typing.NDArray
+        field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT
+        actions : gym_multigrid.core.agent.ActionsT = CtfActions
             Actions available to the agent.
-        randomness : float
+        randomness : float = 0.75
             Probability of taking an optimal action.
-
+        ego_agent : Literal["red", "blue"] = "red"
+            Controlled agent.
         """
 
         super().__init__(field_map, action_set, random_generator, randomness)
         self.name = "capture"
+        self.ego_agent: Literal["red", "blue"] = ego_agent
 
     def get_target(self, observation: ObservationDictT) -> Position:
-        assert "flag" in observation
-        return observation["flag"]
+        match self.ego_agent:
+            case "red":
+                assert "blue_flag" in observation
+                return observation["blue_flag"]
+            case "blue":
+                assert "red_flag" in observation
+                return observation["red_flag"]
 
     def get_start(self, observation: ObservationDictT) -> Position:
-        assert "red_agent" in observation
-        return observation["red_agent"]
+        match self.ego_agent:
+            case "red":
+                assert "red_agent" in observation
+                return observation["red_agent"]
+            case "blue":
+                assert "blue_agent" in observation
+                return observation["blue_agent"]
+
+
+class PatrolPolicy(DestinationPolicy):
+    """
+    Policy that always tries to patrol around the border between blue and red territories.
+
+    Attributes:
+        name: str
+            Policy name
+    """
+
+    def __init__(
+        self,
+        field_map: NDArray | None = None,
+        action_set: ActionsT = CtfActions,
+        random_generator: Generator | None = None,
+        randomness: float = 0.75,
+        ego_agent: Literal["red", "blue"] = "red",
+        world: WorldT = CtfWorld,
+    ) -> None:
+        """
+        Initialize the policy.
+
+        Parameters
+        ----------
+        field_map : numpy.typing.NDArray | None = None
+            Field map of the environment.
+        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+            Actions available to the agent.
+        randomness : float = 0.75
+            Probability of taking an optimal action.
+        ego_agent : Literal["red", "blue"] = "red"
+            Controlled agent.
+        world : gym_multigrid.core.world.WorldT = CtfWorld
+            World object where the policy is applied.
+        """
+
+        super().__init__(field_map, action_set, random_generator, randomness)
+        self.name = "patrol"
+        self.ego_agent: Literal["red", "blue"] = ego_agent
+        self.world: WorldT = world
+
+        self.directions: list[Position] = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+        self.boarder: list[Position]
+        self.obstacle: list[Position]
+        self.boarder, self.obstacle = self.locate_boarder(world, self.directions)
+
+    def get_target(self, observation: ObservationDictT) -> Position:
+        current_pos: Position = observation[self.ego_agent + "_agent"]
+
+        if position_in_positions(current_pos, self.boarder):
+            possible_next_pos: list[Position] = [
+                (pos[0] + dir[0], pos[1] + dir[1])
+                for pos in self.boarder
+                for dir in self.directions
+            ] + [current_pos]
+            optimal_locs: list[Position] = [
+                pos
+                for pos in possible_next_pos
+                if position_in_positions(pos, self.boarder)
+            ]
+            target: Position = self.random_generator.choice(optimal_locs)
+        else:
+            target: Position = closest_area_pos(current_pos, self.boarder)
+
+        return target
+
+    def get_start(self, observation: ObservationDictT) -> Position:
+        match self.ego_agent:
+            case "red":
+                assert "red_agent" in observation
+                return observation["red_agent"]
+            case "blue":
+                assert "blue_agent" in observation
+                return observation["blue_agent"]
+
+    def locate_boarder(
+        self, world: WorldT, directions: list[Position]
+    ) -> tuple[list[Position], list[Position]]:
+        """
+        Locate the boarder between red and blue territories.
+
+        Parameters
+        ----------
+        ego_agent : Literal["red", "blue"]
+            Controlled agent.
+
+        Returns
+        -------
+        boarder: list[Position]
+            List of positions on the boarder.
+        """
+
+        assert self.world is not None
+
+        own_territory_type: str = (
+            "red_territory" if self.ego_agent == "red" else "blue_territory"
+        )
+        opponent_territory_type: str = (
+            "red_territory" if self.ego_agent == "blue" else "blue_territory"
+        )
+
+        own_territory: list[Position] = list(
+            zip(*np.where(self.field_map == world.OBJECT_TO_IDX[own_territory_type]))
+        )
+        opponent_territory: list[Position] = list(
+            zip(
+                *np.where(
+                    self.field_map == world.OBJECT_TO_IDX[opponent_territory_type]
+                )
+            )
+        )
+        obstacle: list[Position] = list(
+            zip(*np.where(self.field_map == world.OBJECT_TO_IDX["obstacle"]))
+        )
+
+        boarder: list[Position] = []
+
+        for loc in own_territory:
+            for dir in directions:
+                new_loc: Position = (loc[0] + dir[0], loc[1] + dir[1])
+                if position_in_positions(new_loc, opponent_territory + obstacle):
+                    boarder.append(new_loc)
+                    break
+                else:
+                    pass
+
+        return boarder, obstacle
