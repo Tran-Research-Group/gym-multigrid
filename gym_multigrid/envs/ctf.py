@@ -182,6 +182,23 @@ class Ctf1v1Env(MultiGridEnv):
             actions=self.actions_set,
             type="blue_agent",
         )
+
+        if hasattr(enemy_policy, "random_generator"):
+            if enemy_policy.random_generator is None:
+                enemy_policy.random_generator = self.np_random
+            else:
+                pass
+        else:
+            pass
+
+        if hasattr(enemy_policy, "field_map"):
+            if enemy_policy.field_map is None:
+                enemy_policy.field_map = self._field_map
+            else:
+                pass
+        else:
+            pass
+
         red_agent = PolicyAgent(
             enemy_policy,
             self.world,
@@ -786,6 +803,23 @@ class CtFMvNEnv(MultiGridEnv):
         else:
             # Check if the number of policies is equal to the number of enemy agents.
             assert len(enemy_policies) == num_red_agents
+
+        for policy in enemy_policies:
+            if hasattr(policy, "random_generator"):
+                if policy.random_generator is None:
+                    policy.random_generator = self.np_random
+                else:
+                    pass
+            else:
+                pass
+
+            if hasattr(policy, "field_map"):
+                if policy.field_map is None:
+                    policy.field_map = self._field_map
+                else:
+                    pass
+            else:
+                pass
 
         red_agents: list[AgentT] = [
             PolicyAgent(
