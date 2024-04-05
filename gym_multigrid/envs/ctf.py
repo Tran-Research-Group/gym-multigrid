@@ -1280,8 +1280,10 @@ class CtFMvNEnv(MultiGridEnv):
             red_action: int = red_agent.policy.act(self._get_dict_obs())
             red_actions.append(red_action)
 
+        # NN outputs are, for some reason, not discrete.
+        rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
         # Concatenate the blue and red actions as 1D array
-        actions: Final[list[int]] = np.array(blue_actions).tolist() + red_actions
+        actions: Final[list[int]] = rounded_blue_actions.tolist() + red_actions
 
         self._move_agents(actions)
 
