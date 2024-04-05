@@ -1,8 +1,9 @@
 import pytest
 import os
+
 import numpy as np
 import imageio
-
+from stable_baselines3 import PPO
 
 from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
 
@@ -79,6 +80,6 @@ def test_ctf_mvn_rgb() -> None:
         if terminated or truncated:
             break
 
-    imageio.mimsave("tests/out/ctf_mvn.gif", frames, duration=0.5)
+    imageio.mimsave("tests/out/animations/ctf_mvn.gif", frames, duration=0.5)
 
-    assert os.path.exists("tests/out/ctf_mvn.gif")
+    assert os.path.exists("tests/out/animations/ctf_mvn.gif")
