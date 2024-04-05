@@ -1,5 +1,9 @@
 import pytest
+import os
 import numpy as np
+import imageio
+
+
 from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
 
 
@@ -35,7 +39,7 @@ def test_ctf_random_seeding() -> None:
 
 
 # MvN CtF test
-def test_ctf_mvn() -> None:
+def test_ctf_mvn_human() -> None:
     map_path: str = "tests/assets/board.txt"
     env = CtFMvNEnv(
         num_blue_agents=2,
@@ -53,3 +57,26 @@ def test_ctf_mvn() -> None:
         env.render()
         if terminated or truncated:
             break
+
+
+def test_ctf_mvn_rgb() -> None:
+    map_path: str = "tests/assets/board.txt"
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="rgb_array",
+        observation_option="flattened",
+    )
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave("tests/out/ctf_mvn.gif", frames, duration=0.5)
+
+    assert os.path.exists("tests/out/ctf_mvn.gif")
