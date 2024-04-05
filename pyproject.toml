@@ -18,6 +18,7 @@ imageio = ">=2.28.1"
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.3.1"
 stable-baselines3 = "^2.3.0"
+tensorboard = "^2.16.2"
 
 [build-system]
 requires = ["poetry-core"]
