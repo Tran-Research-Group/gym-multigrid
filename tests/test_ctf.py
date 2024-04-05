@@ -58,6 +58,8 @@ def test_ctf_mvn_human() -> None:
         if terminated or truncated:
             break
 
+    assert terminated or truncated
+
 
 def test_ctf_mvn_rgb() -> None:
     map_path: str = "tests/assets/board.txt"
