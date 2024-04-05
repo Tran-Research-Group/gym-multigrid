@@ -157,7 +157,7 @@ def test_patrol_policy() -> None:
     map_path: str = "tests/assets/board.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = PatrolPolicy(field_map, ego_agent="red")
+    enemy_policy = PatrolPolicy(field_map)
 
     env = CtFMvNEnv(
         num_blue_agents=2,
@@ -165,7 +165,7 @@ def test_patrol_policy() -> None:
         map_path=map_path,
         render_mode="human",
         observation_option="flattened",
-        enemy_policies=[enemy_policy, RwPolicy()],
+        enemy_policies=enemy_policy,
     )
 
     obs, _ = env.reset()
