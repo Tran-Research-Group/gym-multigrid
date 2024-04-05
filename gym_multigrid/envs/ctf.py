@@ -1378,9 +1378,14 @@ class CtFMvNEnv(MultiGridEnv):
                 else:
                     reward -= self.battle_reward
                     self.agents[blue_agent_idx].terminated = True
-                    terminated = True
             else:
                 pass
+
+        # Check if all the blue agents are defeated.
+        if all(agent.terminated for agent in self.agents[0 : self.num_blue_agents]):
+            terminated = True
+        else:
+            pass
 
         reward -= self.step_penalty * self.num_blue_agents
 
