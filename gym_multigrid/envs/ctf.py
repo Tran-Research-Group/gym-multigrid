@@ -10,60 +10,12 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import World
+from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.policy.ctf.heuristic import RwPolicy
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
-
-
-CtfColors: dict[str, NDArray] = {
-    "red": np.array([228, 3, 3]),
-    "orange": np.array([255, 140, 0]),
-    "yellow": np.array([255, 237, 0]),
-    "green": np.array([0, 128, 38]),
-    "blue": np.array([0, 77, 255]),
-    "purple": np.array([117, 7, 135]),
-    "brown": np.array([120, 79, 23]),
-    "grey": np.array([100, 100, 100]),
-    "light_red": np.array([255, 228, 225]),
-    "light_blue": np.array([240, 248, 255]),
-    "white": np.array([255, 250, 250]),
-    "red_grey": np.array([170, 152, 169]),
-    "blue_grey": np.array([140, 146, 172]),
-}
-
-
-Ctf1v1World = World(
-    encode_dim=3,
-    normalize_obs=1,
-    COLORS=CtfColors,
-    OBJECT_TO_IDX={
-        "blue_territory": 0,
-        "red_territory": 1,
-        "blue_agent": 2,
-        "red_agent": 3,
-        "blue_flag": 4,
-        "red_flag": 5,
-        "obstacle": 6,
-    },
-)
-
-CtFMvNWorld = World(
-    encode_dim=3,
-    normalize_obs=1,
-    COLORS=CtfColors,
-    OBJECT_TO_IDX={
-        "blue_territory": 0,
-        "red_territory": 1,
-        "blue_agent": 2,
-        "red_agent": 3,
-        "blue_flag": 4,
-        "red_flag": 5,
-        "obstacle": 6,
-    },
-)
 
 
 class ObservationDict(TypedDict):
@@ -141,7 +93,7 @@ class Ctf1v1Env(MultiGridEnv):
         partial_obs: bool = False
         agent_view_size: int = 10
 
-        self.world = Ctf1v1World
+        self.world = CtfWorld
         self.actions_set = CtfActions
         see_through_walls: bool = False
 
@@ -752,7 +704,7 @@ class CtFMvNEnv(MultiGridEnv):
         partial_obs: bool = False
         agent_view_size: int = 10
 
-        self.world = CtFMvNWorld
+        self.world = CtfWorld
         self.actions_set = CtfActions
         see_through_walls: bool = False
 
