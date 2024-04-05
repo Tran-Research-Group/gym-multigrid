@@ -50,6 +50,8 @@ def position_in_positions(position: Position, positions: list[Position]) -> bool
         else:
             pass
 
+    return in_positions
+
 
 def closest_area_pos(pos: Position, area: list[Position]) -> Position:
     """Calculate the squared distance of an area and a point"""
