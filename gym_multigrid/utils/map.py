@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 
 from gym_multigrid.typing import Position
 
@@ -16,3 +17,23 @@ def distance_area_point(point: Position, area: list[Position]) -> float:
     """Calculate the squared distance of an area and a point"""
     distances = [np.linalg.norm(np.array(point) - np.array(node)) for node in area]
     return float(np.min(distances))
+
+
+def load_text_map(map_path: str) -> NDArray:
+    """
+    Load a map from a text file
+
+    Parameters
+    ----------
+    map_path : str
+        Path to the map file (relative to the current directory to execute the script using this function).
+
+    Returns
+    -------
+    field_map : numpy.typing.NDArray
+        Field map of the environment.
+
+    """
+    field_map: NDArray = np.loadtxt(map_path).T
+
+    return field_map

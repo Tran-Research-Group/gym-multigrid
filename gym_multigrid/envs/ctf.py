@@ -15,7 +15,7 @@ from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.policy.ctf.heuristic import RwPolicy
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.map import distance_area_point, distance_points
+from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
 
 
 CtfColors: dict[str, NDArray] = {
@@ -146,8 +146,7 @@ class Ctf1v1Env(MultiGridEnv):
         see_through_walls: bool = False
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
-
+        self._field_map: Final[NDArray] = load_text_map(map_path)
         height: int
         width: int
         height, width = self._field_map.shape
@@ -741,8 +740,7 @@ class CtFMvNEnv(MultiGridEnv):
         see_through_walls: bool = False
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
-
+        self._field_map: Final[NDArray] = load_text_map(map_path)
         height: int
         width: int
         height, width = self._field_map.shape
