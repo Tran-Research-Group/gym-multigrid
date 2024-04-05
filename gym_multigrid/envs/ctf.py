@@ -12,8 +12,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.base import AgentPolicyT
-from gym_multigrid.policy.ctf.heuristic import RwPolicy
+from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
 
@@ -40,7 +39,7 @@ class Ctf1v1Env(MultiGridEnv):
     def __init__(
         self,
         map_path: str,
-        enemy_policy: AgentPolicyT = RwPolicy(),
+        enemy_policy: CtfPolicyT = RwPolicy(),
         battle_range: float = 1.0,
         randomness: float = 0.75,
         flag_reward: float = 1.0,
@@ -60,7 +59,7 @@ class Ctf1v1Env(MultiGridEnv):
         ----------
         map_path : str
             Path to the map file.
-        enemy_policy : Type[AgentPolicyT]
+        enemy_policy : Type[CtfPolicyT]
             Policy of the enemy agent.
         randomness : float=0.75
             Probability of the enemy agent winning a battle within its territory.
@@ -532,7 +531,9 @@ class Ctf1v1Env(MultiGridEnv):
         self.step_count += 1
 
         assert type(self.agents[1]) is PolicyAgent
-        red_action: int = self.agents[1].policy.act(self._get_dict_obs())
+        red_action: int = self.agents[1].policy.act(
+            self._get_dict_obs(), self.agents[1].pos
+        )
 
         actions: list[int] = [action, red_action]
 
@@ -636,7 +637,7 @@ class CtFMvNEnv(MultiGridEnv):
         map_path: str,
         num_blue_agents: int = 2,
         num_red_agents: int = 2,
-        enemy_policies: list[AgentPolicyT] | AgentPolicyT = RwPolicy(),
+        enemy_policies: list[CtfPolicyT] | CtfPolicyT = RwPolicy(),
         battle_range: float = 1,
         randomness: float = 0.75,
         flag_reward: float = 1,
@@ -660,7 +661,7 @@ class CtFMvNEnv(MultiGridEnv):
             Number of blue (friendly) agents.
         num_red_agents : int = 2
             Number of red (enemy) agents.
-        enemy_policies : list[Type[AgentPolicyT]]=[RwwPolicy()]
+        enemy_policies : list[Type[CtfPolicyT]]=[RwwPolicy()]
             Policies of the enemy agents. If there is only one policy, it will be used for all enemy agents.
         battle_range : float = 1
             Range within which battles can occur.
@@ -1084,8 +1085,12 @@ class CtFMvNEnv(MultiGridEnv):
         observation: ObservationDict
 
         observation = {
-            "blue_agent": np.array(self.agents[0].pos),
-            "red_agent": np.array(self.agents[1].pos),
+            "blue_agent": np.array(
+                [agent.pos for agent in self.agents[0 : self.num_blue_agents]]
+            ).flatten(),
+            "red_agent": np.array(
+                [agent.pos for agent in self.agents[self.num_blue_agents :]]
+            ).flatten(),
             "blue_flag": np.array(self.blue_flag),
             "red_flag": np.array(self.red_flag),
             "blue_territory": np.array(self.blue_territory).flatten(),
@@ -1261,7 +1266,7 @@ class CtFMvNEnv(MultiGridEnv):
         red_actions: list[int] = []
         for red_agent in self.agents[self.num_blue_agents :]:
             assert type(red_agent) is PolicyAgent
-            red_action: int = red_agent.policy.act(self._get_dict_obs())
+            red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
 
         # NN outputs are, for some reason, not discrete.

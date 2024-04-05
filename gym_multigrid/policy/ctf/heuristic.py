@@ -12,9 +12,32 @@ from gym_multigrid.utils.map import position_in_positions, closest_area_pos
 from gym_multigrid.typing import Position
 
 ObservationDictT = TypeVar("ObservationDictT", bound=dict)
+CtfPolicyT = TypeVar("CtfPolicyT", bound="CtfPolicy")
 
 
-class RwPolicy(BaseAgentPolicy):
+class CtfPolicy(BaseAgentPolicy):
+    """
+    Abstract class for Capture the Flag agent policy
+    """
+
+    def act(self, observation: ObservationDictT, curr_pos: Position) -> int:
+        """
+        Determine the action to take.
+
+        Parameters
+        ----------
+        observation : ObservationDictT
+            Observation dictionary (dict from the env).
+
+        Returns
+        -------
+        int
+            Action to take.
+        """
+        raise NotImplementedError
+
+
+class RwPolicy(CtfPolicy):
     """
     Random walk policy
 
@@ -43,11 +66,13 @@ class RwPolicy(BaseAgentPolicy):
         super().__init__(action_set, random_generator)
         self.name = "rw"
 
-    def act(self, observation: ObservationT | None = None) -> int:
+    def act(
+        self, observation: ObservationT | None = None, curr_pos: Position | None = None
+    ) -> int:
         return self.random_generator.integers(0, len(self.action_set))
 
 
-class DestinationPolicy(BaseAgentPolicy):
+class DestinationPolicy(CtfPolicy):
     """
     Policy that always tries to reach a destination with possible randomness in action selection.
 
@@ -80,7 +105,7 @@ class DestinationPolicy(BaseAgentPolicy):
         self.field_map: NDArray | None = field_map
         self.randomness: float = randomness
 
-    def get_target(self, observation: ObservationDictT) -> Position:
+    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
         """
         Get the target position of the agent.
 
@@ -97,23 +122,7 @@ class DestinationPolicy(BaseAgentPolicy):
         # Implement this method
         ...
 
-    def get_start(self, observation: ObservationDictT) -> Position:
-        """
-        Get the start position of the agent.
-
-        Parameters
-        ----------
-        observation : ObservationDictT
-            Observation dictionary (dict from the env).
-
-        Returns
-        -------
-        Position
-            Start position of the agent.
-        """
-        ...
-
-    def act(self, observation: ObservationDictT) -> int:
+    def act(self, observation: ObservationDictT, curr_pos: Position) -> int:
         """
         Determine the action to take.
 
@@ -128,10 +137,15 @@ class DestinationPolicy(BaseAgentPolicy):
             Action to take.
         """
 
-        start: Position = self.get_start(observation)
-        target: Position = self.get_target(observation)
+        start_np: NDArray = np.array(curr_pos)
+        target_np: NDArray = np.array(self.get_target(observation, curr_pos))
+        # Convert start and target to tuple from NDArray
+        start: Position = tuple(start_np)
+        target: Position = tuple(target_np)
         shortest_path = a_star(start, target, self.field_map)
-        optimal_loc: Position = shortest_path[1] if len(shortest_path) > 1 else target
+        optimal_loc: Position = np.array(
+            shortest_path[1] if len(shortest_path) > 1 else target
+        )
 
         # Determine if the agent should take the optimal action
         is_action_optimal: bool = self.random_generator.choice(
@@ -141,7 +155,7 @@ class DestinationPolicy(BaseAgentPolicy):
         # If the optimal action is not taken, return a random action
         action: int
         if is_action_optimal:
-            action_dir: NDArray = np.array(optimal_loc) - np.array(target)
+            action_dir: NDArray = np.array(optimal_loc) - start_np
 
             # Convert the direction to an action
             # stay: (0,0), left: (0,-1), down: (-1,0), right: (0,1), up: (1,0)
@@ -199,23 +213,17 @@ class FightPolicy(DestinationPolicy):
         self.name = "fight"
         self.ego_agent: Literal["red", "blue"] = ego_agent
 
-    def get_target(self, observation: ObservationDictT) -> Position:
-        match self.ego_agent:
-            case "red":
-                assert "blue_agent" in observation
-                return observation["blue_agent"]
-            case "blue":
-                assert "red_agent" in observation
-                return observation["red_agent"]
+    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+        opponent_agent: Literal["red_agent", "blue_agent"] = (
+            "blue_agent" if self.ego_agent == "red" else "red_agent"
+        )
 
-    def get_start(self, observation: ObservationDictT) -> Position:
-        match self.ego_agent:
-            case "red":
-                assert "red_agent" in observation
-                return observation["red_agent"]
-            case "blue":
-                assert "blue_agent" in observation
-                return observation["blue_agent"]
+        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)
+        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+
+        target: Position = closest_area_pos(curr_pos, opponent_pos)
+
+        return target
 
 
 class CapturePolicy(DestinationPolicy):
@@ -254,7 +262,7 @@ class CapturePolicy(DestinationPolicy):
         self.name = "capture"
         self.ego_agent: Literal["red", "blue"] = ego_agent
 
-    def get_target(self, observation: ObservationDictT) -> Position:
+    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
         match self.ego_agent:
             case "red":
                 assert "blue_flag" in observation
@@ -262,15 +270,6 @@ class CapturePolicy(DestinationPolicy):
             case "blue":
                 assert "red_flag" in observation
                 return observation["red_flag"]
-
-    def get_start(self, observation: ObservationDictT) -> Position:
-        match self.ego_agent:
-            case "red":
-                assert "red_agent" in observation
-                return observation["red_agent"]
-            case "blue":
-                assert "blue_agent" in observation
-                return observation["blue_agent"]
 
 
 class PatrolPolicy(DestinationPolicy):
@@ -315,44 +314,34 @@ class PatrolPolicy(DestinationPolicy):
 
         self.directions: list[Position] = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
-        self.boarder: list[Position]
+        self.border: list[Position]
         self.obstacle: list[Position]
-        self.boarder, self.obstacle = self.locate_boarder(world, self.directions)
+        self.border, self.obstacle = self.locate_border(world, self.directions)
 
-    def get_target(self, observation: ObservationDictT) -> Position:
-        current_pos: Position = observation[self.ego_agent + "_agent"]
+    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
 
-        if position_in_positions(current_pos, self.boarder):
+        if position_in_positions(curr_pos, self.border):
             possible_next_pos: list[Position] = [
                 (pos[0] + dir[0], pos[1] + dir[1])
-                for pos in self.boarder
+                for pos in self.border
                 for dir in self.directions
-            ] + [current_pos]
+            ]
             optimal_locs: list[Position] = [
                 pos
                 for pos in possible_next_pos
-                if position_in_positions(pos, self.boarder)
+                if position_in_positions(pos, self.border)
             ]
             target: Position = self.random_generator.choice(optimal_locs)
         else:
-            target: Position = closest_area_pos(current_pos, self.boarder)
+            target: Position = closest_area_pos(curr_pos, self.border)
 
         return target
 
-    def get_start(self, observation: ObservationDictT) -> Position:
-        match self.ego_agent:
-            case "red":
-                assert "red_agent" in observation
-                return observation["red_agent"]
-            case "blue":
-                assert "blue_agent" in observation
-                return observation["blue_agent"]
-
-    def locate_boarder(
+    def locate_border(
         self, world: WorldT, directions: list[Position]
     ) -> tuple[list[Position], list[Position]]:
         """
-        Locate the boarder between red and blue territories.
+        Locate the border between red and blue territories.
 
         Parameters
         ----------
@@ -361,8 +350,8 @@ class PatrolPolicy(DestinationPolicy):
 
         Returns
         -------
-        boarder: list[Position]
-            List of positions on the boarder.
+        border: list[Position]
+            List of positions on the border.
         """
 
         assert self.world is not None
@@ -388,15 +377,15 @@ class PatrolPolicy(DestinationPolicy):
             zip(*np.where(self.field_map == world.OBJECT_TO_IDX["obstacle"]))
         )
 
-        boarder: list[Position] = []
+        border: list[Position] = []
 
         for loc in own_territory:
             for dir in directions:
                 new_loc: Position = (loc[0] + dir[0], loc[1] + dir[1])
                 if position_in_positions(new_loc, opponent_territory + obstacle):
-                    boarder.append(new_loc)
+                    border.append(new_loc)
                     break
                 else:
                     pass
 
-        return boarder, obstacle
+        return border, obstacle
