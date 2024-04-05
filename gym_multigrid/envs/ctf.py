@@ -30,6 +30,8 @@ CtfColors: dict[str, NDArray] = {
     "light_red": np.array([255, 228, 225]),
     "light_blue": np.array([240, 248, 255]),
     "white": np.array([255, 250, 250]),
+    "red_grey": np.array([170, 152, 169]),
+    "blue_grey": np.array([140, 146, 172]),
 }
 
 
@@ -1293,7 +1295,15 @@ class CtFMvNEnv(MultiGridEnv):
             for blue_agent in self.agents[0 : self.num_blue_agents]:
                 if blue_agent.collided:
                     reward -= self.obstacle_penalty
-                    terminated = True
+                    blue_agent.terminated = True
+                    blue_agent.color = "blue_grey"
+                else:
+                    pass
+
+            for red_agent in self.agents[self.num_blue_agents :]:
+                if red_agent.collided:
+                    red_agent.terminated = True
+                    red_agent.color = "red_grey"
                 else:
                     pass
         else:
@@ -1375,9 +1385,11 @@ class CtFMvNEnv(MultiGridEnv):
                 if blue_win:
                     reward += self.battle_reward
                     self.agents[self.num_blue_agents + red_agent_idx].terminated = True
+                    self.agents[self.num_blue_agents + red_agent_idx].color = "red_grey"
                 else:
                     reward -= self.battle_reward
                     self.agents[blue_agent_idx].terminated = True
+                    self.agents[blue_agent_idx].color = "blue_grey"
             else:
                 pass
 
