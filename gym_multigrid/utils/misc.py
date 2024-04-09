@@ -159,3 +159,39 @@ def get_central_square_coordinates(N, C):
                 coordinates.append((x, y))
 
     return coordinates
+
+
+def get_3x3_square_coordinates(center_x, center_y, grid_size):
+    """
+    Takes the center cell position (x, y) and grid size, and returns the coordinates of all cells in a 3x3 square around the center.
+
+    Args:
+      center_x: The x-coordinate of the center cell.
+      center_y: The y-coordinate of the center cell.
+      grid_size: The size of the grid (must be greater than or equal to 3).
+
+    Returns:
+      A list of tuples, where each tuple represents the (x, y) coordinates of a cell in the 3x3 square.
+
+    Raises:
+      ValueError: If grid size is less than 3.
+    """
+
+    if grid_size < 3:
+        raise ValueError("Grid size must be greater than or equal to 3.")
+
+    # Calculate offsets for the 3x3 square
+    offset = 1  # Since the square is centered, offset is 1 in each direction
+
+    # Ensure coordinates stay within grid boundaries
+    start_x = max(1, center_x - offset)
+    end_x = min(grid_size, center_x + offset)
+    start_y = max(1, center_y - offset)
+    end_y = min(grid_size, center_y + offset)
+
+    coordinates = []
+    for x in range(start_x, end_x + 1):
+        for y in range(start_y, end_y + 1):
+            coordinates.append((x, y))
+
+    return coordinates

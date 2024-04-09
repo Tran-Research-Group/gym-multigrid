@@ -12,11 +12,9 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 def test_wildfire() -> None:
     env = gym.make(
         "wildfire-v0",
-        max_episode_steps=5,
-        log_selfish_region_metrics=False,
-        two_initial_fires=False,
-        search_and_rescue=True,
-        num_rescues=5,
+        max_episode_steps=1,
+        two_initial_fires=True,
+        cooperative_reward=True,
     )
     obs, _ = env.reset()
     frames = []
@@ -32,7 +30,6 @@ def test_wildfire() -> None:
                 f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
             }
             obs, reward, terminated, truncated, info = env.step(actions)
-
             steps += 1
             frames.append(env.render())
             if terminated or truncated:
