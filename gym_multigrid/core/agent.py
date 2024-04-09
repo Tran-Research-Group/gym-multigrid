@@ -52,10 +52,11 @@ class MineActions(enum.IntEnum):
 
 
 class WildfireActions(enum.IntEnum):
-    north = 0
-    east = 1
-    south = 2
-    west = 3
+    still = 0
+    north = 1
+    east = 2
+    south = 3
+    west = 4
 
 
 AgentT = TypeVar("AgentT", bound="Agent")

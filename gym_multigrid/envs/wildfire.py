@@ -33,7 +33,7 @@ class WildfireEnv(MultiGridEnv):
         alpha=0.05,
         beta=0.99,
         delta_beta=0,
-        size=17,
+        size=5,
         num_agents=2,
         agent_view_size=10,
         initial_fire_size=1,
@@ -454,8 +454,8 @@ class WildfireEnv(MultiGridEnv):
 
         # Move agents
         for i in order:
-            # if actions[i] == self.actions.still:
-            #     continue
+            if actions[i] == self.actions.still:
+                continue
             if actions[i] == self.actions.north:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
