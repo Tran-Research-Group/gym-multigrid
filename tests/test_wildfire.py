@@ -12,7 +12,7 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 def test_wildfire() -> None:
     env = gym.make(
         "wildfire-v0",
-        max_episode_steps=100,
+        max_episode_steps=10,
         two_initial_fires=False,
         cooperative_reward=True,
     )
@@ -22,6 +22,8 @@ def test_wildfire() -> None:
     steps = 0
     ep_metric = []  # store the metric for each episode
     num_episodes = 1
+    state = env.get_state()
+    env.interpretable_state(state)
     # np.set_printoptions(threshold=sys.maxsize)
 
     for _ in range(num_episodes):
@@ -32,11 +34,17 @@ def test_wildfire() -> None:
             obs, reward, terminated, truncated, info = env.step(actions)
             steps += 1
             frames.append(env.render())
+            if steps == 5:
+                env.reset(state=state)
+                frames.append(env.render())
             if terminated or truncated:
                 break
 
-        save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=3, dpi=30)
+        # s = env.get_state()
+        # env.interpretable_state(s)
 
+        save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=1, dpi=60)
+    # save_frames_as_gif(frames, path="./", filename="wildfire-", ep=0, fps=3, dpi=30)
     # print(f"Average metric: {np.mean(ep_metric)}")
 
 

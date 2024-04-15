@@ -185,7 +185,7 @@ class WildfireEnv(MultiGridEnv):
 
         return observation_space
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width, height, state=None):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -194,27 +194,63 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        # trees_on_fire = get_central_square_coordinates(
-        #     self.grid_size_without_walls, self.initial_fire_size
-        # )
-        trees_on_fire = [
-            (
-                random.randint(1, self.grid_size_without_walls),
-                random.randint(1, self.grid_size_without_walls),
+        # assign positions of trees on fire and agents. If state is not None, match them to provided state.
+        start_pos = []
+        if state is not None:
+            state = state.reshape(
+                (
+                    self.grid_size_without_walls,
+                    self.grid_size_without_walls,
+                    self.obs_depth + 1,
+                ),
+                order="F",
             )
-        ]
+            trees_on_fire = []
+            for i in range(self.grid_size_without_walls):
+                for j in range(self.grid_size_without_walls):
+                    if state[i, j, 1] == 1:
+                        trees_on_fire.append((i + 1, j + 1))
+                    for o in self.agents:
+                        index = o.index
+                        if state[i, j, len(STATE_IDX_TO_COLOR_WILDFIRE) + index] == 1:
+                            start_pos.append((i + 1, j + 1))
+        else:
+            trees_on_fire = [
+                (
+                    random.randint(1, self.grid_size_without_walls),
+                    random.randint(1, self.grid_size_without_walls),
+                )
+            ]
+            for a in self.agents:  # random start positions for agents
+                while True:
+                    p = (
+                        np.random.choice(range(1, self.grid.width - 1)),
+                        np.random.choice(range(1, self.grid.height - 1)),
+                    )
+                    if p not in start_pos:
+                        start_pos.append(p)
+                        break
+
+        # update counts of trees on fire and healthy trees
         self.trees_on_fire += self.initial_fire_size**2
-        # assuming selfish regions don't coincide with initial fire region. If not true, update selfish_region_trees_on_fire accordingly.
+        if self.log_selfish_region_metrics:
+            for a in self.agents:
+                for pos in trees_on_fire:
+                    if self.in_selfish_region(pos[0], pos[1], a.index):
+                        self.selfish_region_trees_on_fire[a.index] += 1
 
         num_healthy_trees = self.grid_size_without_walls**2 - len(trees_on_fire)
 
+        # place on fire tree objects in grid
         for pos in trees_on_fire:
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
                 int(pos[0]),
                 int(pos[1]),
             )
-        if self.two_initial_fires:
+
+        # place on fire trees in second region
+        if state is None and self.two_initial_fires:
             self.trees_on_fire += 9
             num_healthy_trees -= 9
             cells_to_avoid = get_3x3_square_coordinates(
@@ -230,12 +266,21 @@ class WildfireEnv(MultiGridEnv):
             trees_on_fire_region2 = get_3x3_square_coordinates(
                 *fire_square_center, self.grid_size_without_walls
             )
+            if self.log_selfish_region_metrics:
+                for a in self.agents:
+                    for pos in trees_on_fire_region2:
+                        if self.in_selfish_region(pos[0], pos[1], a.index):
+                            self.selfish_region_trees_on_fire[a.index] += 1
+
+            # place on fire tree objects in grid
             for pos in trees_on_fire_region2:
                 self.put_obj(
                     Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
                     int(pos[0]),
                     int(pos[1]),
                 )
+
+        # place healthy tree objects in grid
         for _ in range(num_healthy_trees):
             self.place_obj(Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"]))
 
@@ -244,13 +289,6 @@ class WildfireEnv(MultiGridEnv):
         self.helper_grid = self.grid.copy()
 
         # Place UAVs at start positions
-        start_pos = [
-            (
-                np.random.choice(range(1, self.grid.width - 1)),
-                np.random.choice(range(1, self.grid.height - 1)),
-            )
-            for _ in range(self.num_agents)
-        ]  # random start positions for agents
         for i, a in enumerate(self.agents):
             self.place_agent(a, pos=start_pos[i])
 
@@ -351,7 +389,29 @@ class WildfireEnv(MultiGridEnv):
         # local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
         return local_obs.flatten("F")
 
-    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
+    def interpretable_state(self, state):
+        state = state.reshape(
+            (
+                self.grid_size_without_walls,
+                self.grid_size_without_walls,
+                self.obs_depth + 1,
+            ),
+            order="F",
+        )
+        print("-------------------------------------------------------------")
+        print("Interpretable state:")
+        for i in range(self.grid_size_without_walls):
+            for j in range(self.grid_size_without_walls):
+                if state[i, j, 1] == 1:
+                    print(f"Tree at position {(i,j)} is on fire.")
+                for o in self.agents:
+                    index = o.index
+                    if state[i, j, len(STATE_IDX_TO_COLOR_WILDFIRE) + index] == 1:
+                        print(f"Agent {o.index} is at position {(i,j)}.")
+
+    def reset(
+        self, seed: int | None = None, options: dict[str, Any] | None = None, state=None
+    ):
         # zero out wildfire specific variables, if any
         self.burnt_trees = 0
         self.trees_on_fire = 0
@@ -365,7 +425,10 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
 
         # reset the grid
-        super().reset(seed=seed)
+        if state is not None:
+            super().reset(seed=seed, state=state)
+        else:
+            super().reset(seed=seed)
 
         obs = OrderedDict(
             {f"{a.index}": self._get_obs(a.pos, a.index) for a in self.agents}
