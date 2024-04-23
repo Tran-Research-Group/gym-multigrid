@@ -161,27 +161,30 @@ def get_central_square_coordinates(N, C):
     return coordinates
 
 
-def get_3x3_square_coordinates(center_x, center_y, grid_size):
+def get_nxn_square_coordinates(center_x, center_y, grid_size, n):
     """
-    Takes the center cell position (x, y) and grid size, and returns the coordinates of all cells in a 3x3 square around the center.
+    Takes the center cell position (x, y) and grid size, and returns the coordinates of all cells in a n x n square around the center.
 
     Args:
       center_x: The x-coordinate of the center cell.
       center_y: The y-coordinate of the center cell.
-      grid_size: The size of the grid (must be greater than or equal to 3).
+      grid_size: The size of the grid (must be greater than or equal to n).
+      n: The size of the square to be extracted (must be odd).
 
     Returns:
-      A list of tuples, where each tuple represents the (x, y) coordinates of a cell in the 3x3 square.
+      A list of tuples, where each tuple represents the (x, y) coordinates of a cell in the n x n square.
 
     Raises:
-      ValueError: If grid size is less than 3.
+      ValueError: If grid size is less than n.
     """
 
     if grid_size < 3:
         raise ValueError("Grid size must be greater than or equal to 3.")
 
-    # Calculate offsets for the 3x3 square
-    offset = 1  # Since the square is centered, offset is 1 in each direction
+    # Calculate offsets for the n x n square
+    offset = int(
+        (n - 1) / 2
+    )  # Since the square is centered, offset is (n-1)/2 in each direction
 
     # Ensure coordinates stay within grid boundaries
     start_x = max(1, center_x - offset)

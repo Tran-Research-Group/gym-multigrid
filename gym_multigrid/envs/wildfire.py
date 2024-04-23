@@ -14,7 +14,7 @@ from gym_multigrid.utils.misc import (
     render_agent_tile,
     get_central_square_coordinates,
     render_rescue_tile,
-    get_3x3_square_coordinates,
+    get_nxn_square_coordinates,
 )
 from collections import OrderedDict
 from gymnasium.spaces import Box, Dict, Discrete
@@ -33,7 +33,7 @@ class WildfireEnv(MultiGridEnv):
         alpha=0.05,
         beta=0.99,
         delta_beta=0,
-        size=5,
+        size=17,
         num_agents=2,
         agent_view_size=10,
         initial_fire_size=1,
@@ -52,12 +52,14 @@ class WildfireEnv(MultiGridEnv):
         two_initial_fires=False,
         search_and_rescue=False,
         num_rescues=None,
+        irregular_shape=False,
     ):
         self.alpha = alpha
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
         self.search_and_rescue = search_and_rescue
+        self.irregular_shape = irregular_shape
         if search_and_rescue:
             self.obs_depth = (
                 (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE) + 1
@@ -102,8 +104,8 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
             self.selfish_region_size = (
-                self.selfish_xmax - self.selfish_xmin + np.ones(2)
-            ) * (self.selfish_ymax - self.selfish_ymin + np.ones(2))
+                self.selfish_xmax - self.selfish_xmin + np.ones(self.num_agents)
+            ) * (self.selfish_ymax - self.selfish_ymin + np.ones(self.num_agents))
 
         if self.cooperative_reward:
             agents = [
@@ -119,15 +121,16 @@ class WildfireEnv(MultiGridEnv):
         else:
             if num_agents > 6:
                 raise NotImplementedError("add more colors in constants.py")
-            # agent_colors = [
-            #     "red",
-            #     "yellow",
-            #     "blue",
-            #     "purple",
-            #     "light_red",
-            #     "light_blue",
-            # ]
-            agent_colors = ["red", "blue"]
+            if num_agents == 5:
+                agent_colors = [
+                    "yellow",
+                    "yellow",
+                    "purple",
+                    "purple",
+                    "purple",
+                ]
+            if num_agents == 2:
+                agent_colors = ["red", "blue"]
             agents = [
                 Agent(
                     world=self.world,
@@ -194,6 +197,11 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
+        # # Generate internal walls to change the shape of the grid
+        # self.grid.vert_wall(23, 20)
+        # self.grid.vert_wall(22, 20)
+        # self.grid.vert_wall(24, 20)
+
         # assign positions of trees on fire and agents. If state is not None, match them to provided state.
         start_pos = []
         if state is not None:
@@ -215,12 +223,21 @@ class WildfireEnv(MultiGridEnv):
                         if state[i, j, len(STATE_IDX_TO_COLOR_WILDFIRE) + index] == 1:
                             start_pos.append((i + 1, j + 1))
         else:
-            trees_on_fire = [
-                (
-                    random.randint(1, self.grid_size_without_walls),
-                    random.randint(1, self.grid_size_without_walls),
-                )
-            ]
+            fire_square_center = (
+                random.randint(
+                    1 + ((self.initial_fire_size - 1) / 2),
+                    self.grid_size_without_walls - ((self.initial_fire_size - 1) / 2),
+                ),
+                random.randint(
+                    1 + ((self.initial_fire_size - 1) / 2),
+                    self.grid_size_without_walls - ((self.initial_fire_size - 1) / 2),
+                ),
+            )
+            trees_on_fire = get_nxn_square_coordinates(
+                *fire_square_center,
+                self.grid_size_without_walls,
+                self.initial_fire_size,
+            )
             for a in self.agents:  # random start positions for agents
                 while True:
                     p = (
@@ -389,7 +406,7 @@ class WildfireEnv(MultiGridEnv):
         # local_obs = np.array(local_obs, dtype=np.float32).reshape(-1)
         return local_obs.flatten("F")
 
-    def interpretable_state(self, state):
+    def get_state_interpretation(self, state):
         state = state.reshape(
             (
                 self.grid_size_without_walls,
@@ -408,6 +425,32 @@ class WildfireEnv(MultiGridEnv):
                     index = o.index
                     if state[i, j, len(STATE_IDX_TO_COLOR_WILDFIRE) + index] == 1:
                         print(f"Agent {o.index} is at position {(i,j)}.")
+
+    def construct_state(self, trees_on_fire, agent_pos):
+        """
+        Construct state from trees on fire and agent positions.
+        Args:
+            trees_on_fire (list): list of tuples containing positions of trees on fire. MUST be in grid without wall coordinates. Counting from 0 to grid_size_without_walls - 1.
+            agent_pos (list): list of tuples containing positions of agents, in order of agent index. MUST be in grid without wall coordinates.
+            Returns (ndarray): State representation of the environment.
+        """
+        state = np.zeros(
+            (
+                self.grid_size_without_walls,
+                self.grid_size_without_walls,
+                self.obs_depth + 1,
+            ),
+            dtype=np.float32,
+        )
+        for pos in trees_on_fire:
+            state[pos[0], pos[1], 1] = 1
+        for i, pos in enumerate(agent_pos):
+            state[
+                pos[0],
+                pos[1],
+                len(STATE_IDX_TO_COLOR_WILDFIRE) + i,
+            ] = 1
+        return state.flatten("F")
 
     def reset(
         self, seed: int | None = None, options: dict[str, Any] | None = None, state=None
