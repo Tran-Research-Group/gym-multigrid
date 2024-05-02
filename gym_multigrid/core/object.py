@@ -379,9 +379,12 @@ class Tree(WorldObj):
         self,
         world: WorldT,
         tree_state_idx: int = 0,
+        region: str = "common",
     ):
         super().__init__(world, "tree", STATE_IDX_TO_COLOR_WILDFIRE[tree_state_idx])
         self.state = tree_state_idx
+        self.agent_above = False
+        self.region = region
 
     def can_overlap(self):
         return True

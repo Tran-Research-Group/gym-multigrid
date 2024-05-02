@@ -161,13 +161,13 @@ def get_central_square_coordinates(N, C):
     return coordinates
 
 
-def get_nxn_square_coordinates(center_x, center_y, grid_size, n):
+def get_nxn_square_coordinates(x, y, grid_size, n):
     """
     Takes the center cell position (x, y) and grid size, and returns the coordinates of all cells in a n x n square around the center.
 
     Args:
-      center_x: The x-coordinate of the center cell.
-      center_y: The y-coordinate of the center cell.
+      x: The x-coordinate of the center cell if n is odd, or the x-coordinate of the top-left corner cell if n is even.
+      y: The y-coordinate of the center cell if n is odd, or the y-coordinate of the top-left corner cell if n is even.
       grid_size: The size of the grid (must be greater than or equal to n).
       n: The size of the square to be extracted (must be odd).
 
@@ -181,20 +181,28 @@ def get_nxn_square_coordinates(center_x, center_y, grid_size, n):
     if grid_size < 3:
         raise ValueError("Grid size must be greater than or equal to 3.")
 
-    # Calculate offsets for the n x n square
-    offset = int(
-        (n - 1) / 2
-    )  # Since the square is centered, offset is (n-1)/2 in each direction
+    if n % 2 == 0:
+        coordinates = []
+        for i in range(x, x + n):
+            for j in range(y, y + n):
+                coordinates.append((i, j))
 
-    # Ensure coordinates stay within grid boundaries
-    start_x = max(1, center_x - offset)
-    end_x = min(grid_size, center_x + offset)
-    start_y = max(1, center_y - offset)
-    end_y = min(grid_size, center_y + offset)
+        return coordinates
+    else:
+        # Calculate offsets for the n x n square
+        offset = int(
+            (n - 1) / 2
+        )  # Since the square is centered, offset is (n-1)/2 in each direction
 
-    coordinates = []
-    for x in range(start_x, end_x + 1):
-        for y in range(start_y, end_y + 1):
-            coordinates.append((x, y))
+        # Ensure coordinates stay within grid boundaries
+        start_x = max(1, x - offset)
+        end_x = min(grid_size, x + offset)
+        start_y = max(1, y - offset)
+        end_y = min(grid_size, y + offset)
 
-    return coordinates
+        coordinates = []
+        for x in range(start_x, end_x + 1):
+            for y in range(start_y, end_y + 1):
+                coordinates.append((x, y))
+
+        return coordinates
