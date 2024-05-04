@@ -33,7 +33,7 @@ def test_wildfire() -> None:
     frames.append(env.render())
     steps = 0
     num_episodes = 1
-    # state = env.get_state()
+    state = env.get_state()
 
     for _ in range(num_episodes):
         # start = timeit.default_timer()

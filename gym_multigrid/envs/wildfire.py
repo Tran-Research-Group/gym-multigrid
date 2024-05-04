@@ -100,8 +100,14 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
             self.selfish_region_size = (
-                self.selfish_xmax - self.selfish_xmin + np.ones(self.num_agents)
-            ) * (self.selfish_ymax - self.selfish_ymin + np.ones(self.num_agents))
+                self.selfish_xmax
+                - self.selfish_xmin
+                + np.ones(len(selfish_region_xmin))
+            ) * (
+                self.selfish_ymax
+                - self.selfish_ymin
+                + np.ones(len(selfish_region_ymin))
+            )
             if group_reward:
                 self.region_agent_map = {f"{i}": i for i in range(self.num_agents)}
 
@@ -163,8 +169,9 @@ class WildfireEnv(MultiGridEnv):
         )
 
     def _set_observation_space(self) -> Dict:
-        low = np.full(self.obs_depth * (self.grid_size_without_walls**2), 0)
-        high = np.full(self.obs_depth * (self.grid_size_without_walls**2), 1)
+        # one at the end is for time aware observation
+        low = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 0)
+        high = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 1)
         if (
             self.partial_obs
         ):  # right now partial obs is not supported. Modify to shorten low and high arrays.
@@ -203,9 +210,9 @@ class WildfireEnv(MultiGridEnv):
         self.grid.vert_wall(width - 1, 0)
 
         # assign positions of trees on fire and agents. If state is not None, match them to provided state.
-        start_pos = []
+        start_pos = []  # agent start positions
         if state is not None:
-            state = state.reshape(
+            state = state[:-1].reshape(
                 (
                     self.obs_depth + 1,
                     self.grid_size_without_walls,
@@ -213,6 +220,7 @@ class WildfireEnv(MultiGridEnv):
                 ),
             )
             trees_on_fire = []
+            # we assume given state does not contain burnt trees
             for i in range(self.grid_size_without_walls):
                 for j in range(self.grid_size_without_walls):
                     if state[1, j, i] == 1:
@@ -277,13 +285,15 @@ class WildfireEnv(MultiGridEnv):
         for pos in trees_on_fire:
             # determine region of tree
             region = "common"
-            for a in self.agents:  # need to modify it for group reward
-                if self.in_selfish_region(pos[0], pos[1], a.index):
-                    region = f"{a.index}"
-                    # update count of trees on fire in selfish regions
-                    if self.log_selfish_region_metrics:
+            if self.log_selfish_region_metrics:
+                for a in self.agents:  # need to modify it for group reward
+                    if self.in_selfish_region(pos[0], pos[1], a.index):
+                        # selfish region is identified by accessing the lists xmin etc. at index = agent index
+                        region = f"{a.index}"
+                        # update count of trees on fire in selfish regions
                         self.selfish_region_trees_on_fire[a.index] += 1
-                    break
+                        break
+
             # insert tree object in grid
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"], region=region),
@@ -306,15 +316,15 @@ class WildfireEnv(MultiGridEnv):
             # place on fire trees in grid
             for pos in trees_on_fire_region2:
                 region = "common"
-                for a in self.agents:  # need to modify it for group reward
-                    if self.in_selfish_region(pos[0], pos[1], a.index):
-                        region = f"{a.index}"
-                        if self.log_selfish_region_metrics:
+                if self.log_selfish_region_metrics:
+                    for a in self.agents:  # need to modify it for group reward
+                        if self.in_selfish_region(pos[0], pos[1], a.index):
+                            # selfish region is identified by accessing the lists xmin etc. at index = agent index
+                            region = f"{a.index}"
                             self.selfish_region_trees_on_fire[a.index] += 1
-                        break
-                tre = Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"], region=region)
+                            break
                 self.put_obj(
-                    tre,
+                    Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"]),
                     int(pos[0]),
                     int(pos[1]),
                 )
@@ -323,10 +333,11 @@ class WildfireEnv(MultiGridEnv):
         for _ in range(num_healthy_trees):
             tree_obj = Tree(self.world, STATE_TO_IDX_WILDFIRE["healthy"])
             self.place_obj(tree_obj)
-            for a in self.agents:  # need to modify it for group reward
-                if self.in_selfish_region(*(tree_obj.pos), a.index):
-                    tree_obj.region = f"{a.index}"
-                    break
+            if self.log_selfish_region_metrics:
+                for a in self.agents:  # need to modify it for group reward
+                    if self.in_selfish_region(*(tree_obj.pos), a.index):
+                        tree_obj.region = f"{a.index}"
+                        break
 
         # Helper grid is a work around for grid unable to store multiple objects at a single cell.
         # Helper grid is the grid without agents.
@@ -399,10 +410,12 @@ class WildfireEnv(MultiGridEnv):
             raise NotImplementedError(
                 "Observation normalization is not currently implemented because they are already normalized (1-hot encoded)."
             )
-        agent_obs = [
-            np.array(agent_obs[a.index], dtype=np.float32).flatten()
-            for a in self.agents
-        ]
+
+        # append normalized time step to agent observations
+        for a in self.agents:
+            agent_obs[a.index] = np.append(
+                agent_obs[a.index].flatten(), self.step_count / self.max_steps
+            )
         return agent_obs
 
     def get_state(self) -> OrderedDict:
@@ -419,8 +432,6 @@ class WildfireEnv(MultiGridEnv):
             if o.type == "tree":
                 s[o.state, o.pos[1] - 1, o.pos[0] - 1] = 1
 
-        # search and rescue version not implemented
-
         for a in self.agents:
             s[
                 len(STATE_IDX_TO_COLOR_WILDFIRE) + a.index, a.pos[1] - 1, a.pos[0] - 1
@@ -430,10 +441,13 @@ class WildfireEnv(MultiGridEnv):
             raise NotImplementedError(
                 "Observation normalization is not currently implemented because they are already normalized (1-hot encoded)."
             )
-        return s.flatten()
+
+        s = np.append(s.flatten(), self.step_count / self.max_steps)
+        return s
 
     def get_state_interpretation(self, state, print_interpretation=True):
-        state = state.reshape(
+        time_step = state[-1]
+        state = state[:-1].reshape(
             (
                 self.obs_depth + 1,
                 self.grid_size_without_walls,
@@ -456,9 +470,12 @@ class WildfireEnv(MultiGridEnv):
                     if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + index, j, i] == 1:
                         if print_interpretation:
                             print(f"Agent {o.index} is at position {(i,j)}.")
-        return fire_tree_positions
+        if print_interpretation:
+            print(f"Time step: {time_step}")
+            print("-------------------------------------------------------------")
+        return fire_tree_positions, time_step
 
-    def construct_state(self, trees_on_fire, agent_pos):
+    def construct_state(self, trees_on_fire, agent_pos, time_step: int):
         """
         Construct state from trees on fire and agent positions. No burnt trees in the state.
         Args:
@@ -485,7 +502,8 @@ class WildfireEnv(MultiGridEnv):
                 pos[1],
                 pos[0],
             ] = 1
-        return state.flatten()
+        state = np.append(state.flatten(), time_step / self.max_steps)
+        return state
 
     def reset(
         self, seed: int | None = None, options: dict[str, Any] | None = None, state=None
@@ -504,6 +522,7 @@ class WildfireEnv(MultiGridEnv):
         else:
             super().reset(seed=seed)
 
+        # get agent observations
         agent_obs = self._get_obs()
         obs = OrderedDict({f"{a.index}": agent_obs[a.index] for a in self.agents})
 
@@ -737,14 +756,6 @@ class WildfireEnv(MultiGridEnv):
                                 0.5 if o.region == f"{agent.index}" else 0.1
                             )
                     return np.array(reward)
-
-            if self.search_and_rescue:
-                if tuple(agent.pos) in self.cells_to_rescue:
-                    reward += 20
-                    self.time_to_rescue = np.append(
-                        self.time_to_rescue, self.step_count
-                    )
-                    self.cells_to_rescue.remove(tuple(agent.pos))
         return reward
 
     def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
