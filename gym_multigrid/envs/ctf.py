@@ -18,17 +18,28 @@ from gym_multigrid.utils.map import distance_area_point, distance_points, load_t
 
 
 class ObservationDict(TypedDict):
-    blue_agent: NDArray
-    red_agent: NDArray
-    blue_flag: NDArray
-    red_flag: NDArray
-    blue_territory: NDArray
-    red_territory: NDArray
-    obstacle: NDArray
+    blue_agent: NDArray[np.int_]
+    red_agent: NDArray[np.int_]
+    blue_flag: NDArray[np.int_]
+    red_flag: NDArray[np.int_]
+    blue_territory: NDArray[np.int_]
+    red_territory: NDArray[np.int_]
+    obstacle: NDArray[np.int_]
     is_red_agent_defeated: int
 
 
-Observation: TypeAlias = ObservationDict | NDArray
+class MultiAgentObservationDict(TypedDict):
+    blue_agents: NDArray[np.int_]
+    red_agents: NDArray[np.int_]
+    blue_flag: NDArray[np.int_]
+    red_flag: NDArray[np.int_]
+    blue_territory: NDArray[np.int_]
+    red_territory: NDArray[np.int_]
+    obstacle: NDArray[np.int_]
+    terminated_agents: NDArray[np.int_]
+
+
+Observation: TypeAlias = ObservationDict | NDArray[np.int_]
 
 
 class Ctf1v1Env(MultiGridEnv):
@@ -1078,17 +1089,17 @@ class CtFMvNEnv(MultiGridEnv):
 
         return observation
 
-    def _get_dict_obs(self) -> ObservationDict:
+    def _get_dict_obs(self) -> MultiAgentObservationDict:
         for a in self.agents:
             assert a.pos is not None
 
-        observation: ObservationDict
+        observation: MultiAgentObservationDict
 
         observation = {
-            "blue_agent": np.array(
+            "blue_agents": np.array(
                 [agent.pos for agent in self.agents[0 : self.num_blue_agents]]
             ).flatten(),
-            "red_agent": np.array(
+            "red_agents": np.array(
                 [agent.pos for agent in self.agents[self.num_blue_agents :]]
             ).flatten(),
             "blue_flag": np.array(self.blue_flag),

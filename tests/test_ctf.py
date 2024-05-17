@@ -13,6 +13,7 @@ from gym_multigrid.policy.ctf.heuristic import (
     RwPolicy,
 )
 from gym_multigrid.utils.map import load_text_map
+import matplotlib.pyplot as plt
 
 
 def test_ctf() -> None:
@@ -97,7 +98,7 @@ def test_fight_policy() -> None:
     map_path: str = "tests/assets/board.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = FightPolicy(field_map)
+    enemy_policy = FightPolicy()
 
     env = CtFMvNEnv(
         num_blue_agents=2,
@@ -180,3 +181,25 @@ def test_patrol_policy() -> None:
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
+
+
+def test_mvn_ctf_render() -> None:
+    img_save_path: str = "tests/out/plots/mvn_ctf_render.png"
+    map_path: str = "tests/assets/board.txt"
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+    )
+    obs, _ = env.reset()
+
+    for _ in range(1):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+
+    img = env.render()
+    plt.imsave(img_save_path, img, dpi=600)
+
+    assert os.path.exists(img_save_path)
