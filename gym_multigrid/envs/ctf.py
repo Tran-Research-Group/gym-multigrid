@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import CtfWorld
+from gym_multigrid.core.world import CtfWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
 from gym_multigrid.typing import Position
@@ -101,7 +101,7 @@ class Ctf1v1Env(MultiGridEnv):
         partial_obs: bool = False
         agent_view_size: int = 10
 
-        self.world = CtfWorld
+        self.world: Final[World] = CtfWorld
         self.actions_set = CtfActions
         see_through_walls: bool = False
 
