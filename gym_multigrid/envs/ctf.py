@@ -29,8 +29,8 @@ class ObservationDict(TypedDict):
 
 
 class MultiAgentObservationDict(TypedDict):
-    blue_agents: NDArray[np.int_]
-    red_agents: NDArray[np.int_]
+    blue_agent: NDArray[np.int_]
+    red_agent: NDArray[np.int_]
     blue_flag: NDArray[np.int_]
     red_flag: NDArray[np.int_]
     blue_territory: NDArray[np.int_]
@@ -39,7 +39,7 @@ class MultiAgentObservationDict(TypedDict):
     terminated_agents: NDArray[np.int_]
 
 
-Observation: TypeAlias = ObservationDict | NDArray[np.int_]
+Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
 class Ctf1v1Env(MultiGridEnv):
