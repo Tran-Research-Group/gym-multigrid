@@ -389,3 +389,75 @@ class PatrolPolicy(DestinationPolicy):
                     pass
 
         return border, obstacle
+
+
+class PatrolFightPolicy(PatrolPolicy):
+    """
+    Policy that always tries to patrol around the border between blue and red territories and, once the opponent agent enters the ego territory, it tries to fight by taking the shortest path the opponent.
+
+    Attributes:
+        name: str
+            Policy name
+    """
+
+    def __init__(
+        self,
+        field_map: NDArray | None = None,
+        action_set: ActionsT = CtfActions,
+        random_generator: Generator | None = None,
+        randomness: float = 0.75,
+        ego_agent: Literal["red", "blue"] = "red",
+        world: WorldT = CtfWorld,
+    ) -> None:
+        """
+        Initialize the policy.
+
+        Parameters
+        ----------
+        field_map : numpy.typing.NDArray | None = None
+            Field map of the environment.
+        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+            Actions available to the agent.
+        randomness : float = 0.75
+            Probability of taking an optimal action.
+        ego_agent : Literal["red", "blue"] = "red"
+            Controlled agent.
+        world : gym_multigrid.core.world.WorldT = CtfWorld
+            World object where the policy is applied.
+        """
+
+        super().__init__(
+            field_map, action_set, random_generator, randomness, ego_agent, world
+        )
+        self.name = "patrol_fight"
+
+    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+        opponent_agent: Literal["red_agent", "blue_agent"] = (
+            "blue_agent" if self.ego_agent == "red" else "red_agent"
+        )
+        ego_territory: Literal["red_territory", "blue_territory"] = (
+            "red_territory" if self.ego_agent == "red" else "blue_territory"
+        )
+
+        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)
+        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+
+        ego_territory_pos_np: NDArray = observation[ego_territory].reshape(-1, 2)
+        ego_territory_pos: list[Position] = [tuple(pos) for pos in ego_territory_pos_np]
+
+        # Check if the opponent agent is in the ego territory
+        is_opponent_in_ego_territory: bool = False
+        for pos in opponent_pos:
+            if position_in_positions(pos, ego_territory_pos):
+                is_opponent_in_ego_territory = True
+                break
+            else:
+                pass
+
+        target: Position = (
+            closest_area_pos(curr_pos, opponent_pos)
+            if is_opponent_in_ego_territory
+            else super().get_target(observation, curr_pos)
+        )
+
+        return target

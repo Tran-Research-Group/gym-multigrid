@@ -11,6 +11,7 @@ from gym_multigrid.policy.ctf.heuristic import (
     CapturePolicy,
     PatrolPolicy,
     RwPolicy,
+    PatrolFightPolicy,
 )
 from gym_multigrid.utils.map import load_text_map
 import matplotlib.pyplot as plt
@@ -159,6 +160,36 @@ def test_patrol_policy() -> None:
 
     field_map = load_text_map(map_path)
     enemy_policy = PatrolPolicy(field_map)
+
+    env = CtFMvNEnv(
+        num_blue_agents=2,
+        num_red_agents=2,
+        map_path=map_path,
+        render_mode="human",
+        observation_option="flattened",
+        enemy_policies=enemy_policy,
+    )
+
+    obs, _ = env.reset()
+    frames = [env.render()]
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave(animation_path, frames, duration=0.5)
+
+    assert os.path.exists(animation_path)
+
+
+def test_patrol_fight_policy() -> None:
+    animation_path: str = "tests/out/animations/ctf_mvn_patrol_fight_policy.gif"
+    map_path: str = "tests/assets/board.txt"
+
+    field_map = load_text_map(map_path)
+    enemy_policy = PatrolFightPolicy(field_map)
 
     env = CtFMvNEnv(
         num_blue_agents=2,
