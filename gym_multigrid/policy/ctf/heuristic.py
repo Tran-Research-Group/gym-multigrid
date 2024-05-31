@@ -179,7 +179,7 @@ class DestinationPolicy(CtfPolicy):
 
 class FightPolicy(DestinationPolicy):
     """
-    Policy that always tries to fight
+    Policy that always tries to fight by taking the shortest path to the opponent agent with some stochasticity.
 
     Attributes:
         name: str
@@ -228,7 +228,7 @@ class FightPolicy(DestinationPolicy):
 
 class CapturePolicy(DestinationPolicy):
     """
-    Policy that always tries to capture the flag
+    Policy that always tries to capture the flag by taking the shortest path to the opponent flag with some stochasticity.
 
     Attributes:
         name: str
@@ -274,7 +274,7 @@ class CapturePolicy(DestinationPolicy):
 
 class PatrolPolicy(DestinationPolicy):
     """
-    Policy that always tries to patrol around the border between blue and red territories.
+    Policy that always tries to patrol around the border between blue and red territories with some stochasticity.
 
     Attributes:
         name: str

@@ -44,7 +44,7 @@ Observation: TypeAlias = ObservationDict | NDArray[np.int_]
 
 class Ctf1v1Env(MultiGridEnv):
     """
-    Environment for capture the flag with two agents.
+    Environment for capture the flag game with one ego (blue) agent and one enemy (red) agent.
     """
 
     def __init__(
