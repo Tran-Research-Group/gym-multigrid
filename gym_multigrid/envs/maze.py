@@ -1,52 +1,16 @@
-import enum
 from typing import Final, Literal, TypedDict, TypeAlias
 
 from gymnasium import spaces
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, AgentT
+from gym_multigrid.core.agent import Agent, AgentT, MazeActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import World
+from gym_multigrid.core.world import MazeWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, load_text_map
-
-MazeColors: dict[str, NDArray] = {
-    "red": np.array([228, 3, 3]),
-    "orange": np.array([255, 140, 0]),
-    "yellow": np.array([255, 237, 0]),
-    "green": np.array([0, 128, 38]),
-    "blue": np.array([0, 77, 255]),
-    "purple": np.array([117, 7, 135]),
-    "brown": np.array([120, 79, 23]),
-    "grey": np.array([100, 100, 100]),
-    "light_red": np.array([255, 228, 225]),
-    "light_blue": np.array([240, 248, 255]),
-    "white": np.array([255, 250, 250]),
-}
-
-
-class MazeActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
-
-
-MazeWorld = World(
-    encode_dim=3,
-    normalize_obs=1,
-    COLORS=MazeColors,
-    OBJECT_TO_IDX={
-        "background": 0,
-        "agent": 1,
-        "flag": 2,
-        "obstacle": 3,
-    },
-)
 
 
 class ObservationDict(TypedDict):

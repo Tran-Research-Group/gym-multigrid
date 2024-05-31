@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import COLORS
+from .constants import COLORS, CTF_COLORS, MAZE_COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -64,26 +64,10 @@ CollectWorld = World(
     },
 )
 
-CtfColors: dict[str, NDArray] = {
-    "red": np.array([228, 3, 3]),
-    "orange": np.array([255, 140, 0]),
-    "yellow": np.array([255, 237, 0]),
-    "green": np.array([0, 128, 38]),
-    "blue": np.array([0, 77, 255]),
-    "purple": np.array([117, 7, 135]),
-    "brown": np.array([120, 79, 23]),
-    "grey": np.array([100, 100, 100]),
-    "light_red": np.array([255, 228, 225]),
-    "light_blue": np.array([240, 248, 255]),
-    "white": np.array([255, 250, 250]),
-    "red_grey": np.array([170, 152, 169]),
-    "blue_grey": np.array([140, 146, 172]),
-}
-
 CtfWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=CtfColors,
+    COLORS=CTF_COLORS,
     OBJECT_TO_IDX={
         "blue_territory": 0,
         "red_territory": 1,
@@ -92,5 +76,17 @@ CtfWorld = World(
         "blue_flag": 4,
         "red_flag": 5,
         "obstacle": 6,
+    },
+)
+
+MazeWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=MAZE_COLORS,
+    OBJECT_TO_IDX={
+        "background": 0,
+        "agent": 1,
+        "flag": 2,
+        "obstacle": 3,
     },
 )

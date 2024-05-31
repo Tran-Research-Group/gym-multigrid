@@ -1,7 +1,5 @@
-import enum
 from itertools import chain
-import random
-from typing import Final, Literal, TypeAlias, TypedDict, Type
+from typing import Final, Literal, TypeAlias, TypedDict
 
 from gymnasium import spaces
 import numpy as np
@@ -10,7 +8,7 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import CtfWorld
+from gym_multigrid.core.world import CtfWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
 from gym_multigrid.typing import Position
@@ -29,8 +27,8 @@ class ObservationDict(TypedDict):
 
 
 class MultiAgentObservationDict(TypedDict):
-    blue_agents: NDArray[np.int_]
-    red_agents: NDArray[np.int_]
+    blue_agent: NDArray[np.int_]
+    red_agent: NDArray[np.int_]
     blue_flag: NDArray[np.int_]
     red_flag: NDArray[np.int_]
     blue_territory: NDArray[np.int_]
@@ -39,12 +37,12 @@ class MultiAgentObservationDict(TypedDict):
     terminated_agents: NDArray[np.int_]
 
 
-Observation: TypeAlias = ObservationDict | NDArray[np.int_]
+Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
 class Ctf1v1Env(MultiGridEnv):
     """
-    Environment for capture the flag with two agents.
+    Environment for capture the flag game with one ego (blue) agent and one enemy (red) agent.
     """
 
     def __init__(
@@ -103,7 +101,7 @@ class Ctf1v1Env(MultiGridEnv):
         partial_obs: bool = False
         agent_view_size: int = 10
 
-        self.world = CtfWorld
+        self.world: Final[World] = CtfWorld
         self.actions_set = CtfActions
         see_through_walls: bool = False
 
@@ -823,11 +821,8 @@ class CtFMvNEnv(MultiGridEnv):
             uncached_object_types=uncached_object_types,
         )
 
-        self.action_space = spaces.Box(
-            low=np.array([0 for _ in range(self.num_blue_agents)]),
-            high=np.array([len(self.actions_set) for _ in range(self.num_blue_agents)])
-            - 1,
-            dtype=np.int64,
+        self.action_space = spaces.MultiDiscrete(
+            [len(self.actions_set) for _ in range(self.num_blue_agents)]
         )
         self.ac_dim = self.action_space.shape
 
@@ -836,7 +831,7 @@ class CtFMvNEnv(MultiGridEnv):
             case "positional":
                 observation_space = spaces.Dict(
                     {
-                        "blue_agents": spaces.Box(
+                        "blue_agent": spaces.Box(
                             low=np.array(
                                 [[-1, -1] for _ in range(self.num_blue_agents)]
                             ).flatten(),
@@ -849,7 +844,7 @@ class CtFMvNEnv(MultiGridEnv):
                             - 1,
                             dtype=np.int64,
                         ),
-                        "red_agents": spaces.Box(
+                        "red_agent": spaces.Box(
                             low=np.array(
                                 [[-1, -1] for _ in range(self.num_red_agents)]
                             ).flatten(),
@@ -1096,10 +1091,10 @@ class CtFMvNEnv(MultiGridEnv):
         observation: MultiAgentObservationDict
 
         observation = {
-            "blue_agents": np.array(
+            "blue_agent": np.array(
                 [agent.pos for agent in self.agents[0 : self.num_blue_agents]]
             ).flatten(),
-            "red_agents": np.array(
+            "red_agent": np.array(
                 [agent.pos for agent in self.agents[self.num_blue_agents :]]
             ).flatten(),
             "blue_flag": np.array(self.blue_flag),
@@ -1280,7 +1275,7 @@ class CtFMvNEnv(MultiGridEnv):
             red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
 
-        # NN outputs are, for some reason, not discrete.
+        # Just in case NN outputs are, for some reason, not discrete.
         rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
         # Concatenate the blue and red actions as 1D array
         actions: Final[list[int]] = rounded_blue_actions.tolist() + red_actions
