@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from numpy.typing import NDArray
 
-from .constants import COLORS
+from .constants import *
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -51,14 +51,17 @@ DefaultWorld = World(
     },
 )
 
-CollectWorld = World(
-    encode_dim=3,
-    normalize_obs=1,
-    COLORS=COLORS,
-    OBJECT_TO_IDX={
+class CollectWorld:
+    encode_dim = 3
+    normalize_obs = 1
+
+    COLOR_TO_IDX = COLOR_TO_IDX
+    IDX_TO_COLOR = IDX_TO_COLOR
+
+    OBJECT_TO_IDX = {
         "empty": 0,
         "wall": 1,
         "ball": 2,
         "agent": 3,
-    },
-)
+    }
+    IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
