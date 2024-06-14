@@ -1,9 +1,10 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
 
+import numpy as np
 from numpy.typing import NDArray
 
-from .constants import COLORS
+from .constants import COLORS, CTF_COLORS, MAZE_COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -60,5 +61,32 @@ CollectWorld = World(
         "wall": 1,
         "ball": 2,
         "agent": 3,
+    },
+)
+
+CtfWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=CTF_COLORS,
+    OBJECT_TO_IDX={
+        "blue_territory": 0,
+        "red_territory": 1,
+        "blue_agent": 2,
+        "red_agent": 3,
+        "blue_flag": 4,
+        "red_flag": 5,
+        "obstacle": 6,
+    },
+)
+
+MazeWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=MAZE_COLORS,
+    OBJECT_TO_IDX={
+        "background": 0,
+        "agent": 1,
+        "flag": 2,
+        "obstacle": 3,
     },
 )

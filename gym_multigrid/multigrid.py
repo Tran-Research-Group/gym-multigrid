@@ -39,7 +39,7 @@ class MultiGridEnv(gym.Env):
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
-    ):
+    ) -> None:
         self.agents: list[AgentT] = agents
         self.render_mode = render_mode
         self.uncahed_object_types = uncached_object_types
@@ -112,7 +112,13 @@ class MultiGridEnv(gym.Env):
 
         return observation_space
 
-    def reset(self, seed: int | None = None):
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ):
+
         super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
@@ -129,7 +135,7 @@ class MultiGridEnv(gym.Env):
             a.carrying = None
 
         # Step count since episode start
-        self.step_count = 0
+        self.step_count: int = 0
 
         # Return first observation
         if self.partial_obs:
@@ -183,7 +189,7 @@ class MultiGridEnv(gym.Env):
 
         return str
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width, height) -> None:
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
@@ -236,7 +242,7 @@ class MultiGridEnv(gym.Env):
         """
 
         lst = list(iterable)
-        idx = self._rand_int(0, len(lst))
+        idx = self._rand_int(0, len(lst) - 1)
         return lst[idx]
 
     def _rand_subset(self, iterable, num_elems):
