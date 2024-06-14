@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import COLORS, CTF_COLORS, MAZE_COLORS
+from .constants import *
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -56,7 +56,7 @@ CollectWorld = World(
     encode_dim=3,
     normalize_obs=1,
     COLORS=COLORS,
-    OBJECT_TO_IDX={
+    OBJECT_TO_IDX = {
         "empty": 0,
         "wall": 1,
         "ball": 2,
