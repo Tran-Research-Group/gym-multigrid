@@ -7,3 +7,6 @@ __pycache__/
 runs/*
 ppo_random_collect_tensorboard/*
 .DS_Store
+
+tests/out
+out

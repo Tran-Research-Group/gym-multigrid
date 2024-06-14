@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 
 # Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
@@ -15,6 +16,36 @@ COLORS = {
     "grey": np.array([100, 100, 100]),
     "light_red": np.array([234, 153, 153]),
     "light_blue": np.array([90, 170, 223]),
+}
+
+CTF_COLORS: dict[str, NDArray[np.uint]] = {
+    "red": np.array([228, 3, 3]),
+    "orange": np.array([255, 140, 0]),
+    "yellow": np.array([255, 237, 0]),
+    "green": np.array([0, 128, 38]),
+    "blue": np.array([0, 77, 255]),
+    "purple": np.array([117, 7, 135]),
+    "brown": np.array([120, 79, 23]),
+    "grey": np.array([100, 100, 100]),
+    "light_red": np.array([255, 228, 225]),
+    "light_blue": np.array([240, 248, 255]),
+    "white": np.array([255, 250, 250]),
+    "red_grey": np.array([170, 152, 169]),
+    "blue_grey": np.array([140, 146, 172]),
+}
+
+MAZE_COLORS: dict[str, NDArray[np.uint]] = {
+    "red": np.array([228, 3, 3]),
+    "orange": np.array([255, 140, 0]),
+    "yellow": np.array([255, 237, 0]),
+    "green": np.array([0, 128, 38]),
+    "blue": np.array([0, 77, 255]),
+    "purple": np.array([117, 7, 135]),
+    "brown": np.array([120, 79, 23]),
+    "grey": np.array([100, 100, 100]),
+    "light_red": np.array([255, 228, 225]),
+    "light_blue": np.array([240, 248, 255]),
+    "white": np.array([255, 250, 250]),
 }
 
 COLOR_NAMES = sorted(list(COLORS.keys()))

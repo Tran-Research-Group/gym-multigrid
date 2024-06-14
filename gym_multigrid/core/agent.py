@@ -51,6 +51,22 @@ class MineActions(enum.IntEnum):
     build = 4
 
 
+class CtfActions(enum.IntEnum):
+    stay = 0
+    left = 1
+    down = 2
+    right = 3
+    up = 4
+
+
+class MazeActions(enum.IntEnum):
+    stay = 0
+    left = 1
+    down = 2
+    right = 3
+    up = 4
+
+
 AgentT = TypeVar("AgentT", bound="Agent")
 
 
@@ -81,6 +97,7 @@ class Agent(WorldObj):
         self.terminated = False
         self.started = True
         self.paused = False
+        self.collided: bool = False
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec
@@ -210,7 +227,7 @@ class Agent(WorldObj):
 
         return self.pos + self.dir_vec
 
-    def west_pos(self):
+    def west_pos(self) -> Position:
         """
         Get the position of the cell to the left of the agent
         """
@@ -219,7 +236,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([-1, 0])
 
-    def east_pos(self):
+    def east_pos(self) -> Position:
         """
         Get the position of the cell to the right of the agent
         """
@@ -228,7 +245,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([1, 0])
 
-    def north_pos(self):
+    def north_pos(self) -> Position:
         """
         Get the position of the cell above the agent
         """
@@ -237,7 +254,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([0, -1])
 
-    def south_pos(self):
+    def south_pos(self) -> Position:
         """
         Get the position of the cell below the agent
         """

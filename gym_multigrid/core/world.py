@@ -1,6 +1,7 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
 
+import numpy as np
 from numpy.typing import NDArray
 
 from .constants import *
@@ -51,17 +52,41 @@ DefaultWorld = World(
     },
 )
 
-class CollectWorld:
-    encode_dim = 3
-    normalize_obs = 1
-
-    COLOR_TO_IDX = COLOR_TO_IDX
-    IDX_TO_COLOR = IDX_TO_COLOR
-
+CollectWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
     OBJECT_TO_IDX = {
         "empty": 0,
         "wall": 1,
         "ball": 2,
         "agent": 3,
-    }
-    IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
+    },
+)
+
+CtfWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=CTF_COLORS,
+    OBJECT_TO_IDX={
+        "blue_territory": 0,
+        "red_territory": 1,
+        "blue_agent": 2,
+        "red_agent": 3,
+        "blue_flag": 4,
+        "red_flag": 5,
+        "obstacle": 6,
+    },
+)
+
+MazeWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=MAZE_COLORS,
+    OBJECT_TO_IDX={
+        "background": 0,
+        "agent": 1,
+        "flag": 2,
+        "obstacle": 3,
+    },
+)
