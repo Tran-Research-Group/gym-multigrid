@@ -1,10 +1,17 @@
+import gymnasium as gym
 from gym_multigrid.utils.misc import save_frames_as_gif
+from gym_multigrid.core.agent import AgentT
 import torch
 import matplotlib
 import matplotlib.pyplot as plt
 
 
-def generate_policy_heatmap_with_arrows(policy, env, filename, device="cpu"):
+def generate_policy_heatmap_with_arrows(
+        policy: AgentT, 
+        env: gym.Env, 
+        filename: str, 
+        device: str = "cpu"
+    ) -> tuple[torch.Tensor, list[plt.patches.FancyArrowPatch]]:
     """
     Generates a heatmap representing the state-action values with arrows indicating the highest value action.
     Also saves an image of the rendered env.
@@ -18,7 +25,7 @@ def generate_policy_heatmap_with_arrows(policy, env, filename, device="cpu"):
     Returns:
         tuple: A tuple containing:
             - torch.Tensor: The 2D tensor representing the heatmap of state-action values.
-            - list: A list of matplotlib.patches.FancyArrowPatch objects for each state.
+            - list: A list of plt.patches.FancyArrowPatch objects for each state.
     """
     # get the initial state
     s, _ = env.reset()
@@ -71,7 +78,12 @@ def generate_policy_heatmap_with_arrows(policy, env, filename, device="cpu"):
     return heatmap, arrows
 
 
-def plot_heatmap_with_arrows(heatmap, arrows, filename, figsize=(8, 8)):
+def plot_heatmap_with_arrows(
+        heatmap: torch.Tensor, 
+        arrows: list[plt.patches.FancyArrowPatch], 
+        filename: str, 
+        figsize: tuple[int, int] = (8, 8)
+    ) -> None:
     """
     Plots the heatmap with arrows on top.
 
@@ -94,7 +106,11 @@ def plot_heatmap_with_arrows(heatmap, arrows, filename, figsize=(8, 8)):
     plt.show()
 
 
-def plot_heatmap(heatmap, filename, figsize=(8, 8)):
+def plot_heatmap(
+        heatmap: torch.Tensor, 
+        filename: str, 
+        figsize: tuple[int, int] = (8, 8)
+    ) -> None:
     """
     Plots the heatmap.
 
