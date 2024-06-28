@@ -13,8 +13,9 @@ from gym_multigrid.typing import Position
 
 
 class CollectGameEnv(MultiGridEnv):
-    """
-    Environment in which the agents have to collect the balls
+    """Environment in which the agents have to collect balls.
+
+    Inherits MultiGridEnv
     """
 
     def __init__(
@@ -26,20 +27,42 @@ class CollectGameEnv(MultiGridEnv):
         agents_index: list[int] = [],
         balls_index: list[int] = [],
         balls_reward: list[float] = [],
-        zero_sum: bool = False,
-        partial_obs: bool = False,
-        view_size: int = 7,
-        actions_set: Type[ActionsT] = CollectActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         max_steps: int = 100,
     ):
+        """Initialize the CollectGameEnv.
+
+        Parameters
+        ----------
+        size : int, optional
+            Size of grid if square. Default 10
+        width : int, optional
+            Width of grid, used if not square. Default None
+        height : int, optional
+            Height of grid, used if not square. Default None
+        num_balls : list[int]
+            Total number of balls present in environment.
+        agents_index : list[int]
+            Colour index for each agent.
+        balls_index : list[int]
+            Colour index for each ball type.
+        balls_reward : list[float]
+            Reward given for collecting each ball type.
+        render_mode : Literal["human", "rgb_array"]="rgb_array"
+            Rendering mode. See utils.rendering for details
+        max_steps : int=100
+            Maximum number of steps per episode.
+        """
+
         self.num_balls = num_balls
         self.collected_balls = 0
         self.balls_index = balls_index
         self.balls_reward = balls_reward
-        self.zero_sum = zero_sum
         self.agents_index = agents_index
         self.world = CollectWorld
+        self.actions_set = CollectActions
+        partial_obs: bool = False
+        view_size: int = 10
         self.keys = [
             "agent1ball1",
             "agent1ball2",
@@ -63,11 +86,21 @@ class CollectGameEnv(MultiGridEnv):
             agents=agents,
             partial_obs=partial_obs,
             agent_view_size=view_size,
-            actions_set=actions_set,
+            actions_set=self.actions_set,
             render_mode=render_mode,
         )
 
     def _gen_grid(self, width: int, height: int):
+        """Generate grid and place all the balls and agents.
+
+        Parameters
+        ----------
+        width : int
+            width of grid
+        height : int
+            height of grid
+        """
+
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -189,71 +222,15 @@ class CollectGameEnv(MultiGridEnv):
         obs = self.grid.encode()
         return obs, rewards, done, truncated, self.info
 
-    def simulate(self, action):
-        # need to simulate what happens without changing current env
-        def dummy_pickup(dummy_grid, fwd_pos, fwd_cell):
-            if fwd_cell:
-                if fwd_cell.can_pickup():
-                    fwd_cell.pos = np.array([-1, -1])
-                    dummy_grid.set(*fwd_pos, None)
-
-        def dummy_move(dummy_grid, next_cell, next_pos):
-            if next_cell is not None:
-                if next_cell.type == "ball":
-                    dummy_pickup(dummy_grid, next_pos, next_cell)
-                    dummy_grid.set(*next_pos, self.agents[0])
-                    dummy_grid.set(*self.agents[0].pos, None)
-            elif next_cell is None or next_cell.can_overlap():
-                dummy_grid.set(*next_pos, self.agents[0])
-                dummy_grid.set(*self.agents[0].pos, None)
-
-        def phi_v(s, snew):
-            phi = np.zeros((self.phi_dim(),))
-            for i in range(self.grid.width):
-                for j in range(self.grid.height):
-                    obj = snew.get(i, j)
-                    if obj is not None and obj.type == "agent":
-                        if s.get(i, j) is not None and s.get(i, j).type == "ball":
-                            color = self.world.COLOR_TO_IDX[s.get(i, j).color]
-                            phi[color] = 1
-            return phi
-
-        dummy_grid = self.grid.copy()
-        s = self.grid.copy()
-        if action == self.actions.north:
-            next_pos = self.agents[0].north_pos()
-            next_cell = dummy_grid.get(*next_pos)
-            dummy_move(dummy_grid, next_cell, next_pos)
-        elif action == self.actions.east:
-            next_pos = self.agents[0].east_pos()
-            next_cell = dummy_grid.get(*next_pos)
-            dummy_move(dummy_grid, next_cell, next_pos)
-        elif action == self.actions.south:
-            next_pos = self.agents[0].south_pos()
-            next_cell = dummy_grid.get(*next_pos)
-            dummy_move(dummy_grid, next_cell, next_pos)
-        elif action == self.actions.west:
-            next_pos = self.agents[0].west_pos()
-            next_cell = dummy_grid.get(*next_pos)
-            dummy_move(dummy_grid, next_cell, next_pos)
-
-        return phi_v(s, dummy_grid)
-
 
 class CollectGame3Obj2Agent(CollectGameEnv):
     def __init__(
         self,
         size: int = 10,
-        agents_index: list[int] = [3, 5],
-        width: int | None = None,
-        height: int | None = None,
         num_balls: int = 15,
+        agents_index: list[int] = [3, 5],
         balls_index: list[int] = [0, 1, 2],
         balls_reward: list[float] = [1, 1, 1],
-        zero_sum: bool = True,
-        partial_obs: bool = False,
-        view_size: int = 7,
-        actions_set: Type[ActionsT] = CollectActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         max_steps: int = 100,
     ):
@@ -263,18 +240,11 @@ class CollectGame3Obj2Agent(CollectGameEnv):
             agents_index=agents_index,
             balls_index=balls_index,
             balls_reward=balls_reward,
-            zero_sum=zero_sum,
             render_mode=render_mode,
-            width=width,
-            height=height,
             max_steps=max_steps,
-            partial_obs=partial_obs,
-            view_size=view_size,
-            actions_set=actions_set,
         )
         assert type(self.num_balls) is int
         self.num_ball_types = self.num_balls // 5
-        self.sigma = 0.1
 
     def _gen_grid(self, width: int, height: int) -> None:
         self.grid = Grid(width, height, self.world)
@@ -285,8 +255,6 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        # partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
-        # partition_size = (width // 2 + 1, height // 2 + 1)
         index = 0
         assert type(self.num_balls) is int
         num_colors: int = len(self.balls_index)
@@ -294,15 +262,11 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         num_ball: int = round(self.num_balls / num_colors)
         for ball in range(self.num_balls):
             if ball % num_ball == 0:
-                # top = partitions[ball // 5]
                 index = ball // num_ball
             self.place_obj(
                 Ball(self.world, self.balls_index[index], self.balls_reward[index])
-            )  # , top=top, size=partition_size)
-        # agent_pos = (1, height - 2)
+            )
         for a in self.agents:
-            # self.place_agent(a, pos=agent_pos)
-            # agent_pos = (agent_pos[0]+1, agent_pos[1])
             self.place_agent(a)
 
     def get_obj_grid(self, ball_idx=[0, 1, 2]):
@@ -320,32 +284,6 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                 else:
                     arr[i][j] = 0
         return arr
-
-    def indicator(self):
-        # indicator function for grid state
-        # [wall, ball1, ball2, ball3, agent1, agent2]
-        num_layers = self.num_ball_types + len(self.agents_index) + 1
-        phi_obs = np.zeros(
-            (num_layers, self.grid.width, self.grid.height), dtype="uint8"
-        )
-        for i in range(self.grid.width):
-            for j in range(self.grid.height):
-                obj = self.grid.get(i, j)
-                if obj is None:
-                    phi_obs[:, i, j] = 0
-                elif obj.type == "agent":
-                    idx = (
-                        4
-                        if self.agents_index[0] == (self.world.COLOR_TO_IDX[obj.color])
-                        else 5
-                    )
-                    phi_obs[idx, i, j] = 1
-                elif obj.type == "ball":
-                    idx = self.world.COLOR_TO_IDX[obj.color] + 1
-                    phi_obs[idx, i, j] = 1
-                elif obj.type == "wall":
-                    phi_obs[0, i, j] = 1
-        return phi_obs
 
     def toroid(self, idx):
         # transform grid into toroidal, agent-centric obs
@@ -380,37 +318,14 @@ class CollectGame3Obj2Agent(CollectGameEnv):
             obs.append(self.toroid(idx))
         return obs
 
-    def gaussian(self, idx):
-        phi_obs = np.zeros((self.grid.width, self.grid.height), dtype="float32")
-        pos = (idx // self.grid.width, idx % self.grid.width)
-        for i in range(self.grid.width):
-            for j in range(self.grid.height):
-                obj = self.grid.get(i, j)
-                if obj is None or obj.type == "wall" or obj.type == "agent":
-                    phi_obs[i, j] = 0
-                elif obj.type == "ball":
-                    phi_obs[i, j] = np.exp(
-                        -(
-                            (((pos[0] - i) / self.grid.width) ** 2)
-                            + (((pos[1] - j) / self.grid.height) ** 2)
-                        )
-                        / self.sigma
-                    )
-        return phi_obs.T
-
-    def phi(self):
-        # phi(s, a, s')
-        phi = np.zeros((self.ac_dim, self.phi_dim()))
-        for a in range(self.ac_dim):
-            phi[a, :] += self.simulate(a)
-        return phi
-
     def phi_dim(self):
         return self.num_ball_types
+
 
 class CollectGame3ObjSingleAgent(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__(agents_index=[3])
+
 
 class CollectGameQuadrants(CollectGame3Obj2Agent):
     def __init__(self):
@@ -440,6 +355,7 @@ class CollectGameQuadrants(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
 
 class CollectGameRooms(CollectGame3Obj2Agent):
     def __init__(self, size: int = 11, *args, **kwargs):
@@ -569,6 +485,7 @@ class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
             self.grid.set(*self.agents[i].pos, None)
             self.agents[i].pos = next_pos
 
+
 class CollectGameRespawn(CollectGame3Obj2Agent):
     def __init__(self):
         super().__init__()
@@ -576,7 +493,7 @@ class CollectGameRespawn(CollectGame3Obj2Agent):
 
     def _respawn(self, color):
         self.place_obj(Ball(self.world, color, 1))
-    
+
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         if fwd_cell:
             if fwd_cell.can_pickup():
@@ -587,7 +504,7 @@ class CollectGameRespawn(CollectGame3Obj2Agent):
                 self.collected_balls += 1
                 self._reward(i, rewards, fwd_cell.reward)
                 self.info[self.keys[3 * i + ball_idx]] += 1
-    
+
     def step(self, actions):
         order = np.random.permutation(len(actions))
         rewards = np.zeros(len(actions))
@@ -619,10 +536,11 @@ class CollectGameRespawn(CollectGame3Obj2Agent):
         obs = self.grid.encode()
         return obs, rewards, done, truncated, self.info
 
+
 class CollectGameRespawnClustered(CollectGameRespawn):
     def __init__(self):
         super().__init__()
-    
+
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height, self.world)
 
@@ -647,9 +565,13 @@ class CollectGameRespawnClustered(CollectGameRespawn):
         for a in self.agents:
             self.place_agent(a, pos=agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
-    
+
     def _respawn(self, color):
-        partitions = [(0, 0), (self.width // 2 - 1, self.height // 2 - 1), (self.width // 2 - 1, 0)]
+        partitions = [
+            (0, 0),
+            (self.width // 2 - 1, self.height // 2 - 1),
+            (self.width // 2 - 1, 0),
+        ]
         partition_size = (self.width // 2 + 1, self.height // 2 + 1)
         top = partitions[color]
         self.place_obj(Ball(self.world, color, 1), top=top, size=partition_size)
