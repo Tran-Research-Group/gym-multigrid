@@ -41,7 +41,15 @@ def save_frames_as_gif(frames, path="./", filename="collect-", ep=0, fps=60, dpi
 
 
 def render_agent_tile(
-    img: NDArray, agent: Agent, helper_grid: Grid, world: WorldT
+    img: NDArray,
+    agent: Agent,
+    helper_grid: Grid,
+    world: WorldT,
+    x_min: list[int] = [],
+    y_min: list[int] = [],
+    x_max: list[int] = [],
+    y_max: list[int] = [],
+    colors=None,
 ) -> NDArray:
     """
     Render tile containing agent with background color corresponding to the state of tree in that cell.
@@ -70,12 +78,60 @@ def render_agent_tile(
         world.COLORS[agent.color],
         bg_color=tree_color,
     )
-    fill_coords(
-        img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 0.031, 0, 1), (100, 100, 100)
-    )
-    fill_coords(
-        img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 1, 0, 0.031), (100, 100, 100)
-    )
+    i, j = pos
+    changed_left_boundary = False
+    changed_top_boundary = False
+    if colors is not None:
+        for index in range(len(colors)):
+            # Create boundary on top
+            if j == y_min[index]:
+                if x_min[index] <= i <= x_max[index]:
+                    changed_top_boundary = True
+                    fill_coords(
+                        img[ymin:ymax, xmin:xmax, :],
+                        point_in_rect(0, 1, 0, 0.093),
+                        colors[index],
+                    )
+
+            # Create boundary on left
+            if i == x_min[index]:
+                if y_min[index] <= j <= y_max[index]:
+                    changed_left_boundary = True
+                    fill_coords(
+                        img[ymin:ymax, xmin:xmax, :],
+                        point_in_rect(0, 0.093, 0, 1),
+                        colors[index],
+                    )
+
+            # Create boundary on bottom
+            if j == y_max[index] + 1:
+                if x_min[index] <= i <= x_max[index]:
+                    changed_top_boundary = True
+                    fill_coords(
+                        img[ymin:ymax, xmin:xmax, :],
+                        point_in_rect(0, 1, 0, 0.093),
+                        colors[index],
+                    )
+
+            # Create boundary on right
+            if i == x_max[index] + 1:
+                if y_min[index] <= j <= y_max[index]:
+                    changed_left_boundary = True
+                    fill_coords(
+                        img[ymin:ymax, xmin:xmax, :],
+                        point_in_rect(0, 0.093, 0, 1),
+                        colors[index],
+                    )
+    # use default color is cell is not on boundary of selfish region
+    if not changed_left_boundary:
+        fill_coords(
+            img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 0.031, 0, 1), (100, 100, 100)
+        )
+    if not changed_top_boundary:
+        fill_coords(
+            img[ymin:ymax, xmin:xmax, :], point_in_rect(0, 1, 0, 0.031), (100, 100, 100)
+        )
+
     return img
 
 
@@ -161,48 +217,48 @@ def get_central_square_coordinates(N, C):
     return coordinates
 
 
-def get_nxn_square_coordinates(x, y, grid_size, n):
-    """
-    Takes the center cell position (x, y) and grid size, and returns the coordinates of all cells in a n x n square around the center.
+def get_initial_fire_coordinates(x, y, grid_size, n):
+    """Generate the coordinates of trees on fire in a uniformly randomly located square fire region of size n by n.
 
-    Args:
-      x: The x-coordinate of the center cell if n is odd, or the x-coordinate of the top-left corner cell if n is even.
-      y: The y-coordinate of the center cell if n is odd, or the y-coordinate of the top-left corner cell if n is even.
-      grid_size: The size of the grid (must be greater than or equal to n).
-      n: The size of the square to be extracted (must be odd).
+    Parameters:
+    ----------
+        x : int
+            the x-coordinate of the center cell of the fire region if n is odd, or the x-coordinate of the top-left corner cell of the fire region if n is even
+        y : int
+            the y-coordinate of the center cell of the fire region if n is odd, or the y-coordinate of the top-left corner cell of the fire region if n is even
+        grid_size : int
+            the side of the square grid
+        n : int
+            the side of the square fire region
 
     Returns:
-      A list of tuples, where each tuple represents the (x, y) coordinates of a cell in the n x n square.
-
-    Raises:
-      ValueError: If grid size is less than n.
+    -------
+    coordinates : list(tuple(int, int))
+        A list of tuples, where each tuple represents the position coordinates of a tree on fire in the fire region.
     """
 
-    if grid_size < 3:
-        raise ValueError("Grid size must be greater than or equal to 3.")
-
     if n % 2 == 0:
+        # side of the fire region is an even number
         coordinates = []
+        # loop through the positions of cells in the fire region. The top-left corner cell is (x, y)
         for i in range(x, x + n):
             for j in range(y, y + n):
                 coordinates.append((i, j))
-
         return coordinates
     else:
-        # Calculate offsets for the n x n square
-        offset = int(
-            (n - 1) / 2
-        )  # Since the square is centered, offset is (n-1)/2 in each direction
+        # side of the fire region is an odd number
+        # distance from the center cell to the edge cell of a fire region of size n by n
+        offset = int((n - 1) / 2)
 
-        # Ensure coordinates stay within grid boundaries
+        # determine range of x and y coordinates lying within the fire region. The center cell is (x, y).
         start_x = max(1, x - offset)
         end_x = min(grid_size, x + offset)
         start_y = max(1, y - offset)
         end_y = min(grid_size, y + offset)
 
         coordinates = []
+        # loop through the positions of cells in the fire region
         for x in range(start_x, end_x + 1):
             for y in range(start_y, end_y + 1):
                 coordinates.append((x, y))
-
         return coordinates

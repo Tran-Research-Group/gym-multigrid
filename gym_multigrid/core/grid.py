@@ -138,6 +138,13 @@ class Grid:
         tile_size: int = TILE_PIXELS,
         subdivs: int = 3,
         cache: bool = True,
+        x_min: list[int] = [],
+        y_min: list[int] = [],
+        x_max: list[int] = [],
+        y_max: list[int] = [],
+        colors=None,
+        obj_x=None,
+        obj_y=None,
     ):
         """
         Render a tile and cache the result
@@ -157,9 +164,40 @@ class Grid:
 
         if obj != None:
             obj.render(img)
+        i, j = obj_x, obj_y
 
-        fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
-        fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
+        changed_left_boundary = False
+        changed_top_boundary = False
+        if colors is not None:
+            for index in range(len(colors)):
+                # Create boundary on top
+                if j == y_min[index]:
+                    if x_min[index] <= i <= x_max[index]:
+                        changed_top_boundary = True
+                        fill_coords(img, point_in_rect(0, 1, 0, 0.093), colors[index])
+
+                # Create boundary on left
+                if i == x_min[index]:
+                    if y_min[index] <= j <= y_max[index]:
+                        changed_left_boundary = True
+                        fill_coords(img, point_in_rect(0, 0.093, 0, 1), colors[index])
+
+                # Create boundary on bottom
+                if j == y_max[index] + 1:
+                    if x_min[index] <= i <= x_max[index]:
+                        changed_top_boundary = True
+                        fill_coords(img, point_in_rect(0, 1, 0, 0.093), colors[index])
+
+                # Create boundary on right
+                if i == x_max[index] + 1:
+                    if y_min[index] <= j <= y_max[index]:
+                        changed_left_boundary = True
+                        fill_coords(img, point_in_rect(0, 0.093, 0, 1), colors[index])
+        # use default color is cell is not on boundary of selfish region
+        if not changed_left_boundary:
+            fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
+        if not changed_top_boundary:
+            fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
 
         # Highlight the cell  if needed
         if len(highlights) > 0:
@@ -181,7 +219,15 @@ class Grid:
         return img
 
     def render(
-        self, tile_size, highlight_masks=None, uncached_object_types: list[str] = []
+        self,
+        tile_size,
+        highlight_masks=None,
+        uncached_object_types: list[str] = [],
+        x_min: list[int] = None,
+        y_min: list[int] = None,
+        x_max: list[int] = None,
+        y_max: list[int] = None,
+        colors=None,
     ):
         """
         Render this grid at a given scale
@@ -199,18 +245,36 @@ class Grid:
         for j in range(0, self.height):
             for i in range(0, self.width):
                 cell = self.get(i, j)
-
                 cache: bool = True
                 if cell is not None and cell.type in uncached_object_types:
                     cache = False
-                # agent_here = np.array_equal(agent_pos, (i, j))
-                tile_img = Grid.render_tile(
-                    self.world,
-                    cell,
-                    highlights=[] if highlight_masks is None else highlight_masks[i, j],
-                    tile_size=tile_size,
-                    cache=cache,
-                )
+                if x_min is not None:
+                    tile_img = Grid.render_tile(
+                        self.world,
+                        cell,
+                        highlights=(
+                            [] if highlight_masks is None else highlight_masks[i, j]
+                        ),
+                        tile_size=tile_size,
+                        cache=False,
+                        x_min=x_min,
+                        y_min=y_min,
+                        x_max=x_max,
+                        y_max=y_max,
+                        colors=colors,
+                        obj_x=i,
+                        obj_y=j,
+                    )
+                else:
+                    tile_img = Grid.render_tile(
+                        self.world,
+                        cell,
+                        highlights=(
+                            [] if highlight_masks is None else highlight_masks[i, j]
+                        ),
+                        tile_size=tile_size,
+                        cache=cache,
+                    )
 
                 ymin = j * tile_size
                 ymax = (j + 1) * tile_size
