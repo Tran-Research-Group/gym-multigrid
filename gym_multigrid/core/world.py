@@ -1,9 +1,7 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
-
 from numpy.typing import NDArray
-
-from .constants import COLORS
+from gym_multigrid.core.constants import COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 

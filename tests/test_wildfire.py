@@ -13,11 +13,9 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 def test_wildfire() -> None:
     env = gym.make(
         "wildfire-v0",
-        size=9,
-        num_agents=2,
         alpha=0.99,
         delta_beta=1,
-        max_episode_steps=1,
+        max_episode_steps=100,
         initial_fire_size=3,
         two_initial_fires=False,
         cooperative_reward=False,

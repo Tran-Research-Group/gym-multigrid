@@ -1,10 +1,10 @@
-from typing import Callable, Type
+# pylint: disable=line-too-long, dangerous-default-value
+from typing import Type
 import numpy as np
-
 from gym_multigrid.core.world import WorldT
-from ..utils.rendering import *
-from .object import WorldObj, Wall, WorldObjT
-from .constants import TILE_PIXELS
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.core.object import WorldObj, Wall, WorldObjT
+from gym_multigrid.core.constants import TILE_PIXELS
 
 
 class Grid:
@@ -134,17 +134,12 @@ class Grid:
         cls,
         world: WorldT,
         obj: WorldObjT | None,
-        highlights: list[bool] = [],
+        highlights: list[bool] = None,
         tile_size: int = TILE_PIXELS,
         subdivs: int = 3,
         cache: bool = True,
-        x_min: list[int] = [],
-        y_min: list[int] = [],
-        x_max: list[int] = [],
-        y_max: list[int] = [],
-        colors=None,
-        obj_x=None,
-        obj_y=None,
+        cell_location: int = 0,
+        selfish_boundary_color: tuple[int, int, int] = (100, 100, 100),
     ):
         """
         Render a tile and cache the result
@@ -152,6 +147,8 @@ class Grid:
 
         key = (*highlights, tile_size)
         key = obj.encode() + key if obj else key
+        if cell_location != 0:
+            key = (key, (cell_location, selfish_boundary_color.tobytes()))
 
         if key in cls.tile_cache:
             return cls.tile_cache[key]
@@ -160,40 +157,21 @@ class Grid:
             shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8
         )
 
-        # Draw the grid lines (top and left edges)
-
-        if obj != None:
+        # render the object
+        if obj is not None:
             obj.render(img)
-        i, j = obj_x, obj_y
 
+        # create grid lines around object (specifically the top and left boundaries for each cell)
         changed_left_boundary = False
         changed_top_boundary = False
-        if colors is not None:
-            for index in range(len(colors)):
-                # Create boundary on top
-                if j == y_min[index]:
-                    if x_min[index] <= i <= x_max[index]:
-                        changed_top_boundary = True
-                        fill_coords(img, point_in_rect(0, 1, 0, 0.093), colors[index])
+        if cell_location == 1 or cell_location == 3:
+            changed_top_boundary = True
+            fill_coords(img, point_in_rect(0, 1, 0, 0.093), selfish_boundary_color)
+        if cell_location == 2 or cell_location == 3:
+            changed_left_boundary = True
+            fill_coords(img, point_in_rect(0, 0.093, 0, 1), selfish_boundary_color)
 
-                # Create boundary on left
-                if i == x_min[index]:
-                    if y_min[index] <= j <= y_max[index]:
-                        changed_left_boundary = True
-                        fill_coords(img, point_in_rect(0, 0.093, 0, 1), colors[index])
-
-                # Create boundary on bottom
-                if j == y_max[index] + 1:
-                    if x_min[index] <= i <= x_max[index]:
-                        changed_top_boundary = True
-                        fill_coords(img, point_in_rect(0, 1, 0, 0.093), colors[index])
-
-                # Create boundary on right
-                if i == x_max[index] + 1:
-                    if y_min[index] <= j <= y_max[index]:
-                        changed_left_boundary = True
-                        fill_coords(img, point_in_rect(0, 0.093, 0, 1), colors[index])
-        # use default color is cell is not on boundary of selfish region
+        # use default boundary color if cell is not on boundary of selfish region
         if not changed_left_boundary:
             fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
         if not changed_top_boundary:
@@ -222,7 +200,7 @@ class Grid:
         self,
         tile_size,
         highlight_masks=None,
-        uncached_object_types: list[str] = [],
+        uncached_object_types: list[str] = None,
         x_min: list[int] = None,
         y_min: list[int] = None,
         x_max: list[int] = None,
@@ -249,6 +227,31 @@ class Grid:
                 if cell is not None and cell.type in uncached_object_types:
                     cache = False
                 if x_min is not None:
+                    # determine if the cell is located adjacent to a selfish region boundary
+                    cell_location = 0
+                    selfish_boundary_color = (100, 100, 100)
+                    for index, color in enumerate(colors):
+                        if j == y_min[index]:
+                            # object is located adjacent to the top boundary of selfish region
+                            if x_min[index] <= i <= x_max[index]:
+                                cell_location = 1
+                                selfish_boundary_color = color
+                        if i == x_min[index]:
+                            # object is located adjacent to the left boundary of selfish region
+                            if y_min[index] <= j <= y_max[index]:
+                                cell_location += 2
+                                selfish_boundary_color = color
+                        if j == y_max[index] + 1:
+                            # object is located adjacent to the bottom boundary of selfish region
+                            if x_min[index] <= i <= x_max[index]:
+                                cell_location = 1
+                                selfish_boundary_color = color
+                        if i == x_max[index] + 1:
+                            # object is located adjacent to the right boundary of selfish region
+                            if y_min[index] <= j <= y_max[index]:
+                                cell_location = 2
+                                selfish_boundary_color = color
+
                     tile_img = Grid.render_tile(
                         self.world,
                         cell,
@@ -256,14 +259,9 @@ class Grid:
                             [] if highlight_masks is None else highlight_masks[i, j]
                         ),
                         tile_size=tile_size,
-                        cache=False,
-                        x_min=x_min,
-                        y_min=y_min,
-                        x_max=x_max,
-                        y_max=y_max,
-                        colors=colors,
-                        obj_x=i,
-                        obj_y=j,
+                        cache=cache,
+                        cell_location=cell_location,
+                        selfish_boundary_color=selfish_boundary_color,
                     )
                 else:
                     tile_img = Grid.render_tile(

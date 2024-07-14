@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long, dangerous-default-value
 """Defines the WildfireEnv class, which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire
 """
 
@@ -18,57 +19,13 @@ from gym_multigrid.core.constants import (
 )
 from gym_multigrid.utils.window import Window
 from gym_multigrid.utils.misc import (
-    render_agent_tile,
+    render_agent_tiles,
     get_initial_fire_coordinates,
 )
 
 
 class WildfireEnv(MultiGridEnv):
-    """Grid environment which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire
-
-    Parameters
-    ----------
-    alpha : float, optional
-        parameter for the wildfire dynamics model, by default 0.05
-    beta : float, optional
-        parameter for the wildfire dynamics model, by default 0.99
-    delta_beta : float, optional
-        parameter for the wildfire dynamics model, by default 0
-    size : int, optional
-        side of the square gridworld, by default 17
-    num_agents : int, optional
-        number of UAV agents, by default 2
-    agent_start_positions : tuple[tuple[int,int]], optional
-        tuple of tuples containing the start positions of the agents, in order of agent index. By default ((1, 1), (15, 15))
-    agent_colors : tuple[str], optional
-        tuple of strings of color names of all agents. The strings should be keys in the COLORS dictionary in constants.py. Only applicable if cooperative_reward is False. Fully cooperative agents have light_blue color by default. By default self-interested agents have red and blue colors
-    agent_view_size : int, optional
-        side of the square region visible to an agent with partial observability, by default 10. Only applicable if partial_obs is True
-    initial_fire_size : int, optional
-        side of the square shaped initial fire region, by default 1
-    max_steps : int, optional
-        maximum number of steps in an episode, by default 100
-    partial_obs : bool, optional
-        whether agents have partial observability, by default False
-    actions_set : WildfireActions, optional
-        action space of the agents. All agents have the same action space. By default WildfireActions.
-    render_mode : str, optional
-        mode of rendering the environment, by default "rgb_array"
-    cooperative_reward : bool, optional
-        whether the agents use a cooperative reward, by default False. If True, the agents are fully cooperative and receive the same reward.
-    log_selfish_region_metrics : bool, optional
-        whether to log metrics related to trees in selfish regions, by default False
-    selfish_region_xmin : list, optional
-        list containing x-coordinates of the leftmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
-    selfish_region_xmax : list, optional
-        list containing x-coordinates of the rightmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
-    selfish_region_ymin : list, optional
-        list containing y-coordinates of the topmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
-    selfish_region_ymax : list, optional
-        list containing y-coordinates of the bottom-most boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
-    two_initial_fires : bool, optional
-        whether the initial state has two disjoint square fire regions, by default False
-    """
+    """Grid environment which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire"""
 
     def __init__(
         self,
@@ -93,13 +50,57 @@ class WildfireEnv(MultiGridEnv):
         selfish_region_ymax=None,
         two_initial_fires=False,
     ):
+        """Create a WildfireEnv environment
+
+        Parameters
+        ----------
+        alpha : float, optional
+            parameter for the wildfire dynamics model, by default 0.05
+        beta : float, optional
+            parameter for the wildfire dynamics model, by default 0.99
+        delta_beta : float, optional
+            parameter for the wildfire dynamics model, by default 0
+        size : int, optional
+            side of the square gridworld, by default 17
+        num_agents : int, optional
+            number of UAV agents, by default 2
+        agent_start_positions : tuple[tuple[int,int]], optional
+            tuple of tuples containing the start positions of the agents, in order of agent index. By default ((1, 1), (15, 15))
+        agent_colors : tuple[str], optional
+            tuple of strings of color names of all agents. The strings should be keys in the COLORS dictionary in constants.py. Only applicable if cooperative_reward is False. Fully cooperative agents have light_blue color by default. By default self-interested agents have red and blue colors
+        agent_view_size : int, optional
+            side of the square region visible to an agent with partial observability, by default 10. Only applicable if partial_obs is True
+        initial_fire_size : int, optional
+            side of the square shaped initial fire region, by default 1
+        max_steps : int, optional
+            maximum number of steps in an episode, by default 100
+        partial_obs : bool, optional
+            whether agents have partial observability, by default False
+        actions_set : WildfireActions, optional
+            action space of the agents. All agents have the same action space. By default WildfireActions.
+        render_mode : str, optional
+            mode of rendering the environment, by default "rgb_array"
+        cooperative_reward : bool, optional
+            whether the agents use a cooperative reward, by default False. If True, the agents are fully cooperative and receive the same reward.
+        log_selfish_region_metrics : bool, optional
+            whether to log metrics related to trees in selfish regions, by default False
+        selfish_region_xmin : list, optional
+            list containing x-coordinates of the leftmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+        selfish_region_xmax : list, optional
+            list containing x-coordinates of the rightmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+        selfish_region_ymin : list, optional
+            list containing y-coordinates of the topmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+        selfish_region_ymax : list, optional
+            list containing y-coordinates of the bottom-most boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+        two_initial_fires : bool, optional
+            whether the initial state has two disjoint square fire regions, by default False
+        """
         self.alpha = alpha
         self.beta = beta
         self.delta_beta = delta_beta
         self.num_agents = num_agents
         self.agent_start_positions = agent_start_positions
-        # observation vector of each agent is concatenation of one-hot encodings of tree states
-        # and other agents' positions. len(STATE_IDX_TO_COLOR_WILDFIRE) is the number of tree states
+        # observation vector of each agent is concatenation of one-hot encodings of tree states and other agents' positions. len(STATE_IDX_TO_COLOR_WILDFIRE) = the number of tree states
         self.obs_depth = (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE)
         self.max_steps = max_steps
         self.world = WildfireWorld
@@ -131,7 +132,7 @@ class WildfireEnv(MultiGridEnv):
             )
 
         if self.cooperative_reward:
-            # initialize fully cooperative agents
+            # initialize cooperative agents
             agents = [
                 Agent(
                     world=self.world,
@@ -171,8 +172,7 @@ class WildfireEnv(MultiGridEnv):
         )
 
     def _set_observation_space(self) -> Dict:
-        """Set the observation space for each agent in the environment.
-           All agents possess the same observation space
+        """Set the observation space for each agent in the environment. All agents possess the same observation space
 
         Returns
         -------
@@ -180,9 +180,7 @@ class WildfireEnv(MultiGridEnv):
             dictionary where each key is an agent's index and the value is the observation space
             for that agent
         """
-        # observation vector of agent is the concatenation of obs_depth number of one-hot encodings
-        # where each encoding has grid_size_without_walls number of elements valued either 0 or 1.
-        # Additionally, the observation vector contains the normalized time step at the end
+        # observation vector of agent is the concatenation of obs_depth number of one-hot encodings where each encoding has grid_size_without_walls number of elements valued either 0 or 1. Additionally, the observation vector contains the normalized time step at the end
         low = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 0)
         high = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 1)
         observation_space = Dict(
@@ -812,7 +810,7 @@ class WildfireEnv(MultiGridEnv):
         Parameters
         ----------
         close : bool, optional
-            close the rendering window, by default False
+            close the rendering window, by default False. Only applicable if render_mode is "human"
         highlight : bool, optional
             highlight the cells visible to the agent, by default False
         tile_size : int, optional
@@ -877,7 +875,7 @@ class WildfireEnv(MultiGridEnv):
                 uncached_object_types=self.uncahed_object_types,
             )
         else:
-            # include selfish region boundaries in rendering for self-interested agents
+            # include selfish region boundaries in render
             colors = [COLORS[a.color] for a in self.agents]
             img = self.grid.render(
                 tile_size,
@@ -890,14 +888,14 @@ class WildfireEnv(MultiGridEnv):
                 colors=colors,
             )
 
-        # Re-render the tiles containing agents to change background color
+        # Re-render the tiles containing agents to include trees below agent
         if self.cooperative_reward:
             for a in self.agents:
-                img = render_agent_tile(img, a, self.helper_grid, self.world)
+                img = render_agent_tiles(img, a, self.helper_grid, self.world)
         else:
-            # include selfish region boundaries in rendering for self-interested agents
+            # include selfish region boundaries in render
             for a in self.agents:
-                img = render_agent_tile(
+                img = render_agent_tiles(
                     img,
                     a,
                     self.helper_grid,
