@@ -100,8 +100,8 @@ class WildfireEnv(MultiGridEnv):
         self.delta_beta = delta_beta
         self.num_agents = num_agents
         self.agent_start_positions = agent_start_positions
-        # observation vector of each agent is concatenation of one-hot encodings of tree states and other agents' positions. len(STATE_IDX_TO_COLOR_WILDFIRE) = the number of tree states
-        self.obs_depth = (self.num_agents - 1) + len(STATE_IDX_TO_COLOR_WILDFIRE)
+        # observation vector of each agent is concatenation of obs_depth number of one-hot encodings, see paper for details. len(STATE_IDX_TO_COLOR_WILDFIRE) = the number of tree states
+        self.obs_depth = self.num_agents + len(STATE_IDX_TO_COLOR_WILDFIRE)
         self.max_steps = max_steps
         self.world = WildfireWorld
         self.grid_size = size
@@ -181,8 +181,10 @@ class WildfireEnv(MultiGridEnv):
             for that agent
         """
         # observation vector of agent is the concatenation of obs_depth number of one-hot encodings where each encoding has grid_size_without_walls number of elements valued either 0 or 1. Additionally, the observation vector contains the normalized time step at the end
-        low = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 0)
-        high = np.full(self.obs_depth * (self.grid_size_without_walls**2) + 1, 1)
+        low = np.full(self.obs_depth * ((self.grid_size_without_walls + 1) ** 2) + 1, 0)
+        high = np.full(
+            self.obs_depth * ((self.grid_size_without_walls + 1) ** 2) + 1, 1
+        )
         observation_space = Dict(
             {
                 f"{a.index}": Box(
@@ -308,7 +310,9 @@ class WildfireEnv(MultiGridEnv):
             if self.log_selfish_region_metrics:
                 # check if tree is in a selfish region, and update region attribute of tree if it is
                 for a in self.agents:
-                    if self.in_selfish_region(*(tree_obj.pos), a.index):
+                    if self.in_selfish_region(
+                        *(tree_obj.pos), a.index  # pylint: disable=not-an-iterable
+                    ):
                         tree_obj.region = f"{a.index}"
                         break
 
@@ -326,30 +330,29 @@ class WildfireEnv(MultiGridEnv):
             self.helper_grid.get(*agent_start_pos[i]).agent_above = True
 
     def _get_obs(self) -> list[np.typing.NDArray]:
-        """Get observation vectors of all agents in the environment
+        """Get observation vectors of all agents in the environment.
 
         Returns
         -------
         agent_obs: list(ndarray)
-            list of agent observations where the element at i^th list index is the observation vector for the agent with index 'i'
+            list of agent observations where the element at i^th list index is the observation vector for the agent with index i.
         """
         # initialize list of observation vector of each agent
         agent_obs = [
             np.zeros(
                 (
                     self.obs_depth,
-                    self.grid_size_without_walls,
-                    self.grid_size_without_walls,
+                    self.grid_size_without_walls + 1,
+                    self.grid_size_without_walls + 1,
                 ),
                 dtype=np.float32,
             )
             for _ in range(self.num_agents)
         ]
 
-        # update tree states in agent observations
+        # update walls and tree states in agent observations
         for obj in self.helper_grid.grid:
-            if obj is None or obj.type == "wall":
-                # agent observations do not contain walls
+            if obj is None:
                 continue
             i, j = obj.pos
             for a in self.agents:
@@ -357,20 +360,22 @@ class WildfireEnv(MultiGridEnv):
                 nc = [i - a.pos[0], j - a.pos[1]]
                 # wrap around to get agent centered toroidal coordinates
                 if nc[0] < 0:
-                    nc[0] += self.grid_size_without_walls
+                    nc[0] += self.grid_size_without_walls + 1
                 if nc[1] < 0:
-                    nc[1] += self.grid_size_without_walls
+                    nc[1] += self.grid_size_without_walls + 1
                 # update agent's observation
-                agent_obs[a.index][obj.state, nc[1], nc[0]] = 1
+                if obj.type == "tree":
+                    agent_obs[a.index][obj.state, nc[1], nc[0]] = 1
+                elif obj.type == "wall":
+                    agent_obs[a.index][
+                        len(STATE_IDX_TO_COLOR_WILDFIRE), nc[1], nc[0]
+                    ] = 1
 
         # for each agent, update other agents' positions in agent observations
         for a in self.agents:
             for o in self.agents:
                 if o.index != a.index:
-                    if o.index > a.index:
-                        idx = o.index - 1
-                    else:
-                        idx = o.index
+                    idx = o.index - np.heaviside(o.index - a.index, 0)
                     # convert to agent centered coordinates
                     nc = [
                         o.pos[0] - a.pos[0],
@@ -378,11 +383,11 @@ class WildfireEnv(MultiGridEnv):
                     ]
                     # wrap around to get agent centered toroidal coordinates
                     if nc[0] < 0:
-                        nc[0] += self.grid_size_without_walls
+                        nc[0] += self.grid_size_without_walls + 1
                     if nc[1] < 0:
-                        nc[1] += self.grid_size_without_walls
+                        nc[1] += self.grid_size_without_walls + 1
                     agent_obs[a.index][
-                        len(STATE_IDX_TO_COLOR_WILDFIRE) + idx,
+                        len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + idx,
                         nc[1],
                         nc[0],
                     ] = 1
@@ -405,7 +410,7 @@ class WildfireEnv(MultiGridEnv):
         """
         s = np.zeros(
             (
-                self.obs_depth + 1,
+                self.obs_depth,
                 self.grid_size_without_walls,
                 self.grid_size_without_walls,
             ),
@@ -452,7 +457,7 @@ class WildfireEnv(MultiGridEnv):
         time_step = state[-1]
         state = state[:-1].reshape(
             (
-                self.obs_depth + 1,
+                self.obs_depth,
                 self.grid_size_without_walls,
                 self.grid_size_without_walls,
             ),
@@ -496,7 +501,7 @@ class WildfireEnv(MultiGridEnv):
         """
         state = np.zeros(
             (
-                self.obs_depth + 1,
+                self.obs_depth,
                 self.grid_size_without_walls,
                 self.grid_size_without_walls,
             ),
@@ -662,7 +667,7 @@ class WildfireEnv(MultiGridEnv):
             dictionary where each key is the agent index and the value is an info dictionary containing additional information about the environment. Here, each agent's info dictionary contains the same information, viz., the number of burnt trees.
         """
         self.step_count += 1
-        actions = [value for value in actions.values()]
+        actions = list(actions.values())
         terminated = False
         truncated = False
 
@@ -691,9 +696,6 @@ class WildfireEnv(MultiGridEnv):
                 next_cell = self.grid.get(*next_pos)
                 if next_cell is None or next_cell.can_overlap():
                     self.move_agent(i, next_pos)
-
-        # rewards for moving over tree on fire
-        agent_rewards = self.partial_reward()
 
         # propagate wildfire dynamics by one time step
         # initialize lists to store trees transitioning to on fire and burnt state in the current time step
@@ -746,7 +748,8 @@ class WildfireEnv(MultiGridEnv):
                 o.state = 2
                 o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
 
-        # include rewards due to trees on fire
+        # compute agent rewards
+        agent_rewards = np.zeros(self.num_agents)
         if self.cooperative_reward:
             agent_rewards -= 0.5 * self.trees_on_fire
         else:
@@ -756,7 +759,7 @@ class WildfireEnv(MultiGridEnv):
                 ] + 0.1 * (
                     self.trees_on_fire - self.selfish_region_trees_on_fire[a.index]
                 )
-        # rewards dictionary
+        # agent rewards dictionary
         rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
 
         # check if episode is done
@@ -775,8 +778,8 @@ class WildfireEnv(MultiGridEnv):
 
         return next_obs, rewards, terminated, truncated, infos
 
-    def partial_reward(self):
-        """Compute partial reward arising from being over trees on fire, for each agent
+    def positive_reward(self):
+        """Compute reward arising from being over trees on fire, for each agent
 
         Returns
         -------

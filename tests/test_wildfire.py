@@ -1,16 +1,16 @@
+import sys
+import os
 import pytest
 import numpy as np
 import gymnasium as gym
-import sys
-import os
-import time
+from gym_multigrid.utils.misc import save_frames_as_gif
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from gym_multigrid.utils.misc import save_frames_as_gif
 
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
 def test_wildfire() -> None:
+    """Runs episodes in the Wildfire environment. Can be used to test the environment's functionality."""
     env = gym.make(
         "wildfire-v0",
         alpha=0.99,

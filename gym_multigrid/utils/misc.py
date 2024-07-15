@@ -1,15 +1,15 @@
+import os
+import random
 from matplotlib import animation
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
-import os
-import random
+from numpy.typing import NDArray
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
-from .rendering import fill_coords, point_in_circle, point_in_rect
+from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 from gym_multigrid.core.agent import Agent
 from gym_multigrid.core.grid import Grid
-from ..core.world import WorldT
-from numpy.typing import NDArray
+from gym_multigrid.core.world import WorldT
 
 
 def set_seed(seed: int = 42) -> None:
@@ -103,7 +103,7 @@ def render_agent_tiles(
     changed_top_boundary = False
     if colors is not None:
         for index, color in enumerate(colors):
-            # Create boundary on top
+            # check if object is located adjacent to the top boundary of selfish region
             if j == y_min[index]:
                 if x_min[index] <= i <= x_max[index]:
                     changed_top_boundary = True
@@ -112,8 +112,7 @@ def render_agent_tiles(
                         point_in_rect(0, 1, 0, 0.093),
                         color,
                     )
-
-            # Create boundary on left
+            # check if object is located adjacent to the left boundary of selfish region
             if i == x_min[index]:
                 if y_min[index] <= j <= y_max[index]:
                     changed_left_boundary = True
@@ -122,8 +121,7 @@ def render_agent_tiles(
                         point_in_rect(0, 0.093, 0, 1),
                         color,
                     )
-
-            # Create boundary on bottom
+            # check if object is located adjacent to the bottom boundary of selfish region
             if j == y_max[index] + 1:
                 if x_min[index] <= i <= x_max[index]:
                     changed_top_boundary = True
@@ -132,8 +130,7 @@ def render_agent_tiles(
                         point_in_rect(0, 1, 0, 0.093),
                         color,
                     )
-
-            # Create boundary on right
+            # check if object is located adjacent to the right boundary of selfish region
             if i == x_max[index] + 1:
                 if y_min[index] <= j <= y_max[index]:
                     changed_left_boundary = True

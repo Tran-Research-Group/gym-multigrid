@@ -231,27 +231,27 @@ class Grid:
                     cell_location = 0
                     selfish_boundary_color = (100, 100, 100)
                     for index, color in enumerate(colors):
+                        # check if object is located adjacent to the top boundary of selfish region
                         if j == y_min[index]:
-                            # object is located adjacent to the top boundary of selfish region
                             if x_min[index] <= i <= x_max[index]:
                                 cell_location = 1
                                 selfish_boundary_color = color
+                        # check if object is located adjacent to the left boundary of selfish region
                         if i == x_min[index]:
-                            # object is located adjacent to the left boundary of selfish region
                             if y_min[index] <= j <= y_max[index]:
                                 cell_location += 2
                                 selfish_boundary_color = color
+                        # check if object is located adjacent to the bottom boundary of selfish region
                         if j == y_max[index] + 1:
-                            # object is located adjacent to the bottom boundary of selfish region
                             if x_min[index] <= i <= x_max[index]:
                                 cell_location = 1
                                 selfish_boundary_color = color
+                        # check if object is located adjacent to the right boundary of selfish region
                         if i == x_max[index] + 1:
-                            # object is located adjacent to the right boundary of selfish region
                             if y_min[index] <= j <= y_max[index]:
                                 cell_location = 2
                                 selfish_boundary_color = color
-
+                    # render the tile containing cell
                     tile_img = Grid.render_tile(
                         self.world,
                         cell,
@@ -264,6 +264,7 @@ class Grid:
                         selfish_boundary_color=selfish_boundary_color,
                     )
                 else:
+                    # render the tile containing cell without selfish region boundary
                     tile_img = Grid.render_tile(
                         self.world,
                         cell,
