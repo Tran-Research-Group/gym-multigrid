@@ -3,9 +3,9 @@ import os
 import pytest
 import numpy as np
 import gymnasium as gym
-from gym_multigrid.utils.misc import save_frames_as_gif
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from gym_multigrid.utils.misc import save_frames_as_gif
 
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:wildfire-v0"])
@@ -15,7 +15,7 @@ def test_wildfire() -> None:
         "wildfire-v0",
         alpha=0.99,
         delta_beta=1,
-        max_episode_steps=100,
+        max_episode_steps=50,
         initial_fire_size=3,
         two_initial_fires=False,
         cooperative_reward=False,

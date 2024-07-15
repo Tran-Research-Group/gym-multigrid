@@ -152,7 +152,7 @@ def render_agent_tiles(
     return img
 
 
-def get_initial_fire_coordinates(x, y, grid_size, n):
+def get_initial_fire_coordinates(x, y, grid_size, n, without_wall_coordinates=False):
     """Generate the coordinates of trees on fire in a uniformly randomly located square fire region of size n by n.
 
     Parameters:
@@ -165,12 +165,19 @@ def get_initial_fire_coordinates(x, y, grid_size, n):
             the side of the square grid
         n : int
             the side of the square fire region
+        without_wall_coordinates : bool, optional
+            if True, the coordinates (x, y) are assumed to be given in, and output coordinates are returned in, grid without wall coordinates.
 
     Returns:
     -------
     coordinates : list(tuple(int, int))
-        A list of tuples, where each tuple represents the position coordinates of a tree on fire in the fire region.
+        a list of tuples, where each tuple represents the position coordinates of a tree on fire in the fire region.
     """
+
+    if without_wall_coordinates:
+        # convert grid without wall coordinates to grid with wall coordinates
+        x += 1
+        y += 1
 
     if n % 2 == 0:
         # side of the fire region is an even number
@@ -182,7 +189,7 @@ def get_initial_fire_coordinates(x, y, grid_size, n):
         return coordinates
     else:
         # side of the fire region is an odd number
-        # distance from the center cell to the edge cell of a fire region of size n by n
+        # offset is the distance from the center cell to the edge cell of a fire region of size n by n
         offset = int((n - 1) / 2)
 
         # determine range of x and y coordinates lying within the fire region. The center cell is (x, y).
@@ -195,5 +202,8 @@ def get_initial_fire_coordinates(x, y, grid_size, n):
         # loop through the positions of cells in the fire region
         for x in range(start_x, end_x + 1):
             for y in range(start_y, end_y + 1):
-                coordinates.append((x, y))
+                if without_wall_coordinates:
+                    coordinates.append((x - 1, y - 1))
+                else:
+                    coordinates.append((x, y))
         return coordinates

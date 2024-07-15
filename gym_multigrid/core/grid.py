@@ -74,7 +74,9 @@ class Grid:
             length = self.width - x
         assert length is not None
         for i in range(0, length):
-            self.set(x + i, y, obj_type(self.world))
+            wall_obj = obj_type(self.world)
+            wall_obj.pos = (x + i, y)
+            self.set(x + i, y, wall_obj)
 
     def vert_wall(
         self,
@@ -86,7 +88,9 @@ class Grid:
         if length is None:
             length = self.height - y
         for j in range(0, length):
-            self.set(x, y + j, obj_type(self.world))
+            wall_obj = obj_type(self.world)
+            wall_obj.pos = (x, y + j)
+            self.set(x, y + j, wall_obj)
 
     def wall_rect(self, x: int, y: int, w: int, h: int) -> None:
         self.horz_wall(x, y, w)
@@ -346,7 +350,7 @@ class Grid:
 
         return array
 
-    def process_vis(grid, agent_pos):
+    def process_vis(self, grid, agent_pos):
         mask = np.zeros(shape=(grid.width, grid.height), dtype=bool)
 
         mask[agent_pos[0], agent_pos[1]] = True

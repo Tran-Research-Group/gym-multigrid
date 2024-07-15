@@ -375,7 +375,7 @@ class WildfireEnv(MultiGridEnv):
         for a in self.agents:
             for o in self.agents:
                 if o.index != a.index:
-                    idx = o.index - np.heaviside(o.index - a.index, 0)
+                    idx = o.index - int(np.heaviside(o.index - a.index, 0))
                     # convert to agent centered coordinates
                     nc = [
                         o.pos[0] - a.pos[0],
