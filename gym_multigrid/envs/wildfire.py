@@ -224,7 +224,7 @@ class WildfireEnv(MultiGridEnv):
             # store positions of agents and trees on fire as per the specified initial state.
             state = state[:-1].reshape(
                 (
-                    self.obs_depth + 1,
+                    self.obs_depth,
                     self.grid_size_without_walls,
                     self.grid_size_without_walls,
                 ),
@@ -700,6 +700,10 @@ class WildfireEnv(MultiGridEnv):
         # propagate wildfire dynamics by one time step
         # initialize lists to store trees transitioning to on fire and burnt state in the current time step
         trees_to_fire_state = []
+        if self.log_selfish_region_metrics:
+            num_trees_to_fire_state_sr = {
+                f"{i}": 0 for i in range(len(self.selfish_xmin))
+            }
         trees_to_burnt_state = []
         # loop over all unburnt trees. Burnt trees remain burnt
         for c in self.unburnt_trees:
@@ -715,6 +719,7 @@ class WildfireEnv(MultiGridEnv):
                     if self.log_selfish_region_metrics:
                         if c.region != "common":
                             self.selfish_region_trees_on_fire[int(c.region)] += 1
+                            num_trees_to_fire_state_sr[c.region] += 1
             if c.state == 1:
                 # transition from on fire to burnt with probability 1 - beta + delta_beta * agent_above
                 if np.random.rand() < 1 - self.beta + c.agent_above * self.delta_beta:
@@ -728,8 +733,7 @@ class WildfireEnv(MultiGridEnv):
                             self.selfish_region_trees_on_fire[int(c.region)] -= 1
 
         # update tree objects in helper grid and grid. This update is done after the loop to avoid affecting
-        # the transition probabilities of trees later in the loop due to trees that have already transitioned
-        # earlier in the loop
+        # the transition probabilities of trees later in the loop due to trees that have already transitioned earlier in the loop.
         for c in trees_to_fire_state:
             c.state = 1
             c.color = STATE_IDX_TO_COLOR_WILDFIRE[c.state]
@@ -748,25 +752,28 @@ class WildfireEnv(MultiGridEnv):
                 o.state = 2
                 o.color = STATE_IDX_TO_COLOR_WILDFIRE[o.state]
 
-        # compute agent rewards
-        agent_rewards = np.zeros(self.num_agents)
-        if self.cooperative_reward:
-            agent_rewards -= 0.5 * self.trees_on_fire
-        else:
-            for a in self.agents:
-                agent_rewards[a.index] -= 0.5 * self.selfish_region_trees_on_fire[
-                    a.index
-                ] + 0.1 * (
-                    self.trees_on_fire - self.selfish_region_trees_on_fire[a.index]
-                )
-        # agent rewards dictionary
-        rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
-
         # check if episode is done
         if self.trees_on_fire == 0:
             terminated = True
+            rewards = {f"{a.index}": 0 for a in self.agents}
         elif self.step_count >= self.max_steps:
             truncated = True
+            rewards = {f"{a.index}": 0 for a in self.agents}
+        else:
+            # compute agent rewards
+            agent_rewards = np.zeros(self.num_agents)
+            if self.cooperative_reward:
+                agent_rewards -= 0.5 * len(trees_to_fire_state)
+            else:
+                for a in self.agents:
+                    agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
+                        f"{a.index}"
+                    ] + 0.1 * (
+                        len(trees_to_fire_state)
+                        - num_trees_to_fire_state_sr[f"{a.index}"]
+                    )
+            # agent rewards dictionary
+            rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
 
         # get agent observations after the environment step
         agent_obs = self._get_obs()
