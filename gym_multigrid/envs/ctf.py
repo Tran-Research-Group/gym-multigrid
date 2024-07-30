@@ -13,6 +13,7 @@ from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
+from gym_multigrid.utils.misc import cartesian_product
 
 
 class ObservationDict(TypedDict):
@@ -657,7 +658,8 @@ class CtFMvNEnv(MultiGridEnv):
         observation_option: Literal["positional", "map", "flattened"] = "positional",
         observation_scaling: float = 1,
         render_mode: Literal["human"] | Literal["rgb_array"] = "rgb_array",
-        uncached_object_types: list[str] = ["red_agent", "blue_agent"],
+        uncached_object_types: list[str] = ["red_agent", "blue_agent"],        
+        store_action_permutations: bool = True,
     ) -> None:
         """
         Initialize a new capture the flag environment.
@@ -694,6 +696,9 @@ class CtFMvNEnv(MultiGridEnv):
             Rendering mode.
         uncached_object_types : list[str] = ["red_agent", "blue_agent"]
             Types of objects that should not be cached.
+        store_action_permutations: Boolean
+            If True, stores the actions permutations, which can be useful for
+            converting integer actions to a compatible form. 
         """
 
         self.num_blue_agents: Final[int] = num_blue_agents
@@ -825,6 +830,17 @@ class CtFMvNEnv(MultiGridEnv):
             [len(self.actions_set) for _ in range(self.num_blue_agents)]
         )
         self.ac_dim = self.action_space.shape
+        self.store_act_permuts = store_action_permutations
+
+        if self.store_act_permuts:
+            if self.num_blue_agents==1:
+                self.act_permuts = np.arange(5)
+            elif self.num_blue_agents==2:
+                self.act_permuts = cartesian_product(np.arange(5), np.arange(5))
+            else:
+                self.act_permuts = cartesian_product(np.arange(5), np.arange(5))
+                for _ in range(self.num_blue_agents-1):
+                    self.act_permuts = cartesian_product(self.act_permuts, np.arange(5))
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
