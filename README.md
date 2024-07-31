@@ -24,13 +24,19 @@ poetry install
 ### Capture-the-Flag (CtF)
 
 ### Collect Game
+![Collect Game Respawn](./assets/collect-game-respawn.gif)
+
 | Attribute             | Description    |
 | --------------------- | -------------- |
 | Action Space          | `Discrete(4)`  |
 | Observation Space     | `np.array` of shape `grid.width x grid.height` |
 | Observation Encoding  |`(OBJECT_IDX, COLOR_IDX, STATE)` |
 | Reward                | `(0, 1)`       |
+| Number of Agents      | `2`            |
+| Termination Condition | None, `max_timesteps = 50` |
 | Creation              | `gymnasium.make("gym_multigrid.envs:CollectGameRespawn")` |
+
+Agents move around the grid to collect objects. The object respawns in a random location after being collected.
 
 ### Maze
 ### Wildfire
