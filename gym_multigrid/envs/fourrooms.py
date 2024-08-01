@@ -149,6 +149,42 @@ class FourRooms(MultiGridEnv):
         else:
             self.place_obj(Goal(self.world, 0))
 
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ):
+
+        super().reset(seed=seed)
+        # Generate a new random grid at the start of each episode
+        # To keep the same grid for each episode, call env.seed() with
+        # the same seed before calling env.reset()
+        self._gen_grid(self.width, self.height)
+
+        # These fields should be defined by _gen_grid
+        for a in self.agents:
+            assert a.pos is not None
+            assert a.dir is not None
+
+        # Item picked up, being carried, initially nothing
+        for a in self.agents:
+            a.carrying = None
+
+        # Step count since episode start
+        self.step_count: int = 0
+
+        # Return first observation
+        if self.partial_obs:
+            obs = self.gen_obs()
+        else:
+            obs = [
+                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
+                for i in range(len(self.agents))
+            ]
+        obs = [self.world.normalize_obs * ob for ob in obs]
+        return obs[0]
+
     def step(self, actions):
         """
         Multi-Agent is not implemented
