@@ -1,9 +1,5 @@
-import os
-import random
 from matplotlib import animation
 import matplotlib.pyplot as plt
-import torch
-import numpy as np
 from numpy.typing import NDArray
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
 from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
@@ -12,20 +8,26 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import WorldT
 
 
-def set_seed(seed: int = 42) -> None:
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    # When running on the CuDNN backend, two further options must be set
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    # Set a fixed value for the hash seed
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    print(f"Random seed set as {seed}")
+def save_frames_as_gif(
+    frames, path="./", filename="env-render-episode-", ep=0, fps=60, dpi=72
+):
+    """Save a list of frames as a gif.
 
-
-def save_frames_as_gif(frames, path="./", filename="collect-", ep=0, fps=60, dpi=72):
+    Parameters
+    ----------
+    frames : ndarray
+        list of frames to be saved as gif. Each frame is an RGB image of the environment at a time step.
+    path : str, optional
+       location to save the gif, by default "./"
+    filename : str, optional
+        name of the gif, by default "env-render-episode-". The episode number is appended to the filename. Thus, entire path of saved gif is "path/filename"+"ep.gif"
+    ep : int, optional
+        the episode number during which the frames were recorded, by default 0. For example, it is useful if the frames are saved during RL agent training to identify the episode number during which the frames were recorded.
+    fps : int, optional
+        frequency at which consecutive images or frames are displayed in the gif, by default 60
+    dpi : int, optional
+        output resolution of gif, by default 72
+    """
     filename = filename + str(ep) + ".gif"
     plt.figure(figsize=(frames[0].shape[1] / 72.0, frames[0].shape[0] / 72.0), dpi=dpi)
 
