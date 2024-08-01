@@ -50,7 +50,7 @@ class FourRooms(MultiGridEnv):
         self,
         agent_pos=None,
         goal_pos=None,
-        grid_size: tuple = (10, 10),
+        grid_size: tuple = (19, 19),
         max_steps: int = 100,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -74,7 +74,7 @@ class FourRooms(MultiGridEnv):
         self._goal_default_pos = goal_pos
         see_through_walls: bool = False
 
-        agents = [
+        self.agents = [
             Agent(
                 self.world,
                 color="blue",
@@ -90,7 +90,7 @@ class FourRooms(MultiGridEnv):
             height=self.height,
             max_steps=max_steps,
             see_through_walls=see_through_walls,
-            agents=agents,
+            agents=self.agents,
             partial_obs=partial_obs,
             agent_view_size=agent_view_size,
             actions_set=self.actions_set,
@@ -139,7 +139,7 @@ class FourRooms(MultiGridEnv):
             # assuming random start direction
             self.agent_dir = self._rand_int(0, 4)
         else:
-            self.place_agent(self.agents)
+            self.place_agent(self.agents[0])
 
         if self._goal_default_pos is not None:
             goal = Goal(self.world, 0)
