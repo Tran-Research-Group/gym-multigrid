@@ -64,6 +64,7 @@ class FourRooms(MultiGridEnv):
         ----------
 
         """
+        partial_obs = True
 
         self.width = grid_size[0]
         self.height = grid_size[1]
@@ -95,6 +96,7 @@ class FourRooms(MultiGridEnv):
             agents=self.agents,
             agent_view_size=agent_view_size,
             actions_set=self.actions_set,
+            partial_obs=partial_obs,
             world=self.world,
             render_mode=render_mode,
         )
