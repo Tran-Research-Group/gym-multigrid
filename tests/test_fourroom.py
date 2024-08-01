@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 def test_fr() -> None:
     env = FourRooms(render_mode="human")
-    obs, _ = env.reset()
+    obs = env.reset()
     env.render()
 
     while True:
