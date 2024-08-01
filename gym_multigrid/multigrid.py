@@ -489,7 +489,7 @@ class MultiGridEnv(gym.Env):
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
 
-            grid = self.grid.slice(self.world, topX, topY, a.view_size, a.view_size)
+            grid = self.grid.slice(topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
                 grid = grid.rotate_left()
@@ -501,7 +501,7 @@ class MultiGridEnv(gym.Env):
                     agent_pos=(a.view_size // 2, a.view_size - 1)
                 )
             else:
-                vis_mask = np.ones(shape=(grid.width, grid.height), dtype=np.bool)
+                vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
 
             grids.append(grid)
             vis_masks.append(vis_mask)
@@ -517,9 +517,7 @@ class MultiGridEnv(gym.Env):
 
         # Encode the partially observable view into a numpy array
         obs = [
-            grid.encode_for_agents(
-                self.world, [grid.width // 2, grid.height - 1], vis_mask
-            )
+            grid.encode_for_agents([grid.width // 2, grid.height - 1], vis_mask)
             for grid, vis_mask in zip(grids, vis_masks)
         ]
 
@@ -537,7 +535,7 @@ class MultiGridEnv(gym.Env):
 
         return img
 
-    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(self, close=False, highlight=True, tile_size=TILE_PIXELS):
         """
         Render the whole-grid human view
         """
