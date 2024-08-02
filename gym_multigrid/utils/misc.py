@@ -32,3 +32,28 @@ def save_frames_as_gif(frames, path="./", filename="collect-", ep=0):
     anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=50)
     anim.save(path + filename, writer="imagemagick", fps=60)
     plt.close()
+
+def cartesian_product(self, arr1, arr2):
+    arr1 = np.asarray(arr1)
+    arr2 = np.asarray(arr2)
+    
+    # Ensure arr1 and arr2 are 2D
+    if arr1.ndim == 1:
+        arr1 = arr1[:, np.newaxis]  # Convert 1D to 2D (n, 1)
+    if arr2.ndim == 1:
+        arr2 = arr2[:, np.newaxis]  # Convert 1D to 2D (p, 1)
+
+    n, m = arr1.shape
+    p, r = arr2.shape
+    
+    # Create a meshgrid for Cartesian product
+    arr1_expanded = arr1[:, np.newaxis, :]  # Shape (n, 1, m)
+    arr2_expanded = arr2[np.newaxis, :, :]  # Shape (1, p, r)
+    
+    # Compute Cartesian product
+    cart_product = np.concatenate([np.tile(arr1_expanded, (1, p, 1)), np.tile(arr2_expanded, (n, 1, 1))], axis=-1)
+    
+    # Reshape to the desired output shape (n*p, m + r)
+    result = cart_product.reshape(n * p, m + r)
+    
+    return result
