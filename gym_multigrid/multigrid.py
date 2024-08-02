@@ -308,8 +308,8 @@ class MultiGridEnv(gym.Env):
 
             pos = np.array(
                 (
-                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
-                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
+                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width)),
+                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height)),
                 )
             )
 

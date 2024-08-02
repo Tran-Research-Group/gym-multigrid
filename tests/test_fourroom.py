@@ -21,13 +21,21 @@ import matplotlib.pyplot as plt
 
 
 def test_fr() -> None:
-    env = FourRooms(render_mode="human")
-    obs = env.reset()
+    env = FourRooms(max_steps=10000, render_mode="human")
+    obs = env.reset(seed=2)
     env.render()
 
+    rew_sum = 0
     while True:
         action = np.random.choice(list(env.actions_set))
+        # action = input()
         obs, reward, terminated, truncated, info = env.step(action)
+        rew_sum += reward
         env.render()
         if terminated or truncated:
             break
+
+    print(rew_sum)
+
+
+# test_fr()
