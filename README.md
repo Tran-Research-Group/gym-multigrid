@@ -33,7 +33,8 @@ poetry install
 | Observation Encoding  |`(OBJECT_IDX, COLOR_IDX, STATE)` |
 | Reward                | `(0, 1)`       |
 | Number of Agents      | `2`            |
-| Termination Condition | None, `max_timesteps = 50` |
+| Termination Condition | `None`         |
+| Truncation Steps      | `50`           |
 | Creation              | `gymnasium.make("gym_multigrid.envs:CollectGameRespawn")` |
 
 Agents move around the grid to collect objects. The object respawns in a random location after being collected.
