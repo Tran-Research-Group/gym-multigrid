@@ -31,6 +31,3 @@ def test_fr() -> None:
         env.render()
         if terminated or truncated:
             break
-
-
-test_fr()
