@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import COLORS, FR_COLORS, CTF_COLORS, MAZE_COLORS
+from .constants import COLORS, CTF_COLORS, MAZE_COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -55,7 +55,7 @@ DefaultWorld = World(
 FRWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=FR_COLORS,
+    COLORS=COLORS,
     OBJECT_TO_IDX={
         "unseen": 0,
         "empty": 1,

@@ -59,8 +59,8 @@ class Grid:
         self.grid[j * self.width + i] = v
 
     def get(self, i: int, j: int) -> WorldObjT | None:
-        assert i >= 0 and i < self.width
-        assert j >= 0 and j < self.height
+        assert i >= 0 and i <= self.width
+        assert j >= 0 and j <= self.height
         return self.grid[j * self.width + i]
 
     def horz_wall(

@@ -226,19 +226,11 @@ class FourRooms(MultiGridEnv):
 
             # Move forward
             elif actions[i] == self.actions.forward:
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        done = True
-                        rewards = self._reward(i, rewards, 1)
-                    elif fwd_cell.type == "switch":
-                        self._handle_switch(i, rewards, fwd_pos, fwd_cell)
-                    elif fwd_cell.type == "ball":
-                        rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
+                if fwd_cell is None or fwd_cell.can_overlap():
+                    self.agent_pos = tuple(fwd_pos)
+                if fwd_cell is not None and fwd_cell.type == "goal":
+                    terminated = True
+                    rewards = self._reward(i, rewards, 1)
 
             else:
                 raise ValueError(f"Unknown action: {actions[i]}")

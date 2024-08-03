@@ -21,8 +21,8 @@ import matplotlib.pyplot as plt
 
 
 def test_fr() -> None:
-    env = FourRooms(max_steps=10000, render_mode="human")
-    obs = env.reset(seed=2)
+    env = FourRooms(max_steps=100, render_mode="rgb_array")
+    obs = env.reset()
     env.render()
 
     rew_sum = 0
@@ -36,6 +36,4 @@ def test_fr() -> None:
             break
 
     print(rew_sum)
-
-
-# test_fr()
+    env.close()

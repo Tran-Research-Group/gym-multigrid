@@ -18,15 +18,6 @@ COLORS = {
     "light_blue": np.array([90, 170, 223]),
 }
 
-FR_COLORS = {
-    "red": np.array([255, 0, 0]),
-    "green": np.array([0, 255, 0]),
-    "blue": np.array([0, 0, 255]),
-    "purple": np.array([112, 39, 195]),
-    "yellow": np.array([255, 255, 0]),
-    "grey": np.array([100, 100, 100]),
-}
-
 CTF_COLORS: dict[str, NDArray[np.uint]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),

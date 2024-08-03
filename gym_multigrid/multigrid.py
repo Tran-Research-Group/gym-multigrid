@@ -217,14 +217,14 @@ class MultiGridEnv(gym.Env):
 
     def _rand_int(self, low, high):
         """
-        Generate random integer in [low,high[
+        Generate random integer in [low,high]
         """
 
         return random.randint(low, high)
 
     def _rand_float(self, low, high):
         """
-        Generate random float in [low,high[
+        Generate random float in [low,high]
         """
 
         return self.np_random.uniform(low, high)
@@ -306,13 +306,16 @@ class MultiGridEnv(gym.Env):
 
             num_tries += 1
 
+            x = (top[0], min(top[0] + size[0], self.grid.width - 1))
+            y = (top[1], min(top[1] + size[1], self.grid.height - 1))
+
             pos = np.array(
                 (
-                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width)),
-                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height)),
+                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
+                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
                 )
             )
-
+            # print((x, y, pos), end=" ")
             # Don't place the object on top of another object
             if self.grid.get(*pos) != None:
                 continue
