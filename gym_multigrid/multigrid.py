@@ -434,8 +434,8 @@ class MultiGridEnv(gym.Env):
                     elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
                 elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*self.agents[i].pos, None)
                     self.grid.set(*fwd_pos, self.agents[i])
+                    self.grid.set(*self.agents[i].pos, None)
                     self.agents[i].pos = fwd_pos
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
