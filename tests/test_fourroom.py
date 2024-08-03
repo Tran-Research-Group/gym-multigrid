@@ -18,14 +18,13 @@ import matplotlib.pyplot as plt
 
 
 def test_fr() -> None:
-    env = FourRooms(max_steps=100, render_mode="rgb_array")
+    env = FourRooms(max_steps=10, render_mode="human")
     obs = env.reset()
     env.render()
 
     rew_sum = 0
     while True:
         action = np.random.choice(list(env.actions_set))
-        # action = input()
         obs, reward, terminated, truncated, info = env.step(action)
         rew_sum += reward
         env.render()

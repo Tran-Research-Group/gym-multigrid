@@ -126,13 +126,13 @@ class FourRooms(MultiGridEnv):
                 # Bottom wall and door
                 if i + 1 < 2:
                     self.grid.vert_wall(xR, yT, room_h)
-                    pos = (xR, self._rand_int(yT + 1, yB))
+                    pos = (xR, self._rand_int(yT + 1, yB - 1))
                     self.grid.set(*pos, None)
 
                 # Bottom wall and door
                 if j + 1 < 2:
                     self.grid.horz_wall(xL, yB, room_w)
-                    pos = (self._rand_int(xL + 1, xR), yB)
+                    pos = (self._rand_int(xL + 1, xR - 1), yB)
                     self.grid.set(*pos, None)
 
         # Randomize the player start position and orientation
