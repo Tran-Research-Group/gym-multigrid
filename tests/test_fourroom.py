@@ -1,6 +1,3 @@
-import sys
-
-sys.path.append("../gym-multigrid")
 import pytest
 import os
 
