@@ -312,7 +312,7 @@ class MultiGridEnv(gym.Env):
                     self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
                 )
             )
-            # print((x, y, pos), end=" ")
+
             # Don't place the object on top of another object
             if self.grid.get(*pos) != None:
                 continue
