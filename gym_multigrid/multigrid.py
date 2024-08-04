@@ -1,14 +1,14 @@
 import math
+import random
 from typing import Literal, Type, TypeVar
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-import random
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.world import DefaultWorld, World, WorldT
-from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
+from gym_multigrid.core.world import DefaultWorld, WorldT
+from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
@@ -466,9 +466,7 @@ class MultiGridEnv(gym.Env):
             obs = self.gen_obs()
         else:
             obs = [
-                self.grid.encode_for_agents(
-                    world=self.world, agent_pos=self.agents[i].pos
-                )
+                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
                 for i in range(len(actions))
             ]
 
@@ -489,7 +487,7 @@ class MultiGridEnv(gym.Env):
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
 
-            grid = self.grid.slice(self.world, topX, topY, a.view_size, a.view_size)
+            grid = self.grid.slice(topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
                 grid = grid.rotate_left()
