@@ -5,6 +5,7 @@ from typing import Any, Iterable, SupportsFloat, TypeVar
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 import numpy as np
+import random
 from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, FRActions
@@ -88,6 +89,8 @@ class FourRooms(MultiGridEnv):
             )
         ]
 
+        self.grids = {}
+
         super().__init__(
             width=self.width,
             height=self.height,
@@ -157,12 +160,11 @@ class FourRooms(MultiGridEnv):
         seed: int | None = None,
         options: dict | None = None,
     ):
-
-        super().reset(seed=seed)
-        # Generate a new random grid at the start of each episode
-        # To keep the same grid for each episode, call env.seed() with
-        # the same seed before calling env.reset()
-        self._gen_grid(self.width, self.height)
+        if str(seed) in self.grids.keys():
+            self.grid = self.grids[str(seed)]
+        else:
+            self._gen_grid(self.width, self.height)
+            self.grids[str(seed)] = self.grid
 
         # These fields should be defined by _gen_grid
         for a in self.agents:
@@ -185,20 +187,15 @@ class FourRooms(MultiGridEnv):
                 for i in range(len(self.agents))
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
-        return obs[0]
+        return obs
 
     def step(self, actions):
-        """
-        Multi-Agent is not implemented
-        """
         self.step_count += 1
-        actions = [actions]  # b/c single agent
 
         order = np.random.permutation(len(actions))
 
         rewards = np.zeros(len(actions))
-        terminated = False
-        truncated = False
+        done = False
 
         for i in order:
             if (
@@ -228,31 +225,54 @@ class FourRooms(MultiGridEnv):
             elif actions[i] == self.actions.forward:
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
-                        terminated = True
+                        done = True
                         rewards = self._reward(i, rewards, 1)
+                    elif fwd_cell.type == "switch":
+                        self._handle_switch(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "ball":
+                        rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
                 elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*fwd_pos, self.agents[i])
                     self.grid.set(*self.agents[i].pos, None)
+                    self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
+            elif "build" in self.actions.available and actions[i] == self.actions.build:
+                self._handle_build(i, rewards, fwd_pos, fwd_cell)
+
+            # Pick up an object
+            elif actions[i] == self.actions.pickup:
+                self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+
+            # Drop an object
+            elif actions[i] == self.actions.drop:
+                self._handle_drop(i, rewards, fwd_pos, fwd_cell)
+
+            # Toggle/activate an object
+            elif actions[i] == self.actions.toggle:
+                if fwd_cell:
+                    fwd_cell.toggle(self, fwd_pos)
+
+            # Done action (not used by default)
+            elif actions[i] == self.actions.done:
+                pass
+
             else:
-                raise ValueError(f"Unknown action: {actions[i]}")
+                assert False, "unknown action"
 
         if self.step_count >= self.max_steps:
-            truncated = True
-
-        if self.render_mode == "human":
-            self.render()
+            done = True
 
         if self.partial_obs:
             obs = self.gen_obs()
         else:
             obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
+                self.grid.encode_for_agents(
+                    world=self.world, agent_pos=self.agents[i].pos
+                )
                 for i in range(len(actions))
             ]
 
-        obs = [self.world.normalize_obs * ob for ob in obs]  # b/c single agent
+        obs = [self.world.normalize_obs * ob for ob in obs]
 
-        return obs[0], rewards[0], terminated, truncated, {}  # b/c single agent
+        return obs, rewards, done, {}
