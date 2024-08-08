@@ -18,6 +18,22 @@ class CollectGameEnv(MultiGridEnv):
     """
 
     def __init__(self, *args, actions_set=CollectActions, **kwargs):
+        """
+        Initialize the CollectGameEnv.
+
+        Parameters
+        ----------
+        size : int, optional
+            Size of grid if square. Default 10
+        num_balls : list[int]
+            Total number of balls present in environment.
+        agents_index : list[int]
+            Colour index for each agent.
+        balls_index : list[int]
+            Colour index for each ball type.
+        balls_reward : list[float]
+            Reward given for collecting each ball type.
+        """
         self.size = kwargs["size"]
         self.num_balls = kwargs["num_balls"]
         self.collected_balls = 0
@@ -26,6 +42,9 @@ class CollectGameEnv(MultiGridEnv):
         self.num_ball_types = len(kwargs["balls_index"])
         self.agents_index = kwargs["agents_index"]
         self.world = CollectWorld
+        self.actions_set = CollectActions
+        partial_obs: bool = False
+        view_size: int = 10
         self.keys = [
             "agent1ball1",
             "agent1ball2",
@@ -47,12 +66,22 @@ class CollectGameEnv(MultiGridEnv):
             world=self.world,
             see_through_walls=False,
             agents=agents,
-            partial_obs=False,
-            actions_set=actions_set,
+            partial_obs=partial_obs,
+            actions_set=self.actions_set,
             render_mode="rgb_array",
         )
 
     def _gen_grid(self, width: int, height: int):
+        """
+        Generate grid and place all the balls and agents.
+
+        Parameters
+        ----------
+        width : int
+            width of grid
+        height : int
+            height of grid
+        """
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
@@ -141,7 +170,6 @@ class CollectGameEnv(MultiGridEnv):
         self.step_count += 1
         for i in order:
             if actions[i] == self.actions.north:
-                # print('up')
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
@@ -157,8 +185,6 @@ class CollectGameEnv(MultiGridEnv):
                 next_pos = self.agents[i].west_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.still:
-                self._reward(i, rewards, -0.01)
         if self.collected_balls == self.num_balls:
             terminated = True
         if self.step_count >= self.max_steps:
@@ -197,13 +223,6 @@ class CollectGame3Obj2Agent(CollectGameEnv):
                 )
         for a in self.agents:
             self.place_agent(a)
-
-    def phi(self, state, next_state):
-        # how many of each type of object was picked up between s and s'
-        ball1 = np.sum(state[:, :, 0]) - np.sum(next_state[:, :, 0])
-        ball2 = np.sum(state[:, :, 1]) - np.sum(next_state[:, :, 1])
-        ball3 = np.sum(state[:, :, 2]) - np.sum(next_state[:, :, 2])
-        return np.array([ball1, ball2, ball3])
 
     def phi_dim(self):
         return self.num_ball_types
@@ -322,7 +341,7 @@ class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
         super().__init__(*args, **kwargs)
 
     def _respawn(self, color):
-        self.place_obj(Ball(self.world, color, 1))
+        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
 
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         if fwd_cell:
@@ -349,3 +368,91 @@ class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
             self.grid.set(*next_pos, self.agents[i])
             self.grid.set(*self.agents[i].pos, None)
             self.agents[i].pos = next_pos
+
+class CollectGameRespawn(CollectGame3Obj2Agent):
+    def __init__(self):
+        super().__init__()
+        self.max_steps = 50
+
+    def _respawn(self, color):
+        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
+
+    def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
+        if fwd_cell:
+            if fwd_cell.can_pickup():
+                fwd_cell.pos = np.array([-1, -1])
+                ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
+                self.grid.set(*fwd_pos, None)
+                self._respawn(ball_idx)
+                self.collected_balls += 1
+                self._reward(i, rewards, fwd_cell.reward)
+                self.info[self.keys[3 * i + ball_idx]] += 1
+
+    def step(self, actions):
+        order = np.random.permutation(len(actions))
+        rewards = np.zeros(len(actions))
+        terminated = False
+        truncated = False
+        self.step_count += 1
+        for i in order:
+            if actions[i] == self.actions.north:
+                next_pos = self.agents[i].north_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.east:
+                next_pos = self.agents[i].east_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.south:
+                next_pos = self.agents[i].south_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+            elif actions[i] == self.actions.west:
+                next_pos = self.agents[i].west_pos()
+                next_cell = self.grid.get(*next_pos)
+                self.move_agent(rewards, i, next_cell, next_pos)
+        if self.step_count >= self.max_steps:
+            truncated = True
+
+        obs = self.grid.encode()
+        return obs, rewards, terminated, truncated, self.info
+
+
+class CollectGameRespawnClustered(CollectGameRespawn):
+    def __init__(self):
+        super().__init__()
+
+    def _gen_grid(self, width, height):
+        self.grid = Grid(width, height, self.world)
+
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
+
+        # place balls
+        partitions = [(0, 0), (width // 2 - 1, height // 2 - 1), (width // 2 - 1, 0)]
+        partition_size = (width // 2 + 1, height // 2 + 1)
+        num_ball_per_type = self.num_balls // len(partitions)
+        index = 0
+        for ball in range(self.num_balls):
+            if ball % num_ball_per_type == 0:
+                top = partitions[ball // num_ball_per_type]
+                index = ball // num_ball_per_type
+            self.place_obj(Ball(self.world, index, 1), top=top, size=partition_size)
+
+        # place agents
+        agent_pos = (1, height - 2)
+        for a in self.agents:
+            self.place_agent(a, pos=agent_pos)
+            agent_pos = (agent_pos[0] + 1, agent_pos[1])
+
+    def _respawn(self, color):
+        partitions = [
+            (0, 0),
+            (self.width // 2 - 1, self.height // 2 - 1),
+            (self.width // 2 - 1, 0),
+        ]
+        partition_size = (self.width // 2 + 1, self.height // 2 + 1)
+        top = partitions[color]
+        self.place_obj(Ball(self.world, color, self.balls_reward[color]), top=top, size=partition_size)
