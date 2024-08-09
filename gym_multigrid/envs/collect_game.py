@@ -1,12 +1,9 @@
-import random
-from typing import Literal, Type
-
 import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import CollectWorld
-from gym_multigrid.core.agent import ActionsT, AgentT, CollectActions, Agent
+from gym_multigrid.core.agent import CollectActions, Agent
 from gym_multigrid.core.object import Ball, WorldObjT
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.typing import Position
@@ -23,7 +20,7 @@ class CollectGameEnv(MultiGridEnv):
 
         Parameters
         ----------
-        size : int, optional
+        size : int
             Size of grid if square. Default 10
         num_balls : list[int]
             Total number of balls present in environment.
@@ -33,18 +30,21 @@ class CollectGameEnv(MultiGridEnv):
             Colour index for each ball type.
         balls_reward : list[float]
             Reward given for collecting each ball type.
+        respawn : bool
+            Whether or not balls respawn after being collected.
         """
         self.size = kwargs["size"]
-        self.num_balls = kwargs["num_balls"]
+        self.num_balls = np.sum(np.array(kwargs["num_balls"]))
         self.collected_balls = 0
         self.balls_index = kwargs["balls_index"]
         self.balls_reward = kwargs["balls_reward"]
         self.num_ball_types = len(kwargs["balls_index"])
         self.agents_index = kwargs["agents_index"]
+        self.respawn = kwargs["respawn"]
         self.world = CollectWorld
         self.actions_set = CollectActions
         partial_obs: bool = False
-        view_size: int = 10
+        self.info = {}
         self.keys = [
             "agent1ball1",
             "agent1ball2",
@@ -90,7 +90,9 @@ class CollectGameEnv(MultiGridEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        assert type(self.num_balls) is list
+        if not isinstance(self.num_balls, list):
+            raise TypeError(f'Expected num balls to be of type list, \
+            however type {type(self.num_balls)} was passed')
 
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
@@ -102,7 +104,7 @@ class CollectGameEnv(MultiGridEnv):
         for a in self.agents:
             self.place_agent(a)
 
-    def reset(self, seed: int | None = None, options={}):
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.collected_balls = 0
         self.info = {
             "agent1ball1": 0,
@@ -117,12 +119,15 @@ class CollectGameEnv(MultiGridEnv):
         return state, self.info
 
     def _reward(
-        self, agent_index: int, rewards: NDArray[np.float_], reward: float = 1
+        self, current_agent: int, rewards: NDArray[np.float_], reward: float = 1
     ) -> None:
         """
         Compute the reward to be given upon success
         """
-        rewards[agent_index] += reward
+        rewards[current_agent] += reward
+    
+    def _respawn(self, color):
+        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
 
     def _handle_pickup(
         self,
@@ -131,14 +136,15 @@ class CollectGameEnv(MultiGridEnv):
         fwd_pos: Position,
         fwd_cell: WorldObjT | None,
     ) -> None:
-        if fwd_cell:
-            if fwd_cell.can_pickup():
-                fwd_cell.pos = np.array([-1, -1])
-                ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
-                self.grid.set(*fwd_pos, None)
-                self.collected_balls += 1
-                self._reward(i, rewards, fwd_cell.reward)
-                self.info[self.keys[self.num_ball_types * i + ball_idx]] += 1
+        if fwd_cell and fwd_cell.can_pickup():
+            fwd_cell.pos = np.array([-1, -1])
+            ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
+            self.grid.set(*fwd_pos, None)
+            if self.respawn:
+                self._respawn(ball_idx)
+            self.collected_balls += 1
+            self._reward(i, rewards, fwd_cell.reward)
+            self.info[self.keys[self.num_ball_types * i + ball_idx]] += 1
 
     def move_agent(
         self,
@@ -147,18 +153,32 @@ class CollectGameEnv(MultiGridEnv):
         next_cell: WorldObjT | None,
         next_pos: Position,
     ) -> None:
+        """
+        Method to move given agent to given next position
+
+        Parameters
+        ----------
+        rewards : NDArray[np.float_]
+            array of rewards for each agent
+        agent_index : int
+            index of agent to move
+        next_cell : WorldObjT | None
+            object corresponding to next position
+        next_pos : Position
+            position coordinates to move agent to
+        """
         if next_cell is not None:
             if next_cell.type == "ball":
                 self._handle_pickup(agent_index, rewards, next_pos, next_cell)
+                # move agent to cell
                 self.grid.set(*next_pos, self.agents[agent_index])
                 self.grid.set(*self.agents[agent_index].pos, None)
+                # update agent position variable
                 self.agents[agent_index].pos = next_pos
-            self._reward(agent_index, rewards, -0.01)
         elif next_cell is None or next_cell.can_overlap():
             self.grid.set(*next_pos, self.agents[agent_index])
             self.grid.set(*self.agents[agent_index].pos, None)
             self.agents[agent_index].pos = next_pos
-            self._reward(agent_index, rewards, -0.01)
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
@@ -185,7 +205,7 @@ class CollectGameEnv(MultiGridEnv):
                 next_pos = self.agents[i].west_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-        if self.collected_balls == self.num_balls:
+        if not self.respawn and self.collected_balls == self.num_balls:
             terminated = True
         if self.step_count >= self.max_steps:
             truncated = True
@@ -193,9 +213,21 @@ class CollectGameEnv(MultiGridEnv):
         obs = self.grid.encode()
         return obs, rewards, terminated, truncated, self.info
 
-class CollectGame3Obj2Agent(CollectGameEnv):
+    def phi_dim(self) -> int:
+        """
+        Helper method to get feature vector dimension
+
+        Returns
+        -------
+        int
+            length of feature vector = number of ball types
+        """
+        return self.num_ball_types
+
+class CollectGameEvenDist(CollectGameEnv):
     """
-        Collect game instance that has 3 types of objects and 2 agents
+        Collect game instance that has the same amount of balls
+        for each type of ball present
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -210,7 +242,9 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        assert type(self.num_balls) is int
+        if not isinstance(self.num_balls, int):
+            raise TypeError(f'Expected num balls to be of type int, \
+            however type {type(self.num_balls)} was passed')
         assert len(self.balls_reward) == self.num_ball_types
         for ball_type in range(self.num_ball_types):
             for _ in range(self.num_balls_per_type):
@@ -224,12 +258,10 @@ class CollectGame3Obj2Agent(CollectGameEnv):
         for a in self.agents:
             self.place_agent(a)
 
-    def phi_dim(self):
-        return self.num_ball_types
-
-class CollectGameQuadrants(CollectGame3Obj2Agent):
+class CollectGameQuadrants(CollectGameEnv):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.num_balls_per_type = self.num_balls // len(self.balls_index)
 
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height, self.world)
@@ -266,7 +298,8 @@ class CollectGameQuadrants(CollectGame3Obj2Agent):
         for a in self.agents:
             self.place_agent(a, agent_pos)
             agent_pos = (agent_pos[0] + 1, agent_pos[1])
-class CollectGameRooms(CollectGame3Obj2Agent):
+
+class CollectGameRooms(CollectGameEnv):
     def __init__(self, size: int = 11, *args, **kwargs):
         super().__init__(size=size, *args, **kwargs)
 
@@ -307,7 +340,9 @@ class CollectGameRooms(CollectGame3Obj2Agent):
         ]
         partition_size = (width // 2 - 1, width // 2 - 1)
         index = 0
-        assert type(self.num_balls) is int
+        if not isinstance(self.num_balls, int):
+            raise TypeError(f'Expected num balls to be of type int, \
+            however type {type(self.num_balls)} was passed')
         num_colors: int = len(self.balls_index)
         assert len(self.balls_reward) == num_colors
         num_ball: int = round(self.num_balls / num_colors)
@@ -326,7 +361,6 @@ class CollectGameRooms(CollectGame3Obj2Agent):
                 size=partition_size,
             )
 
-
 class CollectGameRoomsFixedHorizon(CollectGameRooms):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -335,90 +369,7 @@ class CollectGameRoomsFixedHorizon(CollectGameRooms):
         obs, rewards, _, truncated, info = super().step(actions)
         return obs, rewards, False, truncated, info
 
-
-class CollectGameRoomsRespawn(CollectGameRoomsFixedHorizon):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def _respawn(self, color):
-        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
-
-    def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
-        if fwd_cell:
-            if fwd_cell.can_pickup():
-                fwd_cell.pos = np.array([-1, -1])
-                ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
-                self.grid.set(*fwd_pos, None)
-                self._respawn(ball_idx)
-                self.collected_balls += 1
-                self._reward(i, rewards, fwd_cell.reward)
-                self.info[self.keys[3 * i + ball_idx]] += 1
-
-    def move_agent(self, rewards, i, next_cell, next_pos):
-        if next_cell is not None:
-            if next_cell.type == "ball":
-                self._handle_pickup(i, rewards, next_pos, next_cell)
-                # move agent to cell
-                self.grid.set(*next_pos, self.agents[i])
-                self.grid.set(*self.agents[i].pos, None)
-                # update agent position variable
-                self.agents[i].pos = next_pos
-            # self._reward(i, rewards, -0.01)
-        elif next_cell is None or next_cell.can_overlap():
-            self.grid.set(*next_pos, self.agents[i])
-            self.grid.set(*self.agents[i].pos, None)
-            self.agents[i].pos = next_pos
-
-class CollectGameRespawn(CollectGame3Obj2Agent):
-    def __init__(self):
-        super().__init__()
-        self.max_steps = 50
-
-    def _respawn(self, color):
-        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
-
-    def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
-        if fwd_cell:
-            if fwd_cell.can_pickup():
-                fwd_cell.pos = np.array([-1, -1])
-                ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
-                self.grid.set(*fwd_pos, None)
-                self._respawn(ball_idx)
-                self.collected_balls += 1
-                self._reward(i, rewards, fwd_cell.reward)
-                self.info[self.keys[3 * i + ball_idx]] += 1
-
-    def step(self, actions):
-        order = np.random.permutation(len(actions))
-        rewards = np.zeros(len(actions))
-        terminated = False
-        truncated = False
-        self.step_count += 1
-        for i in order:
-            if actions[i] == self.actions.north:
-                next_pos = self.agents[i].north_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.east:
-                next_pos = self.agents[i].east_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.south:
-                next_pos = self.agents[i].south_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.west:
-                next_pos = self.agents[i].west_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-        if self.step_count >= self.max_steps:
-            truncated = True
-
-        obs = self.grid.encode()
-        return obs, rewards, terminated, truncated, self.info
-
-
-class CollectGameRespawnClustered(CollectGameRespawn):
+class CollectGameQuadrantsRespawn(CollectGameQuadrants):
     def __init__(self):
         super().__init__()
 
