@@ -1,21 +1,17 @@
 import enum
 import math
 from typing import Type, TypeVar
-
 import numpy as np
 from numpy.typing import NDArray
 from gym_multigrid.core.grid import Grid
-
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
-from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
-from .object import WorldObj
-from .constants import DIR_TO_VEC
+from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
+from gym_multigrid.core.object import WorldObj
+from gym_multigrid.core.constants import DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
-
-# ActionsT = TypeVar("ActionsT", bound="Actions")
 
 
 class DefaultActions(enum.IntEnum):
@@ -63,6 +59,8 @@ AgentT = TypeVar("AgentT", bound="Agent")
 
 
 class Agent(WorldObj):
+    """Defines the class for an agent in the environment"""
+
     def __init__(
         self,
         world: WorldT,
@@ -74,6 +72,27 @@ class Agent(WorldObj):
         bg_color: str | None = None,
         type: str = "agent",
     ):
+        """Initialize the agent object
+
+        Parameters
+        ----------
+        world : WorldT
+            _description_
+        index : int, optional
+            _description_, by default 0
+        view_size : int, optional
+            _description_, by default 7
+        actions : Type[ActionsT], optional
+            _description_, by default DefaultActions
+        dir_to_vec : list[NDArray], optional
+            _description_, by default DIR_TO_VEC
+        color : str | None, optional
+            _description_, by default None
+        bg_color : str | None, optional
+            _description_, by default None
+        type : str, optional
+            _description_, by default "agent"
+        """
         if color is None:
             color = world.IDX_TO_COLOR[index]
         else:

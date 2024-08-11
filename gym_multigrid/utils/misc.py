@@ -9,7 +9,7 @@ from gym_multigrid.core.world import WorldT
 
 
 def save_frames_as_gif(
-    frames, path="./", filename="env-render-episode-", ep=0, fps=60, dpi=72
+    frames, path="./", filename="env-render-episode", ep=0, fps=60, dpi=72
 ):
     """Save a list of frames as a gif.
 
@@ -28,7 +28,7 @@ def save_frames_as_gif(
     dpi : int, optional
         output resolution of gif, by default 72
     """
-    filename = filename + str(ep) + ".gif"
+    filename = filename + "-" + str(ep) + ".gif"
     plt.figure(figsize=(frames[0].shape[1] / 72.0, frames[0].shape[0] / 72.0), dpi=dpi)
 
     patch = plt.imshow(frames[0])

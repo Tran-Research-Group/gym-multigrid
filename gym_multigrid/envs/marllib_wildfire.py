@@ -1,4 +1,3 @@
-# pylint: skip-file
 """Defines the WildfireEnv class, which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire
 """
 
@@ -6,7 +5,6 @@ from collections import OrderedDict
 import random
 from gym.spaces import Box, Dict, Discrete
 import numpy as np
-from typing import Any
 from marllib.envs.gym_multigrid.multigrid import MultiGridEnv
 from marllib.envs.gym_multigrid.core.world import WildfireWorld
 from marllib.envs.gym_multigrid.core.agent import WildfireActions, Agent
@@ -43,6 +41,7 @@ class WildfireEnv(MultiGridEnv):
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
+        render_selfish_region_boundaries=False,
         cooperative_reward=False,
         log_selfish_region_metrics=False,
         selfish_region_xmin=None,
@@ -81,18 +80,20 @@ class WildfireEnv(MultiGridEnv):
             action space of the agents. All agents have the same action space. By default WildfireActions.
         render_mode : str, optional
             mode of rendering the environment, by default "rgb_array"
+        render_selfish_region_boundaries : bool, optional
+            whether to render boundaries of selfish regions, by default False
         cooperative_reward : bool, optional
             whether the agents use a cooperative reward, by default False. If True, the agents are fully cooperative and receive the same reward.
         log_selfish_region_metrics : bool, optional
             whether to log metrics related to trees in selfish regions, by default False
         selfish_region_xmin : list, optional
-            list containing x-coordinates of the leftmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing x-coordinates of the left boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
         selfish_region_xmax : list, optional
-            list containing x-coordinates of the rightmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing x-coordinates of the right boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
         selfish_region_ymin : list, optional
-            list containing y-coordinates of the topmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing y-coordinates of the top boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
         selfish_region_ymax : list, optional
-            list containing y-coordinates of the bottom-most boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing y-coordinates of the bottom boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
         two_initial_fires : bool, optional
             whether the initial state has two disjoint square fire regions, by default False
         """
@@ -101,6 +102,7 @@ class WildfireEnv(MultiGridEnv):
         self.delta_beta = delta_beta
         self.num_agents = num_agents
         self.agent_start_positions = agent_start_positions
+        self.agent_colors = agent_colors
         # observation vector of each agent is concatenation of obs_depth number of one-hot encodings, see paper for details. len(STATE_IDX_TO_COLOR_WILDFIRE) = the number of tree states
         self.obs_depth = self.num_agents + len(STATE_IDX_TO_COLOR_WILDFIRE)
         self.max_steps = max_steps
@@ -113,6 +115,7 @@ class WildfireEnv(MultiGridEnv):
         self.trees_on_fire = 0
         self.cooperative_reward = cooperative_reward
         self.two_initial_fires = two_initial_fires
+        self.render_selfish_region_boundaries = render_selfish_region_boundaries
         self.log_selfish_region_metrics = log_selfish_region_metrics
         if self.log_selfish_region_metrics:
             # initialize attributes for logging metrics related to trees in selfish regions
@@ -152,7 +155,7 @@ class WildfireEnv(MultiGridEnv):
                     index=i,
                     view_size=agent_view_size,
                     actions=actions_set,
-                    color=agent_colors[i],
+                    color=self.agent_colors[i],
                 )
                 for i in range(self.num_agents)
             ]
@@ -376,7 +379,7 @@ class WildfireEnv(MultiGridEnv):
         for a in self.agents:
             for o in self.agents:
                 if o.index != a.index:
-                    idx = o.index - np.heaviside(o.index - a.index, 0)
+                    idx = o.index - int(np.heaviside(o.index - a.index, 0))
                     # convert to agent centered coordinates
                     nc = [
                         o.pos[0] - a.pos[0],
@@ -879,15 +882,9 @@ class WildfireEnv(MultiGridEnv):
                         highlight_masks[abs_i, abs_j].append(i)
 
         # Render the grid
-        if self.cooperative_reward:
-            img = self.grid.render(
-                tile_size,
-                highlight_masks=highlight_masks if highlight else None,
-                uncached_object_types=self.uncahed_object_types,
-            )
-        else:
-            # include selfish region boundaries in render
-            colors = [COLORS[a.color] for a in self.agents]
+        if self.render_selfish_region_boundaries:
+            # include selfish region boundaries in the render
+            colors = [COLORS[color] for color in self.agent_colors]
             img = self.grid.render(
                 tile_size,
                 highlight_masks=highlight_masks if highlight else None,
@@ -898,13 +895,16 @@ class WildfireEnv(MultiGridEnv):
                 y_max=self.selfish_ymax,
                 colors=colors,
             )
+        else:
+            img = self.grid.render(
+                tile_size,
+                highlight_masks=highlight_masks if highlight else None,
+                uncached_object_types=self.uncahed_object_types,
+            )
 
         # Re-render the tiles containing agents to include trees below agent
-        if self.cooperative_reward:
-            for a in self.agents:
-                img = render_agent_tiles(img, a, self.helper_grid, self.world)
-        else:
-            # include selfish region boundaries in render
+        if self.render_selfish_region_boundaries:
+            # include selfish region boundaries in the render
             for a in self.agents:
                 img = render_agent_tiles(
                     img,
@@ -917,6 +917,9 @@ class WildfireEnv(MultiGridEnv):
                     y_max=self.selfish_ymax,
                     colors=colors,
                 )
+        else:
+            for a in self.agents:
+                img = render_agent_tiles(img, a, self.helper_grid, self.world)
 
         if self.render_mode == "human":
             self.window.show_img(img)

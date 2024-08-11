@@ -36,12 +36,14 @@ class WildfireEnv(MultiGridEnv):
         num_agents=2,
         agent_start_positions=((1, 1), (15, 15)),
         agent_colors=("red", "blue"),
+        agent_groups=None,
         agent_view_size=10,
         initial_fire_size=1,
         max_steps=100,
         partial_obs=False,
         actions_set=WildfireActions,
         render_mode="rgb_array",
+        render_selfish_region_boundaries=False,
         cooperative_reward=False,
         log_selfish_region_metrics=False,
         selfish_region_xmin=None,
@@ -66,8 +68,10 @@ class WildfireEnv(MultiGridEnv):
             number of UAV agents, by default 2
         agent_start_positions : tuple[tuple[int,int]], optional
             tuple of tuples containing the start positions of the agents, in order of agent index. By default ((1, 1), (15, 15))
-        agent_colors : tuple[str], optional
-            tuple of strings of color names of all agents. The strings should be keys in the COLORS dictionary in constants.py. Only applicable if cooperative_reward is False. Fully cooperative agents have light_blue color by default. By default self-interested agents have red and blue colors
+        agent_colors : tuple[str,str], optional
+            tuple of strings of color names of all agents (or groups if agents are grouped) in order of increasing index. All agents in a group have the same color. The strings should be keys in the COLORS dictionary in constants.py. Only applicable if cooperative_reward is False. Fully cooperative agents have light_blue color by default. By default self-interested agents have red and blue colors
+        agent_groups : tuple[tuple], optional
+            tuple of tuples containing the indices (in ascending order) of agents in each group. Only applicable if cooperative_reward is False. By default None
         agent_view_size : int, optional
             side of the square region visible to an agent with partial observability, by default 10. Only applicable if partial_obs is True
         initial_fire_size : int, optional
@@ -80,18 +84,20 @@ class WildfireEnv(MultiGridEnv):
             action space of the agents. All agents have the same action space. By default WildfireActions.
         render_mode : str, optional
             mode of rendering the environment, by default "rgb_array"
+        render_selfish_region_boundaries : bool, optional
+            whether to render boundaries of selfish regions, by default False
         cooperative_reward : bool, optional
             whether the agents use a cooperative reward, by default False. If True, the agents are fully cooperative and receive the same reward.
         log_selfish_region_metrics : bool, optional
             whether to log metrics related to trees in selfish regions, by default False
         selfish_region_xmin : list, optional
-            list containing x-coordinates of the leftmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing x-coordinates of the left boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
         selfish_region_xmax : list, optional
-            list containing x-coordinates of the rightmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing x-coordinates of the right boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
         selfish_region_ymin : list, optional
-            list containing y-coordinates of the topmost boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing y-coordinates of the top boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
         selfish_region_ymax : list, optional
-            list containing y-coordinates of the bottom-most boundaries of the regions of selfish interest for the agents. Regions of selfish interest are rectangular. List elements are in order of agent indices. Only applicable if cooperative_reward is False. By default None
+            list containing y-coordinates of the bottom boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
         two_initial_fires : bool, optional
             whether the initial state has two disjoint square fire regions, by default False
         """
@@ -100,6 +106,13 @@ class WildfireEnv(MultiGridEnv):
         self.delta_beta = delta_beta
         self.num_agents = num_agents
         self.agent_start_positions = agent_start_positions
+        self.agent_colors = agent_colors
+        self.agent_groups = agent_groups
+        if agent_groups:
+            self.idx_to_group = {}
+            for i, group in enumerate(agent_groups):
+                for agent_index in group:
+                    self.idx_to_group[agent_index] = i
         # observation vector of each agent is concatenation of obs_depth number of one-hot encodings, see paper for details. len(STATE_IDX_TO_COLOR_WILDFIRE) = the number of tree states
         self.obs_depth = self.num_agents + len(STATE_IDX_TO_COLOR_WILDFIRE)
         self.max_steps = max_steps
@@ -112,6 +125,7 @@ class WildfireEnv(MultiGridEnv):
         self.trees_on_fire = 0
         self.cooperative_reward = cooperative_reward
         self.two_initial_fires = two_initial_fires
+        self.render_selfish_region_boundaries = render_selfish_region_boundaries
         self.log_selfish_region_metrics = log_selfish_region_metrics
         if self.log_selfish_region_metrics:
             # initialize attributes for logging metrics related to trees in selfish regions
@@ -143,6 +157,18 @@ class WildfireEnv(MultiGridEnv):
                 )
                 for i in range(self.num_agents)
             ]
+        elif self.agent_groups:
+            # initialize self-interested agents with different colors
+            agents = [
+                Agent(
+                    world=self.world,
+                    index=i,
+                    view_size=agent_view_size,
+                    actions=actions_set,
+                    color=self.agent_colors[self.idx_to_group[i]],
+                )
+                for i in range(self.num_agents)
+            ]
         else:
             # initialize self-interested agents with different colors
             agents = [
@@ -151,7 +177,7 @@ class WildfireEnv(MultiGridEnv):
                     index=i,
                     view_size=agent_view_size,
                     actions=actions_set,
-                    color=agent_colors[i],
+                    color=self.agent_colors[i],
                 )
                 for i in range(self.num_agents)
             ]
@@ -166,6 +192,7 @@ class WildfireEnv(MultiGridEnv):
             world=self.world,
             render_mode=render_mode,
         )
+        self.helper_grid = None
         self.observation_space: Box | Dict = self._set_observation_space()
         self.action_space = Dict(
             {f"{a.index}": Discrete(len(self.actions)) for a in self.agents}
@@ -224,22 +251,22 @@ class WildfireEnv(MultiGridEnv):
             # store positions of agents and trees on fire as per the specified initial state.
             state = state[:-1].reshape(
                 (
-                    self.obs_depth,
-                    self.grid_size_without_walls,
-                    self.grid_size_without_walls,
+                    self.obs_depth + 1,
+                    self.grid_size,
+                    self.grid_size,
                 ),
             )
             initial_fire = []
-            for i in range(self.grid_size_without_walls):
-                for j in range(self.grid_size_without_walls):
+            for i in range(self.grid_size):
+                for j in range(self.grid_size):
                     if state[1, j, i]:
-                        # increment by 1 is to convert positions to grid with wall coordinates. i and j are swapped because the element at first index of an 2d-array specifies the row, while the x-coordinate in gridworld positions specifies the column.
-                        initial_fire.append((i + 1, j + 1))
+                        # i and j are swapped because the y-coordinate specifies the row, while the x-coordinate specifies the column.
+                        initial_fire.append((i, j))
                     for o in self.agents:
                         index = o.index
-                        if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + index, j, i]:
-                            # increment by 1 is to convert positions to grid with wall coordinates. i and j are swapped because the element at first index of an 2d-array specifies the row, while the x-coordinate in gridworld positions specifies the column.
-                            agent_start_pos.append((i + 1, j + 1))
+                        if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + index, j, i]:
+                            # i and j are swapped because the y-coordinate specifies the row, while the x-coordinate specifies the column.
+                            agent_start_pos.append((i, j))
 
         else:
             # choose location of initial fire uniformly at random
@@ -286,12 +313,20 @@ class WildfireEnv(MultiGridEnv):
             region = "common"
             if self.log_selfish_region_metrics:
                 # update count of trees on fire in selfish regions
-                for a in self.agents:
-                    if self.in_selfish_region(pos[0], pos[1], a.index):
-                        # selfish region is identified by the lowest index among indices of the corresponding selfish agent(s)
-                        region = f"{a.index}"
-                        self.selfish_region_trees_on_fire[a.index] += 1
-                        break
+                if self.agent_groups:
+                    for i, _ in enumerate(self.agent_groups):
+                        if self.in_selfish_region(pos[0], pos[1], i):
+                            # selfish region is identified by the lowest index among indices of the corresponding group of selfish agents
+                            region = f"{i}"
+                            self.selfish_region_trees_on_fire[i] += 1
+                            break
+                else:
+                    for a in self.agents:
+                        if self.in_selfish_region(pos[0], pos[1], a.index):
+                            # selfish region is identified by the lowest index among indices of the corresponding selfish agent
+                            region = f"{a.index}"
+                            self.selfish_region_trees_on_fire[a.index] += 1
+                            break
             # insert tree on fire in grid
             self.put_obj(
                 Tree(self.world, STATE_TO_IDX_WILDFIRE["on fire"], region=region),
@@ -309,12 +344,20 @@ class WildfireEnv(MultiGridEnv):
             self.place_obj(tree_obj)
             if self.log_selfish_region_metrics:
                 # check if tree is in a selfish region, and update region attribute of tree if it is
-                for a in self.agents:
-                    if self.in_selfish_region(
-                        *(tree_obj.pos), a.index  # pylint: disable=not-an-iterable
-                    ):
-                        tree_obj.region = f"{a.index}"
-                        break
+                if self.agent_groups:
+                    for i, _ in enumerate(self.agent_groups):
+                        if self.in_selfish_region(
+                            *(tree_obj.pos), i  # pylint: disable=not-an-iterable
+                        ):
+                            tree_obj.region = f"{i}"
+                            break
+                else:
+                    for a in self.agents:
+                        if self.in_selfish_region(
+                            *(tree_obj.pos), a.index  # pylint: disable=not-an-iterable
+                        ):
+                            tree_obj.region = f"{a.index}"
+                            break
 
         # helper grid is a work around for grid being unable to store multiple objects at a single cell. It does not contain agents
         self.helper_grid = self.grid.copy()
@@ -363,7 +406,7 @@ class WildfireEnv(MultiGridEnv):
                     nc[0] += self.grid_size_without_walls + 1
                 if nc[1] < 0:
                     nc[1] += self.grid_size_without_walls + 1
-                # update agent's observation
+                # update agent's observation. # switch x and y coordinates because the y-coordinate specifies the row, while the x-coordinate specifies the column
                 if obj.type == "tree":
                     agent_obs[a.index][obj.state, nc[1], nc[0]] = 1
                 elif obj.type == "wall":
@@ -408,26 +451,30 @@ class WildfireEnv(MultiGridEnv):
         ndarray
             state representation of the environment
         """
+        # initialize array to store state vector
         s = np.zeros(
             (
-                self.obs_depth,
-                self.grid_size_without_walls,
-                self.grid_size_without_walls,
+                self.obs_depth + 1,
+                self.grid_size,
+                self.grid_size,
             ),
             dtype=np.float32,
         )
 
-        # update tree states in state representation
+        # update tree states and walls in state representation
         for o in self.helper_grid.grid:
+            # switch x and y coordinates because the y-coordinate specifies the row, while the x-coordinate specifies the column
             if o.type == "tree":
-                # state representation does not contain walls, so decrement by 1 to convert positions to grid without wall coordinates
-                s[o.state, o.pos[1] - 1, o.pos[0] - 1] = 1
+                s[o.state, o.pos[1], o.pos[0]] = 1
+            if o.type == "wall":
+                s[len(STATE_IDX_TO_COLOR_WILDFIRE), o.pos[1], o.pos[0]] = 1
 
         # update agent positions in state representation
         for a in self.agents:
-            # state representation does not contain walls, so decrement by 1 to convert positions to grid without wall coordinates
             s[
-                len(STATE_IDX_TO_COLOR_WILDFIRE) + a.index, a.pos[1] - 1, a.pos[0] - 1
+                len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + a.index,
+                a.pos[1],
+                a.pos[0],
             ] = 1
 
         # flatten, and append normalized time step at the end of, state representation
@@ -457,24 +504,24 @@ class WildfireEnv(MultiGridEnv):
         time_step = state[-1]
         state = state[:-1].reshape(
             (
-                self.obs_depth,
-                self.grid_size_without_walls,
-                self.grid_size_without_walls,
+                self.obs_depth + 1,
+                self.grid_size,
+                self.grid_size,
             ),
         )
         if print_interpretation:
             print("-------------------------------------------------------------")
-            print("Interpretable state in grid without wall coordinates:")
+            print("State interpretation:")
         on_fire_trees = []
-        for i in range(self.grid_size_without_walls):
-            for j in range(self.grid_size_without_walls):
+        for i in range(self.grid_size):
+            for j in range(self.grid_size):
                 if state[1, j, i] == 1:
                     if print_interpretation:
                         print(f"Tree at position {(i,j)} is on fire.")
                     on_fire_trees.append((i, j))
                 for o in self.agents:
                     index = o.index
-                    if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + index, j, i] == 1:
+                    if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + index, j, i] == 1:
                         if print_interpretation:
                             print(f"Agent {o.index} is at position {(i,j)}.")
         if print_interpretation:
@@ -501,22 +548,32 @@ class WildfireEnv(MultiGridEnv):
         """
         state = np.zeros(
             (
-                self.obs_depth,
-                self.grid_size_without_walls,
-                self.grid_size_without_walls,
+                self.obs_depth + 1,
+                self.grid_size,
+                self.grid_size,
             ),
             dtype=np.float32,
         )
-        # update tree states in state representation. There are no burnt trees in the state
+        # update tree states and walls in state representation. There are no burnt trees in the state
         state[0, :, :] = 1
         for pos in trees_on_fire:
             state[1, pos[1], pos[0]] = 1
             state[0, pos[1], pos[0]] = 0
+        for i in range(self.grid_size):
+            for j in range(self.grid_size):
+                if (
+                    i == 0
+                    or i == self.grid_size - 1
+                    or j == 0
+                    or j == self.grid_size - 1
+                ):
+                    state[len(STATE_IDX_TO_COLOR_WILDFIRE), j, i] = 1
+                    state[0, j, i] = 0
 
         # update agent positions in state representation
         for i, pos in enumerate(agent_pos):
             state[
-                len(STATE_IDX_TO_COLOR_WILDFIRE) + i,
+                len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + i,
                 pos[1],
                 pos[0],
             ] = 1
@@ -623,8 +680,8 @@ class WildfireEnv(MultiGridEnv):
                             num += 1
         return num
 
-    def in_selfish_region(self, i: int, j: int, agent_index: int) -> bool:
-        """Check if given tree is in region of selfish interest of given agent
+    def in_selfish_region(self, i: int, j: int, region_index: int) -> bool:
+        """Check if given tree is in region of selfish interest with given index
 
         Parameters
         ----------
@@ -632,19 +689,19 @@ class WildfireEnv(MultiGridEnv):
             x-coordinate of tree position
         j : int
             y-coordinate of tree position
-        agent_index : int
-            index of selfish agent
+        region_index : int
+            index of selfish region. Same as index of corresponding selfish agent (or group of selfish agents).
 
         Returns
         -------
         bool
-            True, if tree is in the region of selfish interest of the given agent. Otherwise, False
+            True, if tree is in the region of selfish interest. Otherwise, False
         """
         return (
-            i >= self.selfish_xmin[agent_index]
-            and i <= self.selfish_xmax[agent_index]
-            and j >= self.selfish_ymin[agent_index]
-            and j <= self.selfish_ymax[agent_index]
+            i >= self.selfish_xmin[region_index]
+            and i <= self.selfish_xmax[region_index]
+            and j >= self.selfish_ymin[region_index]
+            and j <= self.selfish_ymax[region_index]
         )
 
     def step(self, actions):
@@ -702,7 +759,7 @@ class WildfireEnv(MultiGridEnv):
         trees_to_fire_state = []
         if self.log_selfish_region_metrics:
             num_trees_to_fire_state_sr = {
-                f"{i}": 0 for i in range(len(self.selfish_xmin))
+                f"{i}": 0 for i, _ in enumerate(self.selfish_xmin)
             }
         trees_to_burnt_state = []
         # loop over all unburnt trees. Burnt trees remain burnt
@@ -765,13 +822,24 @@ class WildfireEnv(MultiGridEnv):
             if self.cooperative_reward:
                 agent_rewards -= 0.5 * len(trees_to_fire_state)
             else:
-                for a in self.agents:
-                    agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
-                        f"{a.index}"
-                    ] + 0.1 * (
-                        len(trees_to_fire_state)
-                        - num_trees_to_fire_state_sr[f"{a.index}"]
-                    )
+                if self.agent_groups:
+                    for a in self.agents:
+                        agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
+                            f"{self.idx_to_group[a.index]}"
+                        ] + 0.1 * (
+                            len(trees_to_fire_state)
+                            - num_trees_to_fire_state_sr[
+                                f"{self.idx_to_group[a.index]}"
+                            ]
+                        )
+                else:
+                    for a in self.agents:
+                        agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
+                            f"{a.index}"
+                        ] + 0.1 * (
+                            len(trees_to_fire_state)
+                            - num_trees_to_fire_state_sr[f"{a.index}"]
+                        )
             # agent rewards dictionary
             rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
 
@@ -784,35 +852,6 @@ class WildfireEnv(MultiGridEnv):
         infos = {f"{a.index}": info for a in self.agents}
 
         return next_obs, rewards, terminated, truncated, infos
-
-    def positive_reward(self):
-        """Compute reward arising from being over trees on fire, for each agent
-
-        Returns
-        -------
-        reward: ndarray[float]
-            reward for each agent
-        """
-        if self.cooperative_reward:
-            reward = 0.0
-            # non-zero reward possible only if there are trees on fire
-            if self.trees_on_fire > 0:
-                for a in self.agents:
-                    o = self.helper_grid.get(*a.pos)
-                    # check if agent is over a tree on fire
-                    if o.state == 1:
-                        reward += 0.5
-            return np.array([reward for _ in range(self.num_agents)])
-        reward = [0.0 for _ in range(self.num_agents)]
-        # non-zero reward possible only if there are trees on fire
-        if self.trees_on_fire > 0:
-            for agent in self.agents:
-                o = self.helper_grid.get(*agent.pos)
-                # check if agent is over a tree on fire
-                if o.state == 1:
-                    reward[agent.index] += 0.5 if o.region == f"{agent.index}" else 0.1
-            return np.array(reward)
-        return reward
 
     def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
         """Render the whole-grid human view
@@ -878,15 +917,9 @@ class WildfireEnv(MultiGridEnv):
                         highlight_masks[abs_i, abs_j].append(i)
 
         # Render the grid
-        if self.cooperative_reward:
-            img = self.grid.render(
-                tile_size,
-                highlight_masks=highlight_masks if highlight else None,
-                uncached_object_types=self.uncahed_object_types,
-            )
-        else:
-            # include selfish region boundaries in render
-            colors = [COLORS[a.color] for a in self.agents]
+        if self.render_selfish_region_boundaries:
+            # include selfish region boundaries in the render
+            colors = [COLORS[color] for color in self.agent_colors]
             img = self.grid.render(
                 tile_size,
                 highlight_masks=highlight_masks if highlight else None,
@@ -897,13 +930,16 @@ class WildfireEnv(MultiGridEnv):
                 y_max=self.selfish_ymax,
                 colors=colors,
             )
+        else:
+            img = self.grid.render(
+                tile_size,
+                highlight_masks=highlight_masks if highlight else None,
+                uncached_object_types=self.uncahed_object_types,
+            )
 
         # Re-render the tiles containing agents to include trees below agent
-        if self.cooperative_reward:
-            for a in self.agents:
-                img = render_agent_tiles(img, a, self.helper_grid, self.world)
-        else:
-            # include selfish region boundaries in render
+        if self.render_selfish_region_boundaries:
+            # include selfish region boundaries in the render
             for a in self.agents:
                 img = render_agent_tiles(
                     img,
@@ -916,6 +952,9 @@ class WildfireEnv(MultiGridEnv):
                     y_max=self.selfish_ymax,
                     colors=colors,
                 )
+        else:
+            for a in self.agents:
+                img = render_agent_tiles(img, a, self.helper_grid, self.world)
 
         if self.render_mode == "human":
             self.window.show_img(img)
