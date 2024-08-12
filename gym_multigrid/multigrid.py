@@ -1,6 +1,6 @@
 import math
 import random
-from typing import Literal, Type, TypeVar
+from typing import Literal, Type, TypeVar, Callable
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
