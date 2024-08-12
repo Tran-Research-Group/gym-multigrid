@@ -1,10 +1,10 @@
-from typing import Callable, Type
+from typing import Type
 import numpy as np
 
 from gym_multigrid.core.world import WorldT
-from ..utils.rendering import *
-from .object import WorldObj, Wall, WorldObjT
-from .constants import TILE_PIXELS
+from gym_multigrid.utils.rendering import downsample, highlight_img, fill_coords, point_in_rect
+from gym_multigrid.core.object import WorldObj, Wall, WorldObjT
+from gym_multigrid.core.constants import TILE_PIXELS
 
 
 class Grid:
