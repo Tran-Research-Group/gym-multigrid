@@ -40,6 +40,13 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
+class GameStats(TypedDict):
+    blue_agent_defeated: list[bool]
+    red_agent_defeated: list[bool]
+    blue_flag_captured: bool
+    red_flag_captured: bool
+
+
 class Ctf1v1Env(MultiGridEnv):
     """
     Environment for capture the flag game with one ego (blue) agent and one enemy (red) agent.
@@ -330,6 +337,13 @@ class Ctf1v1Env(MultiGridEnv):
         obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
 
+        self.game_stats: GameStats = {
+            "blue_agent_defeated": [False],
+            "red_agent_defeated": [False],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
+
         return obs, info
 
     def _get_obs(self) -> Observation:
@@ -565,6 +579,7 @@ class Ctf1v1Env(MultiGridEnv):
         ):
             reward += self.flag_reward
             terminated = True
+            self.game_stats["red_flag_captured"] = True
         else:
             pass
 
@@ -574,6 +589,7 @@ class Ctf1v1Env(MultiGridEnv):
         ):
             reward -= self.flag_reward
             terminated = True
+            self.game_stats["blue_flag_captured"] = True
         else:
             pass
 
@@ -613,9 +629,11 @@ class Ctf1v1Env(MultiGridEnv):
             if blue_win:
                 reward += self.battle_reward
                 self._is_red_agent_defeated = True
+                self.game_stats["red_agent_defeated"] = [True]
             else:
                 reward -= self.battle_reward
                 terminated = True
+                self.game_stats["blue_agent_defeated"] = [True]
 
         if self.obstacle_penalty != 0:
             if blue_agent_loc in self.obstacle:
@@ -1047,6 +1065,13 @@ class CtFMvNEnv(MultiGridEnv):
         obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
 
+        self.game_stats: GameStats = {
+            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
+            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
+
         return obs, info
 
     def _get_obs(self) -> Observation:
@@ -1314,6 +1339,7 @@ class CtFMvNEnv(MultiGridEnv):
             ):
                 reward += self.flag_reward
                 terminated = True
+                self.game_stats["red_flag_captured"] = True
             else:
                 pass
 
@@ -1325,6 +1351,7 @@ class CtFMvNEnv(MultiGridEnv):
             ):
                 reward -= self.flag_reward
                 terminated = True
+                self.game_stats["blue_flag_captured"] = True
             else:
                 pass
 
@@ -1383,10 +1410,12 @@ class CtFMvNEnv(MultiGridEnv):
                     reward += self.battle_reward
                     self.agents[self.num_blue_agents + red_agent_idx].terminated = True
                     self.agents[self.num_blue_agents + red_agent_idx].color = "red_grey"
+                    self.game_stats["red_agent_defeated"][red_agent_idx] = True
                 else:
                     reward -= self.battle_reward
                     self.agents[blue_agent_idx].terminated = True
                     self.agents[blue_agent_idx].color = "blue_grey"
+                    self.game_stats["blue_agent_defeated"][blue_agent_idx] = True
             else:
                 pass
 

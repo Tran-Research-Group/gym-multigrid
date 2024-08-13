@@ -1,14 +1,14 @@
 import math
-from typing import Literal, Type, TypeVar
+import random
+from typing import Literal, Type, TypeVar, Callable
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-import random
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.world import DefaultWorld, World, WorldT
-from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
+from gym_multigrid.core.world import DefaultWorld, WorldT
+from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
@@ -41,6 +41,7 @@ class MultiGridEnv(gym.Env):
         uncached_object_types: list[str] = [],
     ) -> None:
         self.agents: list[AgentT] = agents
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.uncahed_object_types = uncached_object_types
         # Does the agents have partial or full observation?
@@ -84,8 +85,6 @@ class MultiGridEnv(gym.Env):
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
 
-        # Initialize the RNG
-
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
 
@@ -118,7 +117,11 @@ class MultiGridEnv(gym.Env):
         seed: int | None = None,
         options: dict | None = None,
     ):
-
+        # It is recommended to use the random number generator self.np_random 
+        # that is provided by the environment’s base class, gymnasium.Env. 
+        # If you only use this RNG, you do not need to worry much about seeding, 
+        # but you need to remember to call ``super().reset(seed=seed)`` to make 
+        # sure that gymnasium.Env correctly seeds the RNG
         super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
@@ -146,7 +149,11 @@ class MultiGridEnv(gym.Env):
                 for i in range(len(self.agents))
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
-        return obs
+        info = self._get_info()
+        return obs, info
+    
+    def _get_info(self):
+        return {}
 
     @property
     def steps_remaining(self):
@@ -387,13 +394,16 @@ class MultiGridEnv(gym.Env):
 
         return obs_cell is not None and obs_cell.type == world_cell.type
 
-    def step(self, actions):
+    def step(
+        self, actions: list[int] | NDArray[np.int_]
+    ) -> tuple[NDArray[np.int_], NDArray[np.float_], bool, bool, dict]:
         self.step_count += 1
 
         order = np.random.permutation(len(actions))
 
         rewards = np.zeros(len(actions))
-        done = False
+        terminated = False
+        truncated = False
 
         for i in order:
             if (
@@ -424,12 +434,10 @@ class MultiGridEnv(gym.Env):
             elif actions[i] == self.actions.forward:
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
-                        done = True
+                        terminated = True
                         rewards = self._reward(i, rewards, 1)
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
-                    elif fwd_cell.type == "ball":
-                        rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.grid.set(*self.agents[i].pos, None)
@@ -460,21 +468,19 @@ class MultiGridEnv(gym.Env):
                 assert False, "unknown action"
 
         if self.step_count >= self.max_steps:
-            done = True
+            truncated = True
 
         if self.partial_obs:
             obs = self.gen_obs()
         else:
             obs = [
-                self.grid.encode_for_agents(
-                    world=self.world, agent_pos=self.agents[i].pos
-                )
+                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
                 for i in range(len(actions))
             ]
 
         obs = [self.world.normalize_obs * ob for ob in obs]
-
-        return obs, rewards, done, {}
+        info = self._get_info()
+        return obs, rewards, terminated, truncated, info
 
     def gen_obs_grid(self):
         """
@@ -489,7 +495,7 @@ class MultiGridEnv(gym.Env):
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
 
-            grid = self.grid.slice(self.world, topX, topY, a.view_size, a.view_size)
+            grid = self.grid.slice(topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
                 grid = grid.rotate_left()
