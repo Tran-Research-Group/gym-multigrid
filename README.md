@@ -35,7 +35,7 @@ poetry install
 | Number of Agents      | `2`            |
 | Termination Condition | `None`         |
 | Truncation Steps      | `50`           |
-| Creation              | `gymnasium.make("gym_multigrid.envs:CollectGameRespawn")` |
+| Creation              | `gymnasium.make("multigrid-collect-respawn-clustered-v0")` |
 
 Agents move around the grid to collect objects. The object respawns in a random location after being collected.
 
