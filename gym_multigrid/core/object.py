@@ -22,6 +22,19 @@ class WorldObj:
         color: str = "grey",
         bg_color: str | None = None,
     ):
+        """Create a WorldObj object
+
+        Parameters
+        ----------
+        world : WorldT
+            the world in which the object exists
+        type : str, optional
+            type of the object, by default "base"
+        color : str, optional
+            color of the object, by default "grey"
+        bg_color : str | None, optional
+            background color of the tile containing object, by default None
+        """
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type

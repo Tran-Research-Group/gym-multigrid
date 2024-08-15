@@ -731,24 +731,24 @@ class WildfireEnv(MultiGridEnv):
         # Move agents sequentially, in random order
         order = np.random.permutation(len(actions))
         for i in order:
-            if actions[i] == self.actions.still:
+            if actions[i] == self.actions.STILL:
                 continue
-            if actions[i] == self.actions.north:
+            if actions[i] == self.actions.NORTH:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 if next_cell is None or next_cell.can_overlap():
                     self.move_agent(i, next_pos)
-            elif actions[i] == self.actions.south:
+            elif actions[i] == self.actions.SOUTH:
                 next_pos = self.agents[i].south_pos()
                 next_cell = self.grid.get(*next_pos)
                 if next_cell is None or next_cell.can_overlap():
                     self.move_agent(i, next_pos)
-            elif actions[i] == self.actions.east:
+            elif actions[i] == self.actions.EAST:
                 next_pos = self.agents[i].east_pos()
                 next_cell = self.grid.get(*next_pos)
                 if next_cell is None or next_cell.can_overlap():
                     self.move_agent(i, next_pos)
-            elif actions[i] == self.actions.west:
+            elif actions[i] == self.actions.WEST:
                 next_pos = self.agents[i].west_pos()
                 next_cell = self.grid.get(*next_pos)
                 if next_cell is None or next_cell.can_overlap():

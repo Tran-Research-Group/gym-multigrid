@@ -8,6 +8,8 @@ WorldT = TypeVar("WorldT", bound="World")
 
 @dataclass
 class World:
+    """This class defines the world within which grid is situated."""
+
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
