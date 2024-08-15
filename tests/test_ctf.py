@@ -20,6 +20,3 @@ def test_ctf() -> None:
         env.render()
         if terminated or truncated:
             break
-
-
-test_ctf()

@@ -9,7 +9,7 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 
 def test_wildfire() -> None:
-    """Runs episodes in the Wildfire environment. Can be used to test the environment's functionality."""
+    """Function to test the environment's functionality. Runs episodes with random agents in the Wildfire environment and save episode renders as GIFs."""
     env = gym.make(
         "wildfire-v0",
         alpha=0.99,
@@ -45,6 +45,3 @@ def test_wildfire() -> None:
             if terminated or truncated:
                 break
         save_frames_as_gif(frames, path="./", filename="wildfire", ep=ep, fps=1, dpi=30)
-
-
-test_wildfire()
