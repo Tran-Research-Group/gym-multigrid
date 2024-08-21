@@ -12,32 +12,20 @@ def test_wildfire() -> None:
     """Function to test the environment's functionality. Runs episodes with random agents in the Wildfire environment and save episode renders as GIFs."""
     env = gym.make(
         "wildfire-v0",
-        alpha=0.2,
-        beta=0.9,
-        delta_beta=0.5,
-        max_episode_steps=100,
-        num_agents=8,
-        agent_groups=[(0, 1, 2, 3), (4, 5, 6, 7)],
-        agent_start_positions=(
-            (9, 31),
-            (10, 31),
-            (9, 32),
-            (10, 32),
-            (28, 11),
-            (29, 11),
-            (28, 12),
-            (29, 12),
-        ),
-        size=42,
-        initial_fire_size=5,
-        two_initial_fires=False,
+        alpha=0.3,
+        beta=0.8,
+        max_episode_steps=10,
+        num_agents=2,
+        agent_start_positions=((8, 8), (14, 2)),
+        size=17,
+        initial_fire_size=3,
         cooperative_reward=False,
         render_selfish_region_boundaries=True,
         log_selfish_region_metrics=True,
-        selfish_region_xmin=[5, 26],
-        selfish_region_xmax=[14, 31],
-        selfish_region_ymin=[27, 9],
-        selfish_region_ymax=[36, 14],
+        selfish_region_xmin=[7, 13],
+        selfish_region_xmax=[9, 15],
+        selfish_region_ymin=[7, 1],
+        selfish_region_ymax=[9, 3],
     )
     obs, _ = env.reset()
     frames = []
@@ -56,7 +44,7 @@ def test_wildfire() -> None:
             if terminated or truncated:
                 break
         save_frames_as_gif(
-            frames, path="./", filename="wildfire", ep=ep, fps=15, dpi=120
+            frames, path="./", filename="wildfire", ep=ep, fps=0.1, dpi=20
         )
 
 

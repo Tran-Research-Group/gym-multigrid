@@ -50,7 +50,6 @@ class WildfireEnv(MultiGridEnv):
         selfish_region_xmax=None,
         selfish_region_ymin=None,
         selfish_region_ymax=None,
-        two_initial_fires=False,
     ):
         """Create a WildfireEnv environment
 
@@ -98,8 +97,6 @@ class WildfireEnv(MultiGridEnv):
             list containing y-coordinates of the top boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
         selfish_region_ymax : list, optional
             list containing y-coordinates of the bottom boundaries of the regions of selfish interest for the agents (or groups if the agents are grouped. All agents in a group have same region of selfish interest). Regions of selfish interest are rectangular. List elements are in order of agent (or group) indices. Only applicable if cooperative_reward is False. By default None.
-        two_initial_fires : bool, optional
-            whether the initial state has two disjoint square fire regions, by default False
         """
         self.alpha = alpha
         self.beta = beta
@@ -124,7 +121,6 @@ class WildfireEnv(MultiGridEnv):
         self.unburnt_trees = []
         self.trees_on_fire = 0
         self.cooperative_reward = cooperative_reward
-        self.two_initial_fires = two_initial_fires
         self.render_selfish_region_boundaries = render_selfish_region_boundaries
         self.log_selfish_region_metrics = log_selfish_region_metrics
         if self.log_selfish_region_metrics:
@@ -770,7 +766,7 @@ class WildfireEnv(MultiGridEnv):
                 if np.random.rand() < 1 - (1 - self.alpha) ** self.neighbors_on_fire(
                     pos
                 ):
-                    # update relevant attributes and list
+                    # update relevant attributes and lists
                     trees_to_fire_state.append(c)
                     self.trees_on_fire += 1
                     if self.log_selfish_region_metrics:
