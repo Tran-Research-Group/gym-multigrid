@@ -267,7 +267,7 @@ class WildfireEnv(MultiGridEnv):
         else:
             # choose location of initial fire uniformly at random
             if self.initial_fire_size % 2 == 0:
-                # for even sized initial fires, choose top left corner of fire region uniformly at random
+                # for even sized initial fires, choose location of top left corner of fire region uniformly at random
                 top_left_corner = (
                     random.randint(
                         1,
@@ -284,7 +284,7 @@ class WildfireEnv(MultiGridEnv):
                     self.initial_fire_size,
                 )
             else:
-                # for odd sized initial fires, choose center of fire region uniformly at random
+                # for odd sized initial fires, choose location of center of fire region uniformly at random
                 fire_square_center = (
                     random.randint(
                         1 + ((self.initial_fire_size - 1) / 2),
