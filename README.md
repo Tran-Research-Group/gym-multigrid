@@ -52,11 +52,11 @@ Agents move around the grid to collect objects. The object respawns in a random 
 | Agent Observation Space     | `Box([0,...],[1,...],(shape depends on number of agents,),float32)` |
 | States                | `Discrete`  |
 | State Space           | `Box([0,...],[1,...],(shape depends on number of agents,),float32)`  |
-| Agents                | `Cooperative/Non-cooperative`       |
+| Agents                | `Cooperative or Non-cooperative or Group`       |
 | Number of Agents      | `>=1`            |
 | Termination Condition | `No trees on fire exist`         |
 | Truncation Steps      | `>=1`           |
-| Creation              | `gymnasium.make("multigrid-collect-respawn-clustered-v0")` |
+| Creation              | `gymnasium.make("wildfire-v0")` |
 
 Agents move over trees on fire to dump fire retardant. Initial fire is randomly located. Agents can be cooperative (shared reward) or non-cooperative (individual/group rewards). A non-cooperative agent preferentially protects a region of selfish interest within the grid. Above GIF contains two groups of agents with their selfish regions shown in same color.
 
