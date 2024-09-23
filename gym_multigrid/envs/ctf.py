@@ -1,4 +1,3 @@
-from itertools import chain
 from typing import Final, Literal, TypeAlias, TypedDict
 
 from gymnasium import spaces
