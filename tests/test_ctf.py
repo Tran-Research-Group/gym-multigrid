@@ -33,6 +33,27 @@ def test_ctf() -> None:
         if terminated or truncated:
             break
 
+    assert terminated or truncated
+
+
+def test_ctf_pos_map() -> None:
+    map_path: str = "tests/assets/board.txt"
+
+    env = Ctf1v1Env(
+        map_path=map_path, render_mode="human", observation_option="pos_map"
+    )
+    obs, _ = env.reset()
+    env.render()
+
+    while True:
+        action = np.random.choice(list(env.actions_set))
+        obs, reward, terminated, truncated, info = env.step(action)
+        env.render()
+        if terminated or truncated:
+            break
+
+    assert terminated or truncated
+
 
 # TODO: might be good idea to include seeding test for other environments
 def test_ctf_random_seeding() -> None:
@@ -106,7 +127,7 @@ def test_fight_policy() -> None:
         num_red_agents=2,
         map_path=map_path,
         render_mode="human",
-        observation_option="flattened",
+        observation_option="pos_map",
         enemy_policies=[enemy_policy, RwPolicy()],
     )
 
