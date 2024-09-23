@@ -227,18 +227,69 @@ class Ctf1v1Env(MultiGridEnv):
                             dtype=np.int64,
                         ),
                         "blue_territory": spaces.Box(
-                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.blue_territory))]))),  # type: ignore
-                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.blue_territory))]))).flatten() - 1,  # type: ignore
+                            low=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [
+                                            [0, 0]
+                                            for _ in range(len(self.blue_territory))
+                                        ]
+                                    )
+                                )
+                            ),
+                            high=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [
+                                            self._field_map.shape
+                                            for _ in range(len(self.blue_territory))
+                                        ]
+                                    )
+                                )
+                            ).flatten()
+                            - 1,
                             dtype=np.int64,
                         ),
                         "red_territory": spaces.Box(
-                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.red_territory))]))),  # type: ignore
-                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.red_territory))]))).flatten() - 1,  # type: ignore
+                            low=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [[0, 0] for _ in range(len(self.red_territory))]
+                                    )
+                                )
+                            ),
+                            high=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [
+                                            self._field_map.shape
+                                            for _ in range(len(self.red_territory))
+                                        ]
+                                    )
+                                )
+                            ).flatten()
+                            - 1,
                             dtype=np.int64,
                         ),
                         "obstacle": spaces.Box(
-                            low=np.array(list(chain.from_iterable([[0, 0] for _ in range(len(self.obstacle))]))),  # type: ignore
-                            high=np.array(list(chain.from_iterable([self._field_map.shape for _ in range(len(self.obstacle))]))).flatten() - 1,  # type: ignore
+                            low=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [[0, 0] for _ in range(len(self.obstacle))]
+                                    )
+                                )
+                            ),
+                            high=np.array(
+                                list(
+                                    chain.from_iterable(
+                                        [
+                                            self._field_map.shape
+                                            for _ in range(len(self.obstacle))
+                                        ]
+                                    )
+                                )
+                            ).flatten()
+                            - 1,
                             dtype=np.int64,
                         ),
                         "is_red_agent_defeated": spaces.Discrete(2),
@@ -254,24 +305,21 @@ class Ctf1v1Env(MultiGridEnv):
                 )
 
             case "flattened":
+                obs_size: int = (
+                    8
+                    + 2 * len(self.obstacle)
+                    + 2 * len(self.blue_territory)
+                    + 2 * len(self.red_territory)
+                    + 1
+                )
                 obs_high = (
-                    np.ones([8 + 200 + 1])
+                    np.ones([obs_size])
                     * (np.max(self._field_map.shape) - 1)
                     / self.observation_scaling
                 )
                 obs_high[-1] = 1
                 observation_space = spaces.Box(
-                    low=np.zeros(
-                        [
-                            8
-                            + 2 * len(self.obstacle)
-                            + 2 * len(self.blue_territory)
-                            + 2 * len(self.red_territory)
-                            + 1
-                        ]
-                    ),
-                    high=obs_high,
-                    dtype=np.int64,
+                    low=np.zeros([obs_size]), high=obs_high, dtype=np.int64
                 )
 
         return observation_space
