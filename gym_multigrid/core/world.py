@@ -75,7 +75,6 @@ CtfWorld = World(
         "blue_flag": 4,
         "red_flag": 5,
         "obstacle": 6,
-        "background": 7,
     },
 )
 
