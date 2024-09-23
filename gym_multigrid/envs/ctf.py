@@ -97,8 +97,14 @@ class Ctf1v1Env(MultiGridEnv):
             Ratio of the flag reward for taking a step.
         max_steps : int=100
             Maximum number of steps per episode.
+        observation_option: ObservationOption="positional"
+            Observation option. Choose from "positional", "map", "flattened", and "pos_map".
+        observation_scaling : float=1.0
+            Scaling factor for the observation.
         render_mode : Literal["human", "rgb_array"]="rgb_array"
             Rendering mode.
+        uncached_object_types : list[str]=["red_agent", "blue_agent"]
+            Types of objects that should not be cached.
         """
 
         self.battle_range: Final[float] = battle_range
