@@ -117,10 +117,10 @@ class MultiGridEnv(gym.Env):
         seed: int | None = None,
         options: dict | None = None,
     ):
-        # It is recommended to use the random number generator self.np_random 
-        # that is provided by the environment’s base class, gymnasium.Env. 
-        # If you only use this RNG, you do not need to worry much about seeding, 
-        # but you need to remember to call ``super().reset(seed=seed)`` to make 
+        # It is recommended to use the random number generator self.np_random
+        # that is provided by the environment’s base class, gymnasium.Env.
+        # If you only use this RNG, you do not need to worry much about seeding,
+        # but you need to remember to call ``super().reset(seed=seed)`` to make
         # sure that gymnasium.Env correctly seeds the RNG
         super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
@@ -151,7 +151,7 @@ class MultiGridEnv(gym.Env):
         obs = [self.world.normalize_obs * ob for ob in obs]
         info = self._get_info()
         return obs, info
-    
+
     def _get_info(self):
         return {}
 
@@ -227,7 +227,7 @@ class MultiGridEnv(gym.Env):
         Generate random integer in [low,high[
         """
 
-        return random.randint(low, high)
+        return self.np_random.integers(low, high, endpoint=True)
 
     def _rand_float(self, low, high):
         """
