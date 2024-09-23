@@ -122,7 +122,7 @@ class MultiGridEnv(gym.Env):
         # If you only use this RNG, you do not need to worry much about seeding,
         # but you need to remember to call ``super().reset(seed=seed)`` to make
         # sure that gymnasium.Env correctly seeds the RNG
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
