@@ -1,14 +1,14 @@
 import math
-import random
-from typing import Literal, Type, TypeVar, Callable
+from typing import Literal, Type, TypeVar
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
+import random
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.world import DefaultWorld, WorldT
-from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
+from gym_multigrid.core.world import DefaultWorld, World, WorldT
+from gym_multigrid.core.agent import ActionsT, Agent, AgentT, DefaultActions
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
@@ -34,22 +34,17 @@ class MultiGridEnv(gym.Env):
         max_steps: int = 100,
         see_through_walls: bool = False,
         partial_obs: bool = False,
+        highlight: bool | None = None,
+        tile_size: int | None = None,
         agent_view_size: int = 7,
         actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
-        close_window: bool = False,
-        highlight_visible_cells: bool = False,
-        tile_size: int = TILE_PIXELS,
     ) -> None:
         self.agents: list[AgentT] = agents
-        assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode: Literal["human", "rgb_array"] = render_mode
-        self.uncached_object_types: list[str] = uncached_object_types
-        self.close_window: bool = close_window
-        self.highlight_visible_cells: bool = highlight_visible_cells
-        self.tile_size: int = tile_size
+        self.render_mode = render_mode
+        self.uncahed_object_types = uncached_object_types
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
         self.agent_view_size = agent_view_size
@@ -64,6 +59,9 @@ class MultiGridEnv(gym.Env):
 
         self.width: int = width
         self.height: int = height
+
+        self.highlight = highlight
+        self.tile_size = tile_size
 
         # Action enumeration for this environment
         self.actions = actions_set
@@ -90,6 +88,8 @@ class MultiGridEnv(gym.Env):
         # Environment configuration
         self.max_steps = max_steps
         self.see_through_walls = see_through_walls
+
+        # Initialize the RNG
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
@@ -123,11 +123,6 @@ class MultiGridEnv(gym.Env):
         seed: int | None = None,
         options: dict | None = None,
     ):
-        # It is recommended to use the random number generator self.np_random
-        # that is provided by the environment’s base class, gymnasium.Env.
-        # If you only use this RNG, you do not need to worry much about seeding,
-        # but you need to remember to call ``super().reset(seed=seed)`` to make
-        # sure that gymnasium.Env correctly seeds the RNG
         super().reset(seed=seed, options=options)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
@@ -155,11 +150,7 @@ class MultiGridEnv(gym.Env):
                 for i in range(len(self.agents))
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
-        info = self._get_info()
-        return obs, info
-
-    def _get_info(self):
-        return {}
+        return obs
 
     @property
     def steps_remaining(self):
@@ -230,14 +221,14 @@ class MultiGridEnv(gym.Env):
 
     def _rand_int(self, low, high):
         """
-        Generate random integer in [low,high[
+        Generate random integer in [low,high]
         """
 
         return self.np_random.integers(low, high, endpoint=True)
 
     def _rand_float(self, low, high):
         """
-        Generate random float in [low,high[
+        Generate random float in [low,high]
         """
 
         return self.np_random.uniform(low, high)
@@ -319,13 +310,16 @@ class MultiGridEnv(gym.Env):
 
             num_tries += 1
 
+            x = (top[0], min(top[0] + size[0], self.grid.width - 1))
+            y = (top[1], min(top[1] + size[1], self.grid.height - 1))
+
             pos = np.array(
                 (
                     self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
                     self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
                 )
             )
-
+            # print((x, y, pos), end=" ")
             # Don't place the object on top of another object
             if self.grid.get(*pos) != None:
                 continue
@@ -400,16 +394,13 @@ class MultiGridEnv(gym.Env):
 
         return obs_cell is not None and obs_cell.type == world_cell.type
 
-    def step(
-        self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[NDArray[np.int_], NDArray[np.float_], bool, bool, dict]:
+    def step(self, actions):
         self.step_count += 1
 
         order = np.random.permutation(len(actions))
 
         rewards = np.zeros(len(actions))
-        terminated = False
-        truncated = False
+        done = False
 
         for i in order:
             if (
@@ -440,13 +431,15 @@ class MultiGridEnv(gym.Env):
             elif actions[i] == self.actions.forward:
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
-                        terminated = True
+                        done = True
                         rewards = self._reward(i, rewards, 1)
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "ball":
+                        rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
                 elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*fwd_pos, self.agents[i])
                     self.grid.set(*self.agents[i].pos, None)
+                    self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
@@ -474,7 +467,7 @@ class MultiGridEnv(gym.Env):
                 assert False, "unknown action"
 
         if self.step_count >= self.max_steps:
-            truncated = True
+            done = True
 
         if self.partial_obs:
             obs = self.gen_obs()
@@ -485,8 +478,8 @@ class MultiGridEnv(gym.Env):
             ]
 
         obs = [self.world.normalize_obs * ob for ob in obs]
-        info = self._get_info()
-        return obs, rewards, terminated, truncated, info
+
+        return obs, rewards, done, {}
 
     def gen_obs_grid(self):
         """
@@ -513,7 +506,7 @@ class MultiGridEnv(gym.Env):
                     agent_pos=(a.view_size // 2, a.view_size - 1)
                 )
             else:
-                vis_mask = np.ones(shape=(grid.width, grid.height), dtype=np.bool)
+                vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
 
             grids.append(grid)
             vis_masks.append(vis_mask)
@@ -529,9 +522,7 @@ class MultiGridEnv(gym.Env):
 
         # Encode the partially observable view into a numpy array
         obs = [
-            grid.encode_for_agents(
-                self.world, [grid.width // 2, grid.height - 1], vis_mask
-            )
+            grid.encode_for_agents([grid.width // 2, grid.height - 1], vis_mask)
             for grid, vis_mask in zip(grids, vis_masks)
         ]
 
@@ -549,12 +540,11 @@ class MultiGridEnv(gym.Env):
 
         return img
 
-    def render(self):
+    def render(self, close=False, highlight=True, tile_size=TILE_PIXELS):
         """
         Render the whole-grid human view
         """
-
-        if self.close_window:
+        if close:
             if self.window:
                 self.window.close()
             return
@@ -563,7 +553,7 @@ class MultiGridEnv(gym.Env):
             self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
-        if self.highlight_visible_cells:
+        if self.highlight:
             # Compute which cells are visible to the agent
             _, vis_masks = self.gen_obs_grid()
 
@@ -602,9 +592,9 @@ class MultiGridEnv(gym.Env):
 
         # Render the whole grid
         img = self.grid.render(
-            self.tile_size,
-            highlight_masks=highlight_masks if self.highlight_visible_cells else None,
-            uncached_object_types=self.uncached_object_types,
+            tile_size,
+            highlight_masks=highlight_masks if self.highlight else None,
+            uncached_object_types=self.uncahed_object_types,
         )
 
         if self.render_mode == "human":

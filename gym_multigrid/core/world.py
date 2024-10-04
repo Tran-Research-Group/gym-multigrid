@@ -1,9 +1,10 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
 
+import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.constants import COLORS, CTF_COLORS, MAZE_COLORS
+from .constants import COLORS, CTF_COLORS, MAZE_COLORS
 
 WorldT = TypeVar("WorldT", bound="World")
 
@@ -48,6 +49,25 @@ DefaultWorld = World(
         "agent": 10,
         "objgoal": 11,
         "switch": 12,
+    },
+)
+
+FRWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "floor": 3,
+        "door": 4,
+        "key": 5,
+        "ball": 6,
+        "box": 7,
+        "goal": 8,
+        "lava": 9,
+        "agent": 10,
     },
 )
 

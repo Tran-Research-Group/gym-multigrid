@@ -59,6 +59,13 @@ class CtfActions(enum.IntEnum):
     up = 4
 
 
+class FRActions(enum.IntEnum):
+    left = 0
+    up = 1
+    right = 2
+    down = 3
+
+    
 class MazeActions(enum.IntEnum):
     stay = 0
     left = 1
