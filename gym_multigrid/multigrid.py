@@ -39,11 +39,17 @@ class MultiGridEnv(gym.Env):
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
+        close_window: bool = False,
+        highlight_visible_cells: bool = False,
+        tile_size: int = TILE_PIXELS,
     ) -> None:
         self.agents: list[AgentT] = agents
         assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode = render_mode
-        self.uncahed_object_types = uncached_object_types
+        self.render_mode: Literal["human", "rgb_array"] = render_mode
+        self.uncached_object_types: list[str] = uncached_object_types
+        self.close_window: bool = close_window
+        self.highlight_visible_cells: bool = highlight_visible_cells
+        self.tile_size: int = tile_size
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
         self.agent_view_size = agent_view_size
@@ -543,12 +549,12 @@ class MultiGridEnv(gym.Env):
 
         return img
 
-    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(self):
         """
         Render the whole-grid human view
         """
 
-        if close:
+        if self.close_window:
             if self.window:
                 self.window.close()
             return
@@ -557,7 +563,7 @@ class MultiGridEnv(gym.Env):
             self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
-        if highlight:
+        if self.highlight_visible_cells:
             # Compute which cells are visible to the agent
             _, vis_masks = self.gen_obs_grid()
 
@@ -596,9 +602,9 @@ class MultiGridEnv(gym.Env):
 
         # Render the whole grid
         img = self.grid.render(
-            tile_size,
-            highlight_masks=highlight_masks if highlight else None,
-            uncached_object_types=self.uncahed_object_types,
+            self.tile_size,
+            highlight_masks=highlight_masks if self.highlight_visible_cells else None,
+            uncached_object_types=self.uncached_object_types,
         )
 
         if self.render_mode == "human":
