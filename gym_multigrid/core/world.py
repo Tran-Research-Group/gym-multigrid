@@ -51,6 +51,25 @@ DefaultWorld = World(
     },
 )
 
+FRWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "floor": 3,
+        "door": 4,
+        "key": 5,
+        "ball": 6,
+        "box": 7,
+        "goal": 8,
+        "lava": 9,
+        "agent": 10,
+    },
+)
+
 CollectWorld = World(
     encode_dim=3,
     normalize_obs=1,
