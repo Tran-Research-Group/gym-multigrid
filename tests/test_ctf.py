@@ -37,21 +37,22 @@ def test_ctf() -> None:
 
 
 def test_ctf_pos_map() -> None:
-    map_path: str = "tests/assets/board.txt"
+    map_path: str = "tests/assets/board_wall.txt"
 
     env = Ctf1v1Env(
         map_path=map_path, render_mode="human", observation_option="pos_map"
     )
     obs, _ = env.reset()
-    env.render()
+    frames = [env.render()]
 
     while True:
         action = np.random.choice(list(env.actions_set))
         obs, reward, terminated, truncated, info = env.step(action)
-        env.render()
+        frames.append(env.render())
         if terminated or truncated:
             break
 
+    imageio.mimsave("tests/out/animations/ctf_pos_map.gif", frames, duration=0.5)
     assert terminated or truncated
 
 
