@@ -56,7 +56,7 @@ ObservationOption: TypeAlias = Literal[
 ]
 
 
-class CtFMvNEnv(MultiGridEnv):
+class CtfMvNEnv(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -431,6 +431,26 @@ class CtFMvNEnv(MultiGridEnv):
                     }
                 )
 
+            case "pos_map_flattened":
+                obs_size: int = (
+                    2 * (self.num_blue_agents + self.num_red_agents)
+                    + 4  # 2 * (blue_flag + red_flag)
+                    + np.prod(self._field_map.shape)
+                    + self.num_blue_agents
+                    + self.num_red_agents
+                )
+                obs_high = (
+                    np.ones([obs_size])
+                    * (np.max(self._field_map.shape) - 1)
+                    / self.observation_scaling
+                )
+                obs_high[-(self.num_blue_agents + self.num_red_agents) :] = 1
+                observation_space = spaces.Box(
+                    low=np.zeros([obs_size]),
+                    high=obs_high,
+                    dtype=np.int64,
+                )
+
             case _:
                 raise ValueError(
                     f"Invalid observation_option: {self.observation_option}"
@@ -571,6 +591,35 @@ class CtFMvNEnv(MultiGridEnv):
                         [int(agent.terminated) for agent in self.agents]
                     ),
                 }
+            case "pos_map_flattened":
+                encoded_map: NDArray = np.zeros(self._field_map.shape, dtype=np.int64)
+
+                for i, j in self.blue_territory:
+                    encoded_map[i, j] = self.world.OBJECT_TO_IDX["blue_territory"]
+
+                for i, j in self.red_territory:
+                    encoded_map[i, j] = self.world.OBJECT_TO_IDX["red_territory"]
+
+                for i, j in self.obstacle:
+                    encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
+
+                observation = np.array(
+                    [
+                        *np.array(
+                            [
+                                agent.pos
+                                for agent in self.agents[0 : self.num_blue_agents]
+                            ]
+                        ).flatten(),
+                        *np.array(
+                            [agent.pos for agent in self.agents[self.num_blue_agents :]]
+                        ).flatten(),
+                        *np.array(self.blue_flag),
+                        *np.array(self.red_flag),
+                        *encoded_map.T.flatten(),
+                        *[int(agent.terminated) for agent in self.agents],
+                    ]
+                )
             case _:
                 raise ValueError(
                     f"Invalid observation_option: {self.observation_option}"
@@ -902,7 +951,7 @@ class CtFMvNEnv(MultiGridEnv):
         return observation, reward, terminated, truncated, info
 
 
-class Ctf1v1Env(CtFMvNEnv):
+class Ctf1v1Env(CtfMvNEnv):
     """
     Environment for capture the flag game with one ego (blue) agent and one enemy (red) agent.
     """

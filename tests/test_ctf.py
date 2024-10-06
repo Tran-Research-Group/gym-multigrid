@@ -5,7 +5,7 @@ import numpy as np
 import imageio
 from stable_baselines3 import PPO
 
-from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
+from gym_multigrid.envs.ctf import Ctf1v1Env, CtfMvNEnv
 from gym_multigrid.policy.ctf.heuristic import (
     FightPolicy,
     CapturePolicy,
@@ -56,6 +56,28 @@ def test_ctf_pos_map() -> None:
     assert terminated or truncated
 
 
+def test_ctf_pos_map_flattened() -> None:
+    map_path: str = "tests/assets/board_wall.txt"
+
+    env = Ctf1v1Env(
+        map_path=map_path, render_mode="human", observation_option="pos_map_flattened"
+    )
+    obs, _ = env.reset()
+    frames = [env.render()]
+
+    while True:
+        action = np.random.choice(list(env.actions_set))
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave(
+        "tests/out/animations/ctf_pos_map_flattened.gif", frames, duration=0.5
+    )
+    assert terminated or truncated
+
+
 # TODO: might be good idea to include seeding test for other environments
 def test_ctf_random_seeding() -> None:
     map_path: str = "tests/assets/board.txt"
@@ -73,7 +95,7 @@ def test_ctf_random_seeding() -> None:
 # MvN CtF test
 def test_ctf_mvn_human() -> None:
     map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -95,7 +117,7 @@ def test_ctf_mvn_human() -> None:
 
 def test_ctf_mvn_rgb() -> None:
     map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -123,7 +145,7 @@ def test_fight_policy() -> None:
     field_map = load_text_map(map_path)
     enemy_policy = FightPolicy()
 
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -153,7 +175,7 @@ def test_capture_policy() -> None:
     field_map = load_text_map(map_path)
     enemy_policy = CapturePolicy(field_map)
 
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -183,7 +205,7 @@ def test_patrol_policy() -> None:
     field_map = load_text_map(map_path)
     enemy_policy = PatrolPolicy(field_map)
 
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -213,7 +235,7 @@ def test_patrol_fight_policy() -> None:
     field_map = load_text_map(map_path)
     enemy_policy = PatrolFightPolicy(field_map)
 
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -239,7 +261,7 @@ def test_patrol_fight_policy() -> None:
 def test_mvn_ctf_render() -> None:
     img_save_path: str = "tests/out/plots/mvn_ctf_render.png"
     map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
