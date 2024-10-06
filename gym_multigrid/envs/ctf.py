@@ -998,4 +998,4 @@ class Ctf1v1Env(CtfMvNEnv):
     def step(
         self, action: int
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-        return super().step([action])
+        return super().step(action)
