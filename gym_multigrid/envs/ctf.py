@@ -498,7 +498,11 @@ class CtfMvNEnv(MultiGridEnv):
             len(self.blue_territory), self.num_blue_agents, replace=False
         )
         for i in range(self.num_blue_agents):
-            self.place_agent(self.agents[i], pos=self.blue_territory[blue_indices[i]])
+            self.place_agent(
+                self.agents[i],
+                pos=self.blue_territory[blue_indices[i]],
+                reset_agent_status=True,
+            )
 
         # Choose non-overlapping indices for the red agents and place them in the red territory.
         red_indices: list[int] = self.np_random.choice(
@@ -508,6 +512,7 @@ class CtfMvNEnv(MultiGridEnv):
             self.place_agent(
                 self.agents[self.num_blue_agents + i],
                 pos=self.red_territory[red_indices[i]],
+                reset_agent_status=True,
             )
 
     def reset(
@@ -995,7 +1000,10 @@ class Ctf1v1Env(CtfMvNEnv):
             uncached_object_types,
         )
 
+        self.action_space = spaces.Discrete(len(self.actions_set))
+        self.ac_dim = self.action_space.n
+
     def step(
         self, action: int
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-        return super().step(action)
+        return super().step([action])

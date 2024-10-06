@@ -101,13 +101,29 @@ class Agent(WorldObj):
         self.index = index
         self.view_size = view_size
         self.carrying = None
-        self.terminated = False
-        self.started = True
-        self.paused = False
+        self.terminated: bool = False
+        self.started: bool = True
+        self.paused: bool = False
         self.collided: bool = False
         self.actions = actions
         self.world = world
         self.dir_to_vec = dir_to_vec
+
+    def reset_status(self) -> None:
+        """
+        Reset the status attributes of the agent.
+        The reset status attributes are:
+        - carrying: None
+        - terminated: False
+        - started: True
+        - paused: False
+        - collided: False
+        """
+        self.carrying = None
+        self.terminated = False
+        self.started = True
+        self.paused = False
+        self.collided = False
 
     def render(self, img):
         c = self.world.COLORS[self.color]
