@@ -27,7 +27,7 @@ def test_ctf() -> None:
     env.render()
 
     while True:
-        action = np.random.choice(list(env.actions_set))
+        action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
         env.render()
         if terminated or truncated:
@@ -46,7 +46,7 @@ def test_ctf_pos_map() -> None:
     frames = [env.render()]
 
     while True:
-        action = np.random.choice(list(env.actions_set))
+        action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
         frames.append(env.render())
         if terminated or truncated:
@@ -66,7 +66,7 @@ def test_ctf_pos_map_flattened() -> None:
     frames = [env.render()]
 
     while True:
-        action = np.random.choice(list(env.actions_set))
+        action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
         frames.append(env.render())
         if terminated or truncated:
