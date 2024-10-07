@@ -454,7 +454,7 @@ class CtfMvNEnv(MultiGridEnv):
             case "tensor":
                 observation_space = spaces.Box(
                     low=0,
-                    high=2,
+                    high=4,
                     shape=(self._field_map.shape[0], self._field_map.shape[1], 3),
                     dtype=np.int64,
                 )
