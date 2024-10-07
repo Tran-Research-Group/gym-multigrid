@@ -78,6 +78,24 @@ def test_ctf_pos_map_flattened() -> None:
     assert terminated or truncated
 
 
+def test_ctf_tensor() -> None:
+    map_path: str = "tests/assets/board_wall.txt"
+
+    env = Ctf1v1Env(map_path=map_path, render_mode="human", observation_option="tensor")
+    obs, _ = env.reset()
+    frames = [env.render()]
+
+    while True:
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
+
+    imageio.mimsave("tests/out/animations/ctf_tensor.gif", frames, duration=0.5)
+    assert terminated or truncated
+
+
 # TODO: might be good idea to include seeding test for other environments
 def test_ctf_random_seeding() -> None:
     map_path: str = "tests/assets/board.txt"

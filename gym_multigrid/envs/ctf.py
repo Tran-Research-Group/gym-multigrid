@@ -52,7 +52,7 @@ class GameStats(TypedDict):
 
 
 ObservationOption: TypeAlias = Literal[
-    "positional", "map", "flattened", "pos_map", "pos_map_flattened"
+    "positional", "map", "flattened", "pos_map", "pos_map_flattened", "tensor"
 ]
 
 
@@ -451,6 +451,14 @@ class CtfMvNEnv(MultiGridEnv):
                     dtype=np.int64,
                 )
 
+            case "tensor":
+                observation_space = spaces.Box(
+                    low=0,
+                    high=2,
+                    shape=(self._field_map.shape[0], self._field_map.shape[1], 3),
+                    dtype=np.int64,
+                )
+
             case _:
                 raise ValueError(
                     f"Invalid observation_option: {self.observation_option}"
@@ -625,6 +633,39 @@ class CtfMvNEnv(MultiGridEnv):
                         *[int(agent.terminated) for agent in self.agents],
                     ]
                 )
+            case "tensor":
+                static_object_layer: NDArray[np.int_] = np.zeros(
+                    self._field_map.shape, dtype=np.int_
+                )
+                agent_flag_layer: NDArray[np.int_] = np.zeros(
+                    self._field_map.shape, dtype=np.int_
+                )
+                agent_status_layer: NDArray[np.int_] = np.zeros(
+                    self._field_map.shape, dtype=np.int_
+                )
+
+                for i, j in self.blue_territory:
+                    static_object_layer[i, j] = 1
+
+                for i, j in self.red_territory:
+                    static_object_layer[i, j] = 2
+
+                for i, j in self.obstacle:
+                    static_object_layer[i, j] = 0
+
+                for agent in self.agents:
+                    assert agent.pos is not None
+                    agent_flag_layer[agent.pos[0], agent.pos[1]] = (
+                        1 if agent.color == "blue" else 2
+                    )
+                    agent_status_layer[agent.pos[0], agent.pos[1]] = (
+                        1 if agent.terminated else 2
+                    )
+
+                observation = np.stack(
+                    [static_object_layer, agent_flag_layer, agent_status_layer], axis=2
+                )
+
             case _:
                 raise ValueError(
                     f"Invalid observation_option: {self.observation_option}"
@@ -972,11 +1013,9 @@ class Ctf1v1Env(CtfMvNEnv):
         obstacle_penalty_ratio: float = 0,
         step_penalty_ratio: float = 0.01,
         max_steps: int = 100,
-        observation_option: Literal[
-            "positional", "map", "flattened", "pos_map", "pos_map_flattened"
-        ] = "positional",
+        observation_option: ObservationOption = "positional",
         observation_scaling: float = 1,
-        render_mode: Literal["human"] | Literal["rgb_array"] = "rgb_array",
+        render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = ["red_agent", "blue_agent"],
     ) -> None:
 

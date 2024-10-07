@@ -15,7 +15,7 @@ map_path: str = "tests/assets/board_wall.txt"
 env = Ctf1v1Env(
     map_path=map_path,
     render_mode="rgb_array",
-    observation_option="pos_map_flattened",
+    observation_option="tensor",
 )
 
 print("GPU available: ", torch.cuda.is_available())
