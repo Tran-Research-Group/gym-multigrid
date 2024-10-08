@@ -22,19 +22,23 @@ poetry install
 
 ## Included environments
 ### Capture-the-Flag (CtF)
+![2 v 2 CtF Game](./assets/ctf_mvn_fight_policy.gif)
+
+Agents move around to capture enemy's flag.
+The details are [here](./docs/environments/ctf.md).
 
 ### Collect Game
 ![Collect Game Respawn](./assets/collect-game-respawn.gif)
 
-| Attribute             | Description    |
-| --------------------- | -------------- |
-| Action Space          | `Discrete(4)`  |
-| Observation Space     | `np.array` of shape `grid.width x grid.height` |
-| Observation Encoding  |`(OBJECT_IDX, COLOR_IDX, STATE)` |
-| Reward                | `(0, 1)`       |
-| Number of Agents      | `2`            |
-| Termination Condition | `None`         |
-| Truncation Steps      | `50`           |
+| Attribute             | Description                                                |
+| --------------------- | ---------------------------------------------------------- |
+| Action Space          | `Discrete(4)`                                              |
+| Observation Space     | `np.array` of shape `grid.width x grid.height`             |
+| Observation Encoding  | `(OBJECT_IDX, COLOR_IDX, STATE)`                           |
+| Reward                | `(0, 1)`                                                   |
+| Number of Agents      | `2`                                                        |
+| Termination Condition | `None`                                                     |
+| Truncation Steps      | `50`                                                       |
 | Creation              | `gymnasium.make("multigrid-collect-respawn-clustered-v0")` |
 
 Agents move around the grid to collect objects. The object respawns in a random location after being collected.
