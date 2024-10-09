@@ -37,10 +37,28 @@ Wrapper of M vs. N CtF game when $M = 1$ and $N = 1$.
 | Observation Space     | `positional`, `map`, `flattened`, `pos_map`, `pos_map_flattened`, `tensor`           |
 | Observation Encoding  | See [Observation Options](#observation-options)                                      |
 | Reward                | `flag_reward`, `battle_reward_ratio`, `obstacle_penalty_ratio`, `step_penalty_ratio` |
-| Termination Condition | `None`                                                                               |
+| Termination Condition | When the blue agent is killed, or either of the flags is captured                    |
 | Number of Agents      | 1 blue (friendly, controlled) agent, 1 red (enemy, uncontrolled) agent               |
 | Truncation Steps      | `100`                                                                                |
 | Creation              | Directly import the class                                                            |
 
 ## Observation Options
 There are five options for the observation:  `positional`, `map`, `flattened`, `pos_map`, `pos_map_flattened`, `tensor`.
+
+### `positional`
+The `positional` observation provides dictionary of object positions in the map ($2 \times \{\text{number of objects}\}$) in addition to binary flags of agents being alive or dead, whose size is $m+n$ in M vs N CtF game while $1$ for the 1v1 game.
+
+### `map`
+The `map` observation is an encoded map which is `np.NDArray` of the size of the map.
+
+### `flattened`
+The `flattened` observation is a flattened vector version of `positional`.
+
+### `pos_map`
+The `pos_map` observation is a dictionary observation of the agent and flag positions, encoded map of the static objects (obstacles, blue & red territories) with the dead/alive flags.
+
+### `pos_map_flattened`
+The `pos_map_flattened` observation is a flattened vector version of `pos_map`.
+
+### `tensor`
+The `tensor` observation is a feature tensor whose size is map height $\times$ map width $\times$ 3, where the first layer represents a map of the territories and obstacles, the second layer represent a map of the agents and flags, and the third layer represents status of the agents whether an agent is dead or alive.
