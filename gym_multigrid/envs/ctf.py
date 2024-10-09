@@ -67,6 +67,11 @@ class CtfMvNEnv(MultiGridEnv):
         num_blue_agents: int = 2,
         num_red_agents: int = 2,
         enemy_policies: list[CtfPolicyT] | CtfPolicyT = RwPolicy(),
+        enemy_policy_avoided_objects: list[str] = [
+            "obstacle",
+            "blue_agent",
+            "red_agent",
+        ],
         battle_range: float = 1,
         randomness: float = 0.75,
         flag_reward: float = 1,
@@ -92,6 +97,9 @@ class CtfMvNEnv(MultiGridEnv):
             Number of red (enemy) agents.
         enemy_policies : list[Type[CtfPolicyT]]=[RwwPolicy()]
             Policies of the enemy agents. If there is only one policy, it will be used for all enemy agents.
+        enemy_policy_avoided_objects : list[str] = ["obstacle", "blue_agent", "red_agent"]
+            Types of objects that the enemy agents should avoid in the path.
+            The object names should match with those in the environment's world object.
         battle_range : float = 1
             Range within which battles can occur.
         randomness : float = 0.75
@@ -198,6 +206,11 @@ class CtfMvNEnv(MultiGridEnv):
                     policy.field_map = self._field_map
                 else:
                     pass
+            else:
+                pass
+
+            if hasattr(policy, "avoided_objects"):
+                policy.avoided_objects = enemy_policy_avoided_objects
             else:
                 pass
 
@@ -1010,6 +1023,11 @@ class Ctf1v1Env(CtfMvNEnv):
         self,
         map_path: str,
         enemy_policies: CtfPolicyT = RwPolicy(),
+        enemy_policy_avoided_objects: list[str] = [
+            "obstacle",
+            "blue_agent",
+            "red_agent",
+        ],
         battle_range: float = 1,
         randomness: float = 0.75,
         flag_reward: float = 1,
@@ -1022,25 +1040,61 @@ class Ctf1v1Env(CtfMvNEnv):
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = ["red_agent", "blue_agent"],
     ) -> None:
+        """
+        Initialize the environment.
+
+        Parameters
+        ----------
+        map_path : str
+            Path to the map file.
+        enemy_policies : CtfPolicyT = RwPolicy()
+            Policy of the enemy agent.
+        enemy_policy_avoided_objects : list[str] = ["obstacle", "blue_agent", "red_agent"]
+            Types of objects that the enemy agent should avoid in the path.
+            The object names should match with those in the environment's world object.
+        battle_range : float = 1
+            Range within which battles can occur.
+        randomness : float = 0.75
+            Probability of the enemy agent winning a battle within its territory.
+        flag_reward : float = 1
+            Reward for capturing the enemy flag.
+        battle_reward_ratio : float = 0.25
+            Ratio of the flag reward for winning a battle.
+        obstacle_penalty_ratio : float = 0
+            Ratio of the flag reward for colliding with an obstacle.
+        step_penalty_ratio : float = 0.01
+            Ratio of the flag reward for taking a step.
+        max_steps : int = 100
+            Maximum number of steps per episode.
+        observation_option : ObservationOption = "positional"
+            Observation option.
+        observation_scaling : float = 1
+            Scaling factor for the observation.
+        render_mode : Literal["human", "rgb_array"] = "rgb_array"
+            Rendering mode.
+        uncached_object_types : list[str] = ["red_agent", "blue_agent"]
+            Types of objects that should not be cached.
+        """
 
         num_blue_agents: Final[int] = 1
         num_red_agents: Final[int] = 1
         super().__init__(
-            map_path,
-            num_blue_agents,
-            num_red_agents,
-            enemy_policies,
-            battle_range,
-            randomness,
-            flag_reward,
-            battle_reward_ratio,
-            obstacle_penalty_ratio,
-            step_penalty_ratio,
-            max_steps,
-            observation_option,
-            observation_scaling,
-            render_mode,
-            uncached_object_types,
+            map_path=map_path,
+            num_blue_agents=num_blue_agents,
+            num_red_agents=num_red_agents,
+            enemy_policies=enemy_policies,
+            enemy_policy_avoided_objects=enemy_policy_avoided_objects,
+            battle_range=battle_range,
+            randomness=randomness,
+            flag_reward=flag_reward,
+            battle_reward_ratio=battle_reward_ratio,
+            obstacle_penalty_ratio=obstacle_penalty_ratio,
+            step_penalty_ratio=step_penalty_ratio,
+            max_steps=max_steps,
+            observation_option=observation_option,
+            observation_scaling=observation_scaling,
+            render_mode=render_mode,
+            uncached_object_types=uncached_object_types,
         )
 
         self.action_space = spaces.Discrete(len(self.actions_set))
@@ -1049,4 +1103,25 @@ class Ctf1v1Env(CtfMvNEnv):
     def step(
         self, action: int
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
+        """
+        Step the environment.
+
+        Parameters
+        ----------
+        action : int
+            Action to take for the blue agent.
+
+        Returns
+        -------
+        observation : Observation
+            Observation of the environment.
+        reward : float
+            Reward of the environment.
+        terminated : bool
+            Whether the episode is terminated.
+        truncated : bool
+            Whether the episode is truncated.
+        info : dict[str, float]
+            Additional information.
+        """
         return super().step([action])

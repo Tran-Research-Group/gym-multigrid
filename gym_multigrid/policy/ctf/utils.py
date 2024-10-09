@@ -1,9 +1,11 @@
 from heapq import heapify, heappop, heappush
 from typing import NamedTuple, Union
 
+import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.typing import Position
+from gym_multigrid.core.world import WorldT
 
 
 class AStarNode(NamedTuple):
@@ -14,7 +16,13 @@ class AStarNode(NamedTuple):
     loc: Position
 
 
-def a_star(start: Position, end: Position, map: NDArray) -> list[Position]:
+def a_star(
+    start: Position,
+    end: Position,
+    field_map: NDArray[np.int_],
+    world: WorldT,
+    avoided_objects: list[str] = ["obstacle", "blue_agent", "red_agent"],
+) -> list[Position]:
     """
     Compute the path from start to end using A* algorithm.
 
@@ -24,8 +32,10 @@ def a_star(start: Position, end: Position, map: NDArray) -> list[Position]:
         Start position
     end : Position
         End position
-    map : NDArray
+    field_map : NDArray[np.int_]
         Map of the environment
+    world : WorldT
+        World object
 
     Returns
     -------
@@ -33,8 +43,6 @@ def a_star(start: Position, end: Position, map: NDArray) -> list[Position]:
         List of positions from start to end
     """
 
-    rows, cols = map.shape
-    map_list: list[list[float]] = map.tolist()
     # Add the start and end nodes
     start_node = AStarNode(
         manhattan_distance(start, end), 0, manhattan_distance(start, end), None, start
@@ -68,11 +76,9 @@ def a_star(start: Position, end: Position, map: NDArray) -> list[Position]:
                 current_loc: Position = current_node.loc
                 new_loc = (current_loc[0] + direction[0], current_loc[1] + direction[1])
 
-                # Make sure within a range
-                if (
-                    (new_loc[1] >= 0 and new_loc[1] < cols)
-                    and (new_loc[0] >= 0 and new_loc[0] < rows)
-                    and (map_list[new_loc[0]][new_loc[1]] != 8)
+                # Make sure within a range and avoid obstacles or other agents
+                if loc_inside_map(new_loc, field_map) and loc_can_overlap(
+                    new_loc, end, field_map, world, avoided_objects
                 ):
                     # Create the f, g, and h values
                     g = current_node.g + 1
@@ -117,6 +123,11 @@ def a_star(start: Position, end: Position, map: NDArray) -> list[Position]:
                 else:
                     continue
 
+    if not path:
+        raise ValueError("No path found")
+    else:
+        pass
+
     return path
 
 
@@ -124,13 +135,80 @@ def manhattan_distance(p1: Position, p2: Position) -> int:
     """
     Compute a Manhattan distance of two points
 
-    Parameters:
-    p1 (Position): a location
-    p2 (Position): another location
+    Parameters
+    ----------
+    p1: Position
+        Location
+    p2 : Position
+        Another location
 
-    Returns:
-    distance (int): Manhattan distance of the two points
+    Returns
+    -------
+    distance : int
+        Manhattan distance between two points
     """
     x1, y1 = p1
     x2, y2 = p2
     return abs(x1 - x2) + abs(y1 - y2)
+
+
+def loc_inside_map(loc: Position, field_map: NDArray[np.int_]) -> bool:
+    """
+    Check if a location is inside the field_map
+
+    Parameters
+    ----------
+    loc: Position
+        Location
+    field_map: NDArray[np.int_]
+        Map of the environment
+
+    Returns
+    -------
+    inside: bool
+        True if the location is inside the field_map
+    """
+    rows, cols = field_map.shape
+    x, y = loc
+    return 0 <= x < rows and 0 <= y < cols
+
+
+def loc_can_overlap(
+    loc: Position,
+    end_loc: Position,
+    field_map: NDArray[np.int_],
+    world: WorldT,
+    avoided_objects: list[str],
+) -> bool:
+    """
+    Check if a location can overlap with other objects.
+    If the location is not empty and not in the list of avoided objects, it can overlap.
+    In case the location is the end location, it can overlap regardless of the object at the location.
+
+
+    Parameters
+    ----------
+    loc: Position
+        Location
+    end_loc: Position
+        End location
+    field_map: NDArray[np.int_]
+        Map of the environment
+    world: WorldT
+        World object
+    avoided_objects: list[str]
+        List of objects to avoid
+
+    Returns
+    -------
+    can_overlap: bool
+        True if the location can overlap with other objects
+    """
+    x, y = loc
+    can_overlap: bool = (
+        True
+        if loc == end_loc
+        else world.IDX_TO_OBJECT[field_map[x][y]] not in avoided_objects
+    )
+
+    return can_overlap
