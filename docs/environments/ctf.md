@@ -3,7 +3,7 @@
 ## Overview
 The CtF game is a simple grid-world environment with discrete state and action spaces, but includes complex adversarial dynamics.
 
-## Game Dyanamics
+## Game Dynamics
 
 In our CtF game, if a pair of blue and red agents are next to each other in the blue territory, then the red agent is killed with 75\% probability (and vice versa in the red territory).
 The game ends when either agent captures its opponent's flag or all blue agents are defeated. 
