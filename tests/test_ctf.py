@@ -158,7 +158,7 @@ def test_ctf_mvn_rgb() -> None:
 
 def test_fight_policy() -> None:
     animation_path: str = "tests/out/animations/ctf_mvn_fight_policy.gif"
-    map_path: str = "tests/assets/board.txt"
+    map_path: str = "tests/assets/board_wall.txt"
 
     field_map = load_text_map(map_path)
     enemy_policy = FightPolicy()
@@ -169,7 +169,7 @@ def test_fight_policy() -> None:
         map_path=map_path,
         render_mode="human",
         observation_option="pos_map",
-        enemy_policies=[enemy_policy, RwPolicy()],
+        enemy_policies=[enemy_policy, enemy_policy],
     )
 
     obs, _ = env.reset()
