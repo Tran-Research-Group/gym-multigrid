@@ -7,40 +7,16 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import CtfWorld, World
+from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
+from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
 
 
-class ObservationDict(TypedDict):
-    blue_agent: NDArray[np.int_]
-    red_agent: NDArray[np.int_]
-    blue_flag: NDArray[np.int_]
-    red_flag: NDArray[np.int_]
-    blue_territory: NDArray[np.int_]
-    red_territory: NDArray[np.int_]
-    obstacle: NDArray[np.int_]
-    is_red_agent_defeated: int
-
-
-class MultiAgentObservationDict(TypedDict):
-    blue_agent: NDArray[np.int_]
-    red_agent: NDArray[np.int_]
-    blue_flag: NDArray[np.int_]
-    red_flag: NDArray[np.int_]
-    blue_territory: NDArray[np.int_]
-    red_territory: NDArray[np.int_]
-    obstacle: NDArray[np.int_]
-    terminated_agents: NDArray[np.int_]
-
-
 Observation: TypeAlias = (
-    ObservationDict
-    | MultiAgentObservationDict
-    | NDArray[np.int_]
-    | dict[str, NDArray[np.int_] | int]
+    ObservationDict | NDArray[np.int_] | dict[str, NDArray[np.int_] | int]
 )
 
 
@@ -690,11 +666,11 @@ class CtfMvNEnv(MultiGridEnv):
 
         return observation
 
-    def _get_dict_obs(self) -> MultiAgentObservationDict:
+    def _get_dict_obs(self) -> ObservationDict:
         for a in self.agents:
             assert a.pos is not None
 
-        observation: MultiAgentObservationDict
+        observation: ObservationDict
 
         observation = {
             "blue_agent": np.array(
