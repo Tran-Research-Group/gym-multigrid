@@ -168,7 +168,7 @@ def test_fight_policy() -> None:
         num_red_agents=2,
         map_path=map_path,
         render_mode="human",
-        observation_option="pos_map",
+        observation_option="tensor",
         enemy_policies=[enemy_policy, RwPolicy()],
     )
 
