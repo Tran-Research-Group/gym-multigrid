@@ -7,11 +7,11 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import ActionsT, CtfActions
 from gym_multigrid.core.world import WorldT, CtfWorld
 from gym_multigrid.policy.base import BaseAgentPolicy, ObservationT
-from gym_multigrid.policy.ctf.utils import a_star
+from gym_multigrid.policy.ctf.typing import ObservationDict
+from gym_multigrid.policy.ctf.utils import a_star, get_unterminated_opponent_pos
 from gym_multigrid.utils.map import position_in_positions, closest_area_pos
 from gym_multigrid.typing import Position
 
-ObservationDictT = TypeVar("ObservationDictT", bound=dict)
 CtfPolicyT = TypeVar("CtfPolicyT", bound="CtfPolicy")
 
 
@@ -20,14 +20,16 @@ class CtfPolicy(BaseAgentPolicy):
     Abstract class for Capture the Flag agent policy
     """
 
-    def act(self, observation: ObservationDictT, curr_pos: Position) -> int:
+    def act(self, observation: ObservationDict, curr_pos: Position) -> int:
         """
         Determine the action to take.
 
         Parameters
         ----------
-        observation : ObservationDictT
+        observation : ObservationDict
             Observation dictionary (dict from the env).
+        curr_pos : Position
+            Current position of the agent.
 
         Returns
         -------
@@ -45,7 +47,8 @@ class RwPolicy(CtfPolicy):
         name: str
             Policy name
         random_generator: numpy.random.Generator
-            Random number generator. Replace it with the environment's random number generator if needed.
+            Random number generator.
+            Replace it with the environment's random number generator if needed.
     """
 
     def __init__(
@@ -61,7 +64,8 @@ class RwPolicy(CtfPolicy):
         action_set : gym_multigrid.core.agent.ActionsT | None
             Actions available to the agent.
         random_generator : numpy.random.Generator
-            Random number generator. Replace it with the environment's random number generator if needed.
+            Random number generator.
+            Replace it with the environment's random number generator if needed.
         """
         super().__init__(action_set, random_generator)
         self.name = "rw"
@@ -87,31 +91,43 @@ class DestinationPolicy(CtfPolicy):
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.75,
+        world: WorldT = CtfWorld,
+        avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
         Initialize the policy.
 
         Parameters
         ----------
-        field_map : numpy.typing.NDArray
+        field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT
+            Make sure to set it to the field map of the environment.
+        actions : gym_multigrid.core.agent.ActionsT = CtfActions
             Actions available to the agent.
+        random_generator : numpy.random.Generator | None = None
+            Random number generator. Replace it with the environment's random number generator if needed.
         randomness : float
             Probability of taking an optimal action.
+        world : gym_multigrid.core.world.WorldT = CtfWorld
+            World object where the policy is applied, and it should be set to the environment's world object.
+        avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
+            List of objects to avoid in the path.
+            The object names should match with those in the environment's world object.
         """
         super().__init__(action_set, random_generator)
         self.name = "destination"
         self.field_map: NDArray | None = field_map
         self.randomness: float = randomness
+        self.world: WorldT = world
+        self.avoided_objects: list[str] = avoided_objects
 
-    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+    def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
         """
         Get the target position of the agent.
 
         Parameters
         ----------
-        observation : ObservationDictT
+        observation : ObservationDict
             Observation dictionary (dict from the env).
 
         Returns
@@ -122,14 +138,16 @@ class DestinationPolicy(CtfPolicy):
         # Implement this method
         ...
 
-    def act(self, observation: ObservationDictT, curr_pos: Position) -> int:
+    def act(self, observation: ObservationDict, curr_pos: Position) -> int:
         """
         Determine the action to take.
 
         Parameters
         ----------
-        observation : ObservationDictT
+        observation : ObservationDict
             Observation dictionary (dict from the env).
+        curr_pos : Position
+            Current position of the agent.
 
         Returns
         -------
@@ -142,7 +160,9 @@ class DestinationPolicy(CtfPolicy):
         # Convert start and target to tuple from NDArray
         start: Position = tuple(start_np)
         target: Position = tuple(target_np)
-        shortest_path = a_star(start, target, self.field_map)
+        shortest_path = a_star(
+            start, target, self.field_map, self.world, self.avoided_objects
+        )
         optimal_loc: Position = np.array(
             shortest_path[1] if len(shortest_path) > 1 else target
         )
@@ -170,7 +190,7 @@ class DestinationPolicy(CtfPolicy):
             elif np.array_equal(action_dir, np.array([1, 0])):
                 action = self.action_set.up
             else:
-                raise ValueError("Invalid direction")
+                raise ValueError(f"Invalid direction {action_dir}")
         else:
             action = self.random_generator.integers(0, len(self.action_set))
 
@@ -193,6 +213,8 @@ class FightPolicy(DestinationPolicy):
         random_generator: Generator | None = None,
         randomness: float = 0.75,
         ego_agent: Literal["red", "blue"] = "red",
+        world: WorldT = CtfWorld,
+        avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
         Initialize the policy.
@@ -207,19 +229,27 @@ class FightPolicy(DestinationPolicy):
             Probability of taking an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
+        world : gym_multigrid.core.world.WorldT = CtfWorld
+            World object where the policy is applied.
+            It should be set to the environment's world object.
+        avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
+            List of objects to avoid in the path.
+            The object names should match with those in the environment's world object.
         """
 
-        super().__init__(field_map, action_set, random_generator, randomness)
+        super().__init__(
+            field_map, action_set, random_generator, randomness, world, avoided_objects
+        )
         self.name = "fight"
         self.ego_agent: Literal["red", "blue"] = ego_agent
 
-    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+    def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
         opponent_agent: Literal["red_agent", "blue_agent"] = (
             "blue_agent" if self.ego_agent == "red" else "red_agent"
         )
-
-        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)
-        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+        opponent_pos: list[Position] = get_unterminated_opponent_pos(
+            observation, opponent_agent
+        )
 
         target: Position = closest_area_pos(curr_pos, opponent_pos)
 
@@ -242,6 +272,8 @@ class CapturePolicy(DestinationPolicy):
         random_generator: Generator | None = None,
         randomness: float = 0.75,
         ego_agent: Literal["red", "blue"] = "red",
+        world: WorldT = CtfWorld,
+        avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
         Initialize the policy.
@@ -256,13 +288,21 @@ class CapturePolicy(DestinationPolicy):
             Probability of taking an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
+        world : gym_multigrid.core.world.WorldT = CtfWorld
+            World object where the policy is applied.
+            It should be set to the environment's world object.
+        avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
+            List of objects to avoid in the path.
+            The object names should match with those in the environment's world
         """
 
-        super().__init__(field_map, action_set, random_generator, randomness)
+        super().__init__(
+            field_map, action_set, random_generator, randomness, world, avoided_objects
+        )
         self.name = "capture"
         self.ego_agent: Literal["red", "blue"] = ego_agent
 
-    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+    def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
         match self.ego_agent:
             case "red":
                 assert "blue_flag" in observation
@@ -289,6 +329,7 @@ class PatrolPolicy(DestinationPolicy):
         randomness: float = 0.75,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
+        avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
         Initialize the policy.
@@ -305,9 +346,15 @@ class PatrolPolicy(DestinationPolicy):
             Controlled agent.
         world : gym_multigrid.core.world.WorldT = CtfWorld
             World object where the policy is applied.
+            It should be set to the environment's world object.
+        avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
+            List of objects to avoid in the path.
+            The object names should match with those in the environment's world object.
         """
 
-        super().__init__(field_map, action_set, random_generator, randomness)
+        super().__init__(
+            field_map, action_set, random_generator, randomness, avoided_objects
+        )
         self.name = "patrol"
         self.ego_agent: Literal["red", "blue"] = ego_agent
         self.world: WorldT = world
@@ -318,7 +365,7 @@ class PatrolPolicy(DestinationPolicy):
         self.obstacle: list[Position]
         self.border, self.obstacle = self.locate_border(world, self.directions)
 
-    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+    def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
 
         if position_in_positions(curr_pos, self.border):
             possible_next_pos: list[Position] = [
@@ -408,6 +455,7 @@ class PatrolFightPolicy(PatrolPolicy):
         randomness: float = 0.75,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
+        avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
         Initialize the policy.
@@ -424,14 +472,24 @@ class PatrolFightPolicy(PatrolPolicy):
             Controlled agent.
         world : gym_multigrid.core.world.WorldT = CtfWorld
             World object where the policy is applied.
+            It should be set to the environment's world
+        avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
+            List of objects to avoid in the path.
+            The object names should match with those in the environment's world object.
         """
 
         super().__init__(
-            field_map, action_set, random_generator, randomness, ego_agent, world
+            field_map,
+            action_set,
+            random_generator,
+            randomness,
+            ego_agent,
+            world,
+            avoided_objects,
         )
         self.name = "patrol_fight"
 
-    def get_target(self, observation: ObservationDictT, curr_pos: Position) -> Position:
+    def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
         opponent_agent: Literal["red_agent", "blue_agent"] = (
             "blue_agent" if self.ego_agent == "red" else "red_agent"
         )
@@ -439,8 +497,9 @@ class PatrolFightPolicy(PatrolPolicy):
             "red_territory" if self.ego_agent == "red" else "blue_territory"
         )
 
-        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)
-        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+        opponent_pos: list[Position] = get_unterminated_opponent_pos(
+            observation, opponent_agent
+        )
 
         ego_territory_pos_np: NDArray = observation[ego_territory].reshape(-1, 2)
         ego_territory_pos: list[Position] = [tuple(pos) for pos in ego_territory_pos_np]
