@@ -656,7 +656,8 @@ class CtfMvNEnv(MultiGridEnv):
                 agent_flag_layer[self.red_flag[0], self.red_flag[1]] = 4
 
                 observation = np.stack(
-                    [static_object_layer, agent_flag_layer, agent_status_layer], axis=2
+                    [static_object_layer.T, agent_flag_layer.T, agent_status_layer.T],
+                    axis=2,
                 )
 
             case _:
