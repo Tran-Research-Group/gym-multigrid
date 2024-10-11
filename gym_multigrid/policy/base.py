@@ -40,3 +40,6 @@ class BaseAgentPolicy(ABC):
 
     @abstractmethod
     def act(self, observation: ObservationT) -> int: ...
+
+    @abstractmethod
+    def reset(self) -> None: ...

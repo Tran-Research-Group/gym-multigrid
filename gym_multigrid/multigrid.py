@@ -366,6 +366,11 @@ class MultiGridEnv(gym.Env):
         """
         Set the agent's starting point at an empty position in the grid and reset the agent's state
         """
+        if reset_agent_status:
+            agent.reset()
+        else:
+            pass
+
         if pos is not None:
             agent.pos = pos
             self.put_obj(agent, i=pos[0], j=pos[1])
@@ -381,11 +386,6 @@ class MultiGridEnv(gym.Env):
             agent.dir = 3
 
         agent.init_dir = agent.dir
-
-        if reset_agent_status:
-            agent.reset_status()
-        else:
-            pass
 
         return pos
 
