@@ -1,9 +1,10 @@
 from heapq import heapify, heappop, heappush
-from typing import NamedTuple, Union
+from typing import NamedTuple, Union, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
+from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.core.world import WorldT
 
@@ -212,3 +213,25 @@ def loc_can_overlap(
     )
 
     return can_overlap
+
+
+def get_unterminated_opponent_pos(
+    observation: ObservationDict, opponent_agent: Literal["red_agent", "blue_agent"]
+) -> list[Position]:
+    num_blue_agents: int = observation["blue_agent"].reshape([-1, 2]).shape[0]
+    num_red_agents: int = observation["red_agent"].reshape([-1, 2]).shape[0]
+    terminated_opponent_agents: NDArray[np.int_] = (
+        observation["terminated_agents"][0:num_blue_agents]
+        if opponent_agent == "blue_agent"
+        else observation["terminated_agents"][
+            num_blue_agents : num_blue_agents + num_red_agents
+        ]
+    )
+
+    # Only choose the positions of the opponent agents that are not terminated
+    opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)[
+        terminated_opponent_agents == 0
+    ]
+    opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+
+    return opponent_pos

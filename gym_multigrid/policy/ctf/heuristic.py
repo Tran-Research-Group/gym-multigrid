@@ -8,7 +8,7 @@ from gym_multigrid.core.agent import ActionsT, CtfActions
 from gym_multigrid.core.world import WorldT, CtfWorld
 from gym_multigrid.policy.base import BaseAgentPolicy, ObservationT
 from gym_multigrid.policy.ctf.typing import ObservationDict
-from gym_multigrid.policy.ctf.utils import a_star
+from gym_multigrid.policy.ctf.utils import a_star, get_unterminated_opponent_pos
 from gym_multigrid.utils.map import position_in_positions, closest_area_pos
 from gym_multigrid.typing import Position
 
@@ -247,21 +247,9 @@ class FightPolicy(DestinationPolicy):
         opponent_agent: Literal["red_agent", "blue_agent"] = (
             "blue_agent" if self.ego_agent == "red" else "red_agent"
         )
-        num_blue_agents: int = observation["blue_agent"].reshape([-1, 2]).shape[0]
-        num_red_agents: int = observation["red_agent"].reshape([-1, 2]).shape[0]
-        terminated_opponent_agents: NDArray[np.int_] = (
-            observation["terminated_agents"][0:num_blue_agents]
-            if opponent_agent == "blue_agent"
-            else observation["terminated_agents"][
-                num_blue_agents : num_blue_agents + num_red_agents
-            ]
+        opponent_pos: list[Position] = get_unterminated_opponent_pos(
+            observation, opponent_agent
         )
-
-        # Only choose the positions of the opponent agents that are not terminated
-        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)[
-            terminated_opponent_agents == 0
-        ]
-        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
 
         target: Position = closest_area_pos(curr_pos, opponent_pos)
 
@@ -509,8 +497,9 @@ class PatrolFightPolicy(PatrolPolicy):
             "red_territory" if self.ego_agent == "red" else "blue_territory"
         )
 
-        opponent_pos_np: NDArray = observation[opponent_agent].reshape(-1, 2)
-        opponent_pos: list[Position] = [tuple(pos) for pos in opponent_pos_np]
+        opponent_pos: list[Position] = get_unterminated_opponent_pos(
+            observation, opponent_agent
+        )
 
         ego_territory_pos_np: NDArray = observation[ego_territory].reshape(-1, 2)
         ego_territory_pos: list[Position] = [tuple(pos) for pos in ego_territory_pos_np]
