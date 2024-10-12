@@ -858,9 +858,7 @@ class CtfMvNEnv(MultiGridEnv):
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
         self.step_count += 1
 
-        blue_actions: list[int] = (
-            [blue_actions] if type(blue_actions) is int else blue_actions
-        )
+        blue_actions: NDArray[np.int_] = np.array(blue_actions).flatten()
 
         red_actions: list[int] = []
         for red_agent in self.agents[self.num_blue_agents :]:
