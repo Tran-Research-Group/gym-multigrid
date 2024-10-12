@@ -107,16 +107,22 @@ class Agent(WorldObj):
         self.world = world
         self.dir_to_vec = dir_to_vec
 
-    def reset_status(self) -> None:
+    def reset(self) -> None:
         """
-        Reset the status attributes of the agent.
-        The reset status attributes are:
+        Reset the agent to its initial state
+        The reset attributes of the agent are:
+        - pos: None
+        - dir: None
+        - init_dir: None
         - carrying: None
         - terminated: False
         - started: True
         - paused: False
         - collided: False
         """
+        self.pos = None
+        self.dir = None
+        self.init_dir = None
         self.carrying = None
         self.terminated = False
         self.started = True
@@ -385,3 +391,7 @@ class PolicyAgent(Agent):
             world, index, view_size, actions, dir_to_vec, color, bg_color, type
         )
         self.policy: AgentPolicyT = policy
+
+    def reset(self) -> None:
+        super().reset()
+        self.policy.reset()
