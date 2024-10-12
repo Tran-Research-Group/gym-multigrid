@@ -228,10 +228,16 @@ class CtfMvNEnv(MultiGridEnv):
             uncached_object_types=uncached_object_types,
         )
 
-        self.action_space = spaces.MultiDiscrete(
-            [len(self.actions_set) for _ in range(self.num_blue_agents)]
+        self.action_space = (
+            spaces.MultiDiscrete(
+                [len(self.actions_set) for _ in range(self.num_blue_agents)]
+            )
+            if self.num_blue_agents > 1
+            else spaces.Discrete(len(self.actions_set))
         )
-        self.ac_dim = self.action_space.shape
+        self.ac_dim = (
+            self.action_space.shape if self.num_blue_agents > 1 else self.action_space.n
+        )
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
@@ -1074,8 +1080,8 @@ class Ctf1v1Env(CtfMvNEnv):
             uncached_object_types=uncached_object_types,
         )
 
-        self.action_space = spaces.Discrete(len(self.actions_set))
-        self.ac_dim = self.action_space.n
+        # self.action_space = spaces.Discrete(len(self.actions_set))
+        # self.ac_dim = self.action_space.n
 
     def step(
         self, action: int
