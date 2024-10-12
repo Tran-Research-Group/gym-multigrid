@@ -10,7 +10,11 @@ from gym_multigrid.core.world import WorldT, CtfWorld
 from gym_multigrid.policy.base import BaseAgentPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.policy.ctf.utils import a_star, get_unterminated_opponent_pos
-from gym_multigrid.utils.map import position_in_positions, closest_area_pos
+from gym_multigrid.utils.map import (
+    distance_area_point,
+    position_in_positions,
+    closest_area_pos,
+)
 from gym_multigrid.typing import Position
 
 CtfPolicyT = TypeVar("CtfPolicyT", bound="CtfPolicy")
@@ -706,7 +710,7 @@ class RoombaPolicy(CtfPolicy):
 
             if flag_dist <= self.flag_range:
                 start_np: NDArray = np.array(curr_pos)
-                target_np: NDArray = np.array(self.get_target(observation, curr_pos))
+                target_np: NDArray = flag_pos
                 # Convert start and target to tuple from NDArray
                 start: Position = tuple(start_np)
                 target: Position = tuple(target_np)
@@ -750,9 +754,20 @@ class RoombaPolicy(CtfPolicy):
                     else observation["blue_territory"]
                 ).reshape(-1, 2)
                 if position_in_positions(curr_pos, opponent_territory):
-                    action = self.dir_to_action(np.array(curr_pos) - np.array(new_pos))
+                    if distance_area_point(
+                        new_pos, opponent_pos
+                    ) <= distance_area_point(curr_pos, opponent_pos):
+                        action = self.dir_to_action(
+                            np.array(curr_pos) - np.array(new_pos)
+                        )
+                    else:
+                        pass
                 else:
-                    pass
+                    # If the agent is its own territory, move up if the opponent is in the lower half of the field.
+                    if curr_pos[1] > self.field_map.shape[1] / 2:
+                        action = self.action_set.down
+                    else:
+                        action = self.action_set.up
             else:
                 pass
 
@@ -770,7 +785,7 @@ class RoombaPolicy(CtfPolicy):
                         self.world.IDX_TO_OBJECT[
                             self.field_map[new_pos_tmp[0], new_pos_tmp[1]]
                         ]
-                        != "obstacle"
+                        not in self.avoided_objects
                     ):
                         available_actions.append(act)
                     else:
@@ -781,5 +796,7 @@ class RoombaPolicy(CtfPolicy):
 
         else:
             action = self.act_randomly()  # 3. Random exploration
+
+        self.previous_action = action
 
         return action
