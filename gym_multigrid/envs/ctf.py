@@ -854,9 +854,13 @@ class CtfMvNEnv(MultiGridEnv):
         return in_territory
 
     def step(
-        self, blue_actions: list[int]
+        self, blue_actions: list[int] | int
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
         self.step_count += 1
+
+        blue_actions: list[int] = (
+            [blue_actions] if type(blue_actions) is int else blue_actions
+        )
 
         red_actions: list[int] = []
         for red_agent in self.agents[self.num_blue_agents :]:
@@ -1079,32 +1083,3 @@ class Ctf1v1Env(CtfMvNEnv):
             render_mode=render_mode,
             uncached_object_types=uncached_object_types,
         )
-
-        # self.action_space = spaces.Discrete(len(self.actions_set))
-        # self.ac_dim = self.action_space.n
-
-    def step(
-        self, action: int
-    ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-        """
-        Step the environment.
-
-        Parameters
-        ----------
-        action : int
-            Action to take for the blue agent.
-
-        Returns
-        -------
-        observation : Observation
-            Observation of the environment.
-        reward : float
-            Reward of the environment.
-        terminated : bool
-            Whether the episode is terminated.
-        truncated : bool
-            Whether the episode is truncated.
-        info : dict[str, float]
-            Additional information.
-        """
-        return super().step([action])
