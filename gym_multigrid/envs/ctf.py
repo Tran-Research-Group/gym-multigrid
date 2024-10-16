@@ -783,10 +783,10 @@ class CtfMvNEnv(MultiGridEnv):
             "d_ra_bf": distance_points(self.agents[1].pos, self.blue_flag),
             "d_ra_rf": distance_points(self.agents[1].pos, self.red_flag),
             "d_bf_rf": distance_points(self.blue_flag, self.red_flag),
-            "d_ba_bb": distance_area_point(self.agents[0].pos, self.blue_territory),
-            "d_ba_rb": distance_area_point(self.agents[0].pos, self.red_territory),
-            "d_ra_bb": distance_area_point(self.agents[1].pos, self.blue_territory),
-            "d_ra_rb": distance_area_point(self.agents[1].pos, self.red_territory),
+            "d_ba_bt": distance_area_point(self.agents[0].pos, self.blue_territory),
+            "d_ba_rt": distance_area_point(self.agents[0].pos, self.red_territory),
+            "d_ra_bt": distance_area_point(self.agents[1].pos, self.blue_territory),
+            "d_ra_rt": distance_area_point(self.agents[1].pos, self.red_territory),
             "d_ba_ob": distance_area_point(self.agents[0].pos, self.obstacle),
         } | self.ep_game_stats
         return info
