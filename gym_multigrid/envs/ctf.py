@@ -23,6 +23,8 @@ Observation: TypeAlias = (
 class GameStats(TypedDict):
     defeated_blue_agents: int
     defeated_red_agents: int
+    captured_blue_flags: int
+    captured_red_flags: int
     blue_agent_defeated: list[bool]
     red_agent_defeated: list[bool]
     blue_flag_captured: bool
@@ -267,6 +269,17 @@ class CtfMvNEnv(MultiGridEnv):
         self.ac_dim = (
             self.action_space.shape if self.num_blue_agents > 1 else self.action_space.n
         )
+
+        self.ep_game_stats: GameStats = {
+            "defeated_blue_agents": 0,
+            "defeated_red_agents": 0,
+            "captured_blue_flags": 0,
+            "captured_red_flags": 0,
+            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
+            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
@@ -553,6 +566,17 @@ class CtfMvNEnv(MultiGridEnv):
         seed: int | None = None,
         options: dict | None = None,
     ) -> tuple[Observation, dict[str, float]]:
+        self.game_stats: GameStats = {
+            "defeated_blue_agents": 0,
+            "defeated_red_agents": 0,
+            "captured_blue_flags": 0,
+            "captured_red_flags": 0,
+            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
+            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
+
         super().reset(seed=seed, options=options)
 
         self.blue_traj: list[list[Position]] = [
@@ -564,15 +588,6 @@ class CtfMvNEnv(MultiGridEnv):
 
         obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
-
-        self.game_stats: GameStats = {
-            "defeated_blue_agents": 0,
-            "defeated_red_agents": 0,
-            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
-            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
-            "blue_flag_captured": False,
-            "red_flag_captured": False,
-        }
 
         return obs, info
 
@@ -773,7 +788,7 @@ class CtfMvNEnv(MultiGridEnv):
             "d_ra_bb": distance_area_point(self.agents[1].pos, self.blue_territory),
             "d_ra_rb": distance_area_point(self.agents[1].pos, self.red_territory),
             "d_ba_ob": distance_area_point(self.agents[0].pos, self.obstacle),
-        }
+        } | self.ep_game_stats
         return info
 
     def _move_agent(self, action: int, agent: AgentT) -> None:
@@ -937,6 +952,7 @@ class CtfMvNEnv(MultiGridEnv):
                 reward += self.flag_reward
                 terminated = True
                 self.game_stats["red_flag_captured"] = True
+                self.game_stats["captured_red_flags"] += 1
             else:
                 pass
 
@@ -949,6 +965,7 @@ class CtfMvNEnv(MultiGridEnv):
                 reward -= self.flag_reward
                 terminated = True
                 self.game_stats["blue_flag_captured"] = True
+                self.game_stats["captured_blue_flags"] += 1
             else:
                 pass
 
@@ -1024,10 +1041,15 @@ class CtfMvNEnv(MultiGridEnv):
         else:
             pass
 
-        reward -= self.step_penalty * self.num_blue_agents
+        reward -= self.step_penalty
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
+
+        if terminated or truncated:
+            self.ep_game_stats = self.game_stats
+        else:
+            pass
 
         return observation, reward, terminated, truncated, info
 
