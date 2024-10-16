@@ -162,7 +162,7 @@ def test_fight_policy() -> None:
     map_path: str = "tests/assets/board_wall.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = FightPolicy()
+    enemy_policy = "fight"
 
     env = CtfMvNEnv(
         num_blue_agents=2,
@@ -170,7 +170,7 @@ def test_fight_policy() -> None:
         map_path=map_path,
         render_mode="human",
         observation_option="tensor",
-        enemy_policies=[enemy_policy, RwPolicy()],
+        enemy_policies=[enemy_policy, "rw"],
     )
 
     obs, _ = env.reset()
@@ -192,7 +192,7 @@ def test_capture_policy() -> None:
     map_path: str = "tests/assets/board.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = CapturePolicy(field_map)
+    enemy_policy = "capture"
 
     env = CtfMvNEnv(
         num_blue_agents=2,
@@ -200,7 +200,7 @@ def test_capture_policy() -> None:
         map_path=map_path,
         render_mode="human",
         observation_option="flattened",
-        enemy_policies=[enemy_policy, RwPolicy()],
+        enemy_policies=[enemy_policy, "rw"],
     )
 
     obs, _ = env.reset()
@@ -222,7 +222,7 @@ def test_patrol_policy() -> None:
     map_path: str = "tests/assets/board.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = PatrolPolicy(field_map)
+    enemy_policy = "patrol"
 
     env = CtfMvNEnv(
         num_blue_agents=2,
@@ -252,7 +252,7 @@ def test_patrol_fight_policy() -> None:
     map_path: str = "tests/assets/board.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = PatrolFightPolicy(field_map)
+    enemy_policy = "patrol_fight"
 
     env = CtfMvNEnv(
         num_blue_agents=2,
@@ -282,7 +282,7 @@ def test_roomba_policy() -> None:
     map_path: str = "tests/assets/board_wall.txt"
 
     field_map = load_text_map(map_path)
-    enemy_policy = RoombaPolicy()
+    enemy_policy = "roomba"
 
     env = CtfMvNEnv(
         num_blue_agents=2,
