@@ -1,4 +1,4 @@
-from typing import Final, Literal, TypeAlias, TypedDict
+from typing import Final, Literal, TypeAlias, TypedDict, Any, Type
 
 from gymnasium import spaces
 import numpy as np
@@ -9,7 +9,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT
+from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT, HEURISTIC_POLICIES
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
@@ -21,6 +21,10 @@ Observation: TypeAlias = (
 
 
 class GameStats(TypedDict):
+    defeated_blue_agents: int
+    defeated_red_agents: int
+    captured_blue_flags: int
+    captured_red_flags: int
     blue_agent_defeated: list[bool]
     red_agent_defeated: list[bool]
     blue_flag_captured: bool
@@ -42,14 +46,12 @@ class CtfMvNEnv(MultiGridEnv):
         map_path: str,
         num_blue_agents: int = 2,
         num_red_agents: int = 2,
-        enemy_policies: list[CtfPolicyT] | CtfPolicyT = RwPolicy(),
-        enemy_policy_avoided_objects: list[str] = [
-            "obstacle",
-            "blue_agent",
-            "red_agent",
-        ],
+        enemy_policies: (
+            list[Type[CtfPolicyT]] | Type[CtfPolicyT] | list[str] | str
+        ) = RwPolicy,
+        enemy_policy_kwargs: list[dict[str, Any]] | dict[str, Any] = {},
         battle_range: float = 1,
-        randomness: float = 0.75,
+        territory_adv_rate: float = 0.75,
         flag_reward: float = 1,
         battle_reward_ratio: float = 0.25,
         obstacle_penalty_ratio: float = 0,
@@ -71,14 +73,18 @@ class CtfMvNEnv(MultiGridEnv):
             Number of blue (friendly) agents.
         num_red_agents : int = 2
             Number of red (enemy) agents.
-        enemy_policies : list[Type[CtfPolicyT]]=[RwwPolicy()]
-            Policies of the enemy agents. If there is only one policy, it will be used for all enemy agents.
-        enemy_policy_avoided_objects : list[str] = ["obstacle", "blue_agent", "red_agent"]
-            Types of objects that the enemy agents should avoid in the path.
-            The object names should match with those in the environment's world object.
+        enemy_policies : list[CtfPolicyT] | CtfPolicyT | list[str] | str = RwPolicy()
+            Policies of the enemy agents.
+            If there is only one policy, it will be used for all enemy agents.
+            If there is a list of policies, the number of policies should be equal to the number of enemy agents.
+            If the policy is a string, it should be one of the keys in HEURISTIC_POLICIES.
+        enemy_policy_kwargs : list[dict[str, Any]] | dict[str, Any] = {"avoided_objects": ["obstacle", "blue_agent", "red_agent"]}
+            Configuration for the enemy policies.
+            If there is only one configuration, it will be used for all enemy policies.
+            If there is a list of configurations, the number of configurations should be equal to the number of enemy agents.
         battle_range : float = 1
             Range within which battles can occur.
-        randomness : float = 0.75
+        territory_adv_rate : float = 0.75
             Probability of the enemy agent winning a battle within its territory.
         flag_reward : float = 1
             Reward for capturing the enemy flag.
@@ -100,11 +106,22 @@ class CtfMvNEnv(MultiGridEnv):
             Types of objects that should not be cached.
         """
 
+        assert num_blue_agents > 0
+        assert num_red_agents > 0
+        assert battle_range > 0
+        assert 0 <= territory_adv_rate <= 1
+        assert flag_reward > 0
+        assert 0 <= battle_reward_ratio <= 1
+        assert 0 <= obstacle_penalty_ratio <= 1
+        assert 0 <= step_penalty_ratio <= 1
+        assert max_steps > 0
+        assert observation_scaling > 0
+
         self.num_blue_agents: Final[int] = num_blue_agents
         self.num_red_agents: Final[int] = num_red_agents
 
         self.battle_range: Final[float] = battle_range
-        self.randomness: Final[float] = randomness
+        self.randomness: Final[float] = territory_adv_rate
         self.flag_reward: Final[float] = flag_reward
         self.battle_reward: Final[float] = battle_reward_ratio * flag_reward
         self.obstacle_penalty: Final[float] = obstacle_penalty_ratio * flag_reward
@@ -168,6 +185,25 @@ class CtfMvNEnv(MultiGridEnv):
             # Check if the number of policies is equal to the number of enemy agents.
             assert len(enemy_policies) == num_red_agents
 
+        if enemy_policy_kwargs is not list:
+            enemy_policy_kwargs = [enemy_policy_kwargs for _ in range(num_red_agents)]
+        else:
+            assert len(enemy_policy_kwargs) == num_red_agents
+
+        # Initialize the enemy policies and set the random generator and field map.
+        match enemy_policies[0]:
+            case str():
+                enemy_policies: list[CtfPolicyT] = [
+                    HEURISTIC_POLICIES[policy](**kwargs)
+                    for policy, kwargs in zip(enemy_policies, enemy_policy_kwargs)
+                ]
+
+            case _:
+                enemy_policies: list[CtfPolicyT] = [
+                    policy(**kwargs)
+                    for policy, kwargs in zip(enemy_policies, enemy_policy_kwargs)
+                ]
+
         for policy in enemy_policies:
             if hasattr(policy, "random_generator"):
                 if policy.random_generator is None:
@@ -182,11 +218,6 @@ class CtfMvNEnv(MultiGridEnv):
                     policy.field_map = self._field_map
                 else:
                     pass
-            else:
-                pass
-
-            if hasattr(policy, "avoided_objects"):
-                policy.avoided_objects = enemy_policy_avoided_objects
             else:
                 pass
 
@@ -238,6 +269,17 @@ class CtfMvNEnv(MultiGridEnv):
         self.ac_dim = (
             self.action_space.shape if self.num_blue_agents > 1 else self.action_space.n
         )
+
+        self.ep_game_stats: GameStats = {
+            "defeated_blue_agents": 0,
+            "defeated_red_agents": 0,
+            "captured_blue_flags": 0,
+            "captured_red_flags": 0,
+            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
+            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
         match self.observation_option:
@@ -524,6 +566,17 @@ class CtfMvNEnv(MultiGridEnv):
         seed: int | None = None,
         options: dict | None = None,
     ) -> tuple[Observation, dict[str, float]]:
+        self.game_stats: GameStats = {
+            "defeated_blue_agents": 0,
+            "defeated_red_agents": 0,
+            "captured_blue_flags": 0,
+            "captured_red_flags": 0,
+            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
+            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
+            "blue_flag_captured": False,
+            "red_flag_captured": False,
+        }
+
         super().reset(seed=seed, options=options)
 
         self.blue_traj: list[list[Position]] = [
@@ -535,13 +588,6 @@ class CtfMvNEnv(MultiGridEnv):
 
         obs: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
-
-        self.game_stats: GameStats = {
-            "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
-            "red_agent_defeated": [False for _ in range(self.num_red_agents)],
-            "blue_flag_captured": False,
-            "red_flag_captured": False,
-        }
 
         return obs, info
 
@@ -742,7 +788,7 @@ class CtfMvNEnv(MultiGridEnv):
             "d_ra_bb": distance_area_point(self.agents[1].pos, self.blue_territory),
             "d_ra_rb": distance_area_point(self.agents[1].pos, self.red_territory),
             "d_ba_ob": distance_area_point(self.agents[0].pos, self.obstacle),
-        }
+        } | self.ep_game_stats
         return info
 
     def _move_agent(self, action: int, agent: AgentT) -> None:
@@ -906,6 +952,7 @@ class CtfMvNEnv(MultiGridEnv):
                 reward += self.flag_reward
                 terminated = True
                 self.game_stats["red_flag_captured"] = True
+                self.game_stats["captured_red_flags"] += 1
             else:
                 pass
 
@@ -918,6 +965,7 @@ class CtfMvNEnv(MultiGridEnv):
                 reward -= self.flag_reward
                 terminated = True
                 self.game_stats["blue_flag_captured"] = True
+                self.game_stats["captured_blue_flags"] += 1
             else:
                 pass
 
@@ -977,11 +1025,13 @@ class CtfMvNEnv(MultiGridEnv):
                     self.agents[self.num_blue_agents + red_agent_idx].terminated = True
                     self.agents[self.num_blue_agents + red_agent_idx].color = "red_grey"
                     self.game_stats["red_agent_defeated"][red_agent_idx] = True
+                    self.game_stats["defeated_red_agents"] += 1
                 else:
                     reward -= self.battle_reward
                     self.agents[blue_agent_idx].terminated = True
                     self.agents[blue_agent_idx].color = "blue_grey"
                     self.game_stats["blue_agent_defeated"][blue_agent_idx] = True
+                    self.game_stats["defeated_blue_agents"] += 1
             else:
                 pass
 
@@ -991,10 +1041,15 @@ class CtfMvNEnv(MultiGridEnv):
         else:
             pass
 
-        reward -= self.step_penalty * self.num_blue_agents
+        reward -= self.step_penalty
 
         observation: Observation = self._get_obs()
         info: dict[str, float] = self._get_info()
+
+        if terminated or truncated:
+            self.ep_game_stats = self.game_stats
+        else:
+            pass
 
         return observation, reward, terminated, truncated, info
 
@@ -1007,14 +1062,10 @@ class Ctf1v1Env(CtfMvNEnv):
     def __init__(
         self,
         map_path: str,
-        enemy_policies: CtfPolicyT = RwPolicy(),
-        enemy_policy_avoided_objects: list[str] = [
-            "obstacle",
-            "blue_agent",
-            "red_agent",
-        ],
+        enemy_policy: Type[CtfPolicyT] | str = RwPolicy,
+        enemy_policy_kwarg: dict[str, Any] = {},
         battle_range: float = 1,
-        randomness: float = 0.75,
+        territory_adv_rate: float = 0.75,
         flag_reward: float = 1,
         battle_reward_ratio: float = 0.25,
         obstacle_penalty_ratio: float = 0,
@@ -1039,7 +1090,7 @@ class Ctf1v1Env(CtfMvNEnv):
             The object names should match with those in the environment's world object.
         battle_range : float = 1
             Range within which battles can occur.
-        randomness : float = 0.75
+        territory_adv_rate : float = 0.75
             Probability of the enemy agent winning a battle within its territory.
         flag_reward : float = 1
             Reward for capturing the enemy flag.
@@ -1067,10 +1118,10 @@ class Ctf1v1Env(CtfMvNEnv):
             map_path=map_path,
             num_blue_agents=num_blue_agents,
             num_red_agents=num_red_agents,
-            enemy_policies=enemy_policies,
-            enemy_policy_avoided_objects=enemy_policy_avoided_objects,
+            enemy_policies=enemy_policy,
+            enemy_policy_kwargs=enemy_policy_kwarg,
             battle_range=battle_range,
-            randomness=randomness,
+            territory_adv_rate=territory_adv_rate,
             flag_reward=flag_reward,
             battle_reward_ratio=battle_reward_ratio,
             obstacle_penalty_ratio=obstacle_penalty_ratio,

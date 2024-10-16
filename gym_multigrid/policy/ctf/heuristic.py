@@ -800,3 +800,13 @@ class RoombaPolicy(CtfPolicy):
         self.previous_action = action
 
         return action
+
+
+HEURISTIC_POLICIES: dict[str, Type[CtfPolicyT]] = {
+    "rw": RwPolicy,
+    "fight": FightPolicy,
+    "capture": CapturePolicy,
+    "patrol": PatrolPolicy,
+    "patrol_fight": PatrolFightPolicy,
+    "roomba": RoombaPolicy,
+}
