@@ -21,6 +21,8 @@ Observation: TypeAlias = (
 
 
 class GameStats(TypedDict):
+    defeated_blue_agents: int
+    defeated_red_agents: int
     blue_agent_defeated: list[bool]
     red_agent_defeated: list[bool]
     blue_flag_captured: bool
@@ -564,6 +566,8 @@ class CtfMvNEnv(MultiGridEnv):
         info: dict[str, float] = self._get_info()
 
         self.game_stats: GameStats = {
+            "defeated_blue_agents": 0,
+            "defeated_red_agents": 0,
             "blue_agent_defeated": [False for _ in range(self.num_blue_agents)],
             "red_agent_defeated": [False for _ in range(self.num_red_agents)],
             "blue_flag_captured": False,
@@ -1004,11 +1008,13 @@ class CtfMvNEnv(MultiGridEnv):
                     self.agents[self.num_blue_agents + red_agent_idx].terminated = True
                     self.agents[self.num_blue_agents + red_agent_idx].color = "red_grey"
                     self.game_stats["red_agent_defeated"][red_agent_idx] = True
+                    self.game_stats["defeated_red_agents"] += 1
                 else:
                     reward -= self.battle_reward
                     self.agents[blue_agent_idx].terminated = True
                     self.agents[blue_agent_idx].color = "blue_grey"
                     self.game_stats["blue_agent_defeated"][blue_agent_idx] = True
+                    self.game_stats["defeated_blue_agents"] += 1
             else:
                 pass
 
