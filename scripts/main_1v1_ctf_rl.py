@@ -26,17 +26,19 @@ class GameStatsLogCallback(BaseCallback):
         self.game_stats_keys: list[str] = game_stats_keys
 
     def _on_rollout_start(self) -> None:
-        self.ep_game_stats: deque[dict[str, Any]] = deque()
+        self.ep_game_stats_buffer: list[dict[str, Any]] = []
 
     def _on_step(self) -> bool:
         # Get the game_stats attribute from the environment
+        infos: list[dict[str, Any]] = self.locals["infos"]
+        for info in infos:
+            self.ep_game_stats_buffer.append(info)
 
         return True
 
     def _on_rollout_end(self) -> None:
         # Get the game_stats attribute from the environment
-        infos: list[dict[str, Any]] = self.locals["infos"]
-
+        infos: list[dict[str, Any]] = self.ep_game_stats_buffer
         num_infos: str = len(infos)
 
         # Log average stats
