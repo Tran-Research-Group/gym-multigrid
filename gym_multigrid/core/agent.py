@@ -120,7 +120,7 @@ class Agent(WorldObj):
         - paused: False
         - collided: False
         """
-        self.pos = None
+        super().reset()
         self.dir = None
         self.init_dir = None
         self.carrying = None
