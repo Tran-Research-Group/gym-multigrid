@@ -788,6 +788,7 @@ class CtfMvNEnv(MultiGridEnv):
             "d_ra_bt": distance_area_point(self.agents[1].pos, self.blue_territory),
             "d_ra_rt": distance_area_point(self.agents[1].pos, self.red_territory),
             "d_ba_ob": distance_area_point(self.agents[0].pos, self.obstacle),
+            "d_ra_ob": distance_area_point(self.agents[1].pos, self.obstacle),
             "d_ra_df": (
                 1
                 if self.num_red_agents == self.game_stats["defeated_red_agents"]
