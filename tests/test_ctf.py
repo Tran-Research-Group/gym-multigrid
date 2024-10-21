@@ -200,7 +200,7 @@ def test_capture_policy() -> None:
         map_path=map_path,
         render_mode="human",
         observation_option="flattened",
-        enemy_policies=[enemy_policy, "rw"],
+        enemy_policies=[enemy_policy, enemy_policy],
     )
 
     obs, _ = env.reset()

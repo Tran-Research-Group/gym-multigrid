@@ -183,7 +183,7 @@ class DestinationPolicy(CtfPolicy):
         field_map: NDArray | None = None,
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
-        randomness: float = 0.75,
+        randomness: float = 0.25,
         world: WorldT = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
@@ -290,7 +290,7 @@ class FightPolicy(DestinationPolicy):
         field_map: NDArray | None = None,
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
-        randomness: float = 0.75,
+        randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
@@ -349,7 +349,7 @@ class CapturePolicy(DestinationPolicy):
         field_map: NDArray | None = None,
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
-        randomness: float = 0.75,
+        randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
@@ -405,7 +405,7 @@ class PatrolPolicy(DestinationPolicy):
         field_map: NDArray | None = None,
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
-        randomness: float = 0.75,
+        randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
@@ -636,7 +636,7 @@ class RoombaPolicy(CtfPolicy):
         field_map: NDArray | None = None,
         action_set: ActionsT = CtfActions,
         random_generator: Generator | None = None,
-        randomness: float = 0.1,
+        randomness: float = 0.15,
         ego_agent: Literal["red", "blue"] = "red",
         world: WorldT = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
@@ -651,7 +651,7 @@ class RoombaPolicy(CtfPolicy):
             Make sure to set it to the field map of the environment.
         actions : gym_multigrid.core.agent.ActionsT = CtfActions
             Actions available to the agent.
-        randomness : float = 0.25
+        randomness : float = 0.15
             Probability of taking a random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
