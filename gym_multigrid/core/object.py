@@ -1,4 +1,4 @@
-from typing import TypeVar, Final
+from typing import TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
@@ -25,27 +25,15 @@ class WorldObj:
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type
         self.color: str = color
-        self.init_color: Final[str] = color
         self.contains = None
         self.world = world
         self.bg_color: str | None = bg_color
-        self.init_bg_color: Final[str | None] = bg_color
 
         # Initial position of the object
-        self.init_pos: Final[Position | None] = None
+        self.init_pos: Position | None = None
 
         # Current position of the object
         self.pos: Position | None = None
-
-    def reset(self) -> None:
-        """
-        Reset the object to its initial state.
-        This method can be called before the start of every episode.
-        """
-        self.pos = self.init_pos
-        self.contains = None
-        self.color = self.init_color
-        self.bg_color = self.init_bg_color
 
     def can_overlap(self) -> bool:
         """Can the agent overlap with this?"""
