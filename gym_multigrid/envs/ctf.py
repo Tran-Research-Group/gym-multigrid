@@ -825,8 +825,8 @@ class CtfMvNEnv(MultiGridEnv):
                 else -1
             ),
             "red_actions": [0 for _ in range(self.num_red_agents)],
-            "blue_init_positions": [0 for traj in self.blue_traj],
-            "red_init_positions": [0 for traj in self.red_traj]
+            "blue_init_positions": [(0,0) for traj in self.blue_traj],
+            "red_init_positions": [(0,0) for traj in self.red_traj]
         } | self.ep_game_stats
         return info
 
@@ -951,8 +951,8 @@ class CtfMvNEnv(MultiGridEnv):
             red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
 
-        blue_init_positions: list[Position] = [list(traj[0]) for traj in self.blue_traj]
-        red_init_positions: list[Position] = [list(traj[0]) for traj in self.blue_traj]
+        blue_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
+        red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
 
         # Just in case NN outputs are, for some reason, not discrete.
         rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
