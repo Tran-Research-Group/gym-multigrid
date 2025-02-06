@@ -585,6 +585,13 @@ class CtfMvNEnv(MultiGridEnv):
             "red_flag_captured": False,
         }
 
+        self.blue_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_blue_agents)
+        ]
+        self.red_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_red_agents)
+        ]
+
         super().reset(seed=seed, options=options)
 
         self.blue_traj: list[list[Position]] = [
@@ -592,6 +599,13 @@ class CtfMvNEnv(MultiGridEnv):
         ]
         self.red_traj: list[list[Position]] = [
             [agent.pos] for agent in self.agents[self.num_blue_agents :]
+        ]
+
+        self.blue_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.blue_traj
+        ]
+        self.red_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.blue_traj
         ]
 
         obs: Observation = self._get_obs()
@@ -825,8 +839,8 @@ class CtfMvNEnv(MultiGridEnv):
                 else -1
             ),
             "red_actions": [0 for _ in range(self.num_red_agents)],
-            "blue_init_positions": [(0,0) for traj in self.blue_traj],
-            "red_init_positions": [(0,0) for traj in self.red_traj]
+            "blue_init_positions": self.blue_init_positions,
+            "red_init_positions": self.red_init_positions,
         } | self.ep_game_stats
         return info
 
@@ -950,9 +964,6 @@ class CtfMvNEnv(MultiGridEnv):
             assert type(red_agent) is PolicyAgent
             red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
-
-        blue_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
-        red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
 
         # Just in case NN outputs are, for some reason, not discrete.
         rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
@@ -1090,10 +1101,6 @@ class CtfMvNEnv(MultiGridEnv):
 
         # Add red agent actions to the info dictionary.
         info["red_actions"] = red_actions
-
-        # Adding blue and red agents initial positions into info dictionary
-        info["blue_init_positions"] = blue_init_positions
-        info["red_init_positions"] = red_init_positions
 
         if terminated or truncated:
             self.ep_game_stats = self.game_stats
