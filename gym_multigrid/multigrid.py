@@ -19,7 +19,7 @@ from gym_multigrid.core.constants import *
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
-class GridConfig(TypedDict):
+class GridConfig(TypedDict, total=False):
     grid_size: int | None
     width: int | None
     height: int | None
