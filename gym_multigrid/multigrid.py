@@ -3,6 +3,7 @@ import warnings
 from typing import Literal, Type, TypeVar, Callable, TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium import spaces
 
@@ -11,9 +12,8 @@ from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, WorldT
 from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
-from gym_multigrid.core.constants import *
+from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
@@ -152,7 +152,7 @@ class MultiGridEnv(gym.Env):
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions))
 
-        self.world: WorldT = world
+        self.world = world
 
         self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
 
@@ -209,6 +209,35 @@ class MultiGridEnv(gym.Env):
 
         return observation_space
 
+    def _reset_gym(self, seed: int | None = None) -> None:
+        super().reset(seed=seed)
+
+    def _reset_grid(self, width: int, height: int) -> None:
+        """
+        Reset the grid to a new random state
+
+        Parameters
+        ----------
+        width : int
+            Width of the grid
+        height : int
+            Height of the grid
+        """
+        self._gen_grid(self.width, self.height)
+
+    def _reset_agents(self) -> None:
+        """
+        Reset the agents to their initial positions
+        """
+
+        # for a in self.agents:
+        #     a.reset()
+        #     self.place_agent(a)
+
+        for a in self.agents:
+            assert a.pos is not None
+            assert a.dir is not None
+
     def reset(
         self,
         *,
@@ -220,20 +249,13 @@ class MultiGridEnv(gym.Env):
         # If you only use this RNG, you do not need to worry much about seeding,
         # but you need to remember to call ``super().reset(seed=seed)`` to make
         # sure that gymnasium.Env correctly seeds the RNG
-        super().reset(seed=seed, options=options)
+        self._reset_gym(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
-        self._gen_grid(self.width, self.height)
-
-        # These fields should be defined by _gen_grid
-        for a in self.agents:
-            assert a.pos is not None
-            assert a.dir is not None
-
-        # Item picked up, being carried, initially nothing
-        for a in self.agents:
-            a.carrying = None
+        self._reset_grid()
+        # Agent status should be reset inside self._gen_grid
+        self._reset_agents()
 
         # Step count since episode start
         self.step_count: int = 0
@@ -501,6 +523,10 @@ class MultiGridEnv(gym.Env):
     def step(
         self, actions: list[int] | NDArray[np.int_]
     ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict]:
+        """
+        Example method showing potential implementation of the step method.
+        Implement this method in your own environment.
+        """
         self.step_count += 1
 
         order = np.random.permutation(len(actions))
