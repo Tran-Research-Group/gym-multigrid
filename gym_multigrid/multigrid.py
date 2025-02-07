@@ -73,7 +73,6 @@ class MultiGridEnv(gym.Env):
         width: int | None = None,
         height: int | None = None,
         world: WorldT = DefaultWorld,
-        max_steps: int = 100,
         actions_set: Type[ActionsT] = DefaultActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
@@ -83,6 +82,7 @@ class MultiGridEnv(gym.Env):
         agent_view_size: int | None = None,
         see_through_walls: bool = False,
         highlight_visible_cells: bool = False,
+        max_steps: int | None = None,
     ) -> None:
         """
         Initialize a new grid world environment
@@ -98,8 +98,6 @@ class MultiGridEnv(gym.Env):
             Width of the grid
         height : int | None = None
             Height of the grid
-        max_steps : int = 100
-            Maximum number of steps per episode
         world : WorldT = DefaultWorld
             World object that defines the objects in the environment
         actions_set : Type[ActionsT] = DefaultActions
@@ -121,6 +119,9 @@ class MultiGridEnv(gym.Env):
             Whether agents can see through walls
         highlight_visible_cells : bool = False
             Whether to highlight the cells visible to the agent
+        max_steps : int | None = None
+            Maximum number of steps per episode.
+            If `None`, `truncated` returned by the `step` method will always be False.
         """
         self.agents = agents
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -179,7 +180,18 @@ class MultiGridEnv(gym.Env):
         self.window: Window | None = None
 
         # Environment configuration
-        self.max_steps: int = max_steps
+        self.max_steps: int | None = max_steps
+        if self.max_steps is not None:
+            warnings.warn(
+                """
+                `max_steps` will be deprecated in the base class in the future. 
+                Please use `gymnasium.wrappers.TimeLimit` instead to limit the number of steps in an episode.
+                If you want to keep using `max_steps` for some purpose, please implement it in your own child classes.
+                """,
+                DeprecationWarning,
+            )
+        else:
+            pass
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
@@ -569,7 +581,7 @@ class MultiGridEnv(gym.Env):
             else:
                 assert False, "unknown action"
 
-        if self.step_count >= self.max_steps:
+        if self.max_steps is not None and self.step_count >= self.max_steps:
             truncated = True
 
         if self.partial_obs:
