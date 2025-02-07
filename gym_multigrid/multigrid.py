@@ -1,6 +1,7 @@
 import math
-import random
-from typing import Literal, Type, TypeVar, Callable
+import warnings
+from typing import Literal, Type, TypeVar, Callable, TypedDict
+
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
@@ -16,6 +17,23 @@ from gym_multigrid.core.constants import *
 
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
+
+
+class MultiGridConfig(TypedDict):
+    grid_size: int | None
+    width: int | None
+    height: int | None
+    max_steps: int
+    see_through_walls: bool
+    partial_obs: bool
+    agent_view_size: int | None
+    actions_set: Type[ActionsT]
+    world: WorldT
+    render_mode: Literal["human", "rgb_array"]
+    uncached_object_types: list[str]
+    close_window: bool
+    highlight_visible_cells: bool
+    tile_size: int
 
 
 class MultiGridEnv(gym.Env):
@@ -34,7 +52,7 @@ class MultiGridEnv(gym.Env):
         max_steps: int = 100,
         see_through_walls: bool = False,
         partial_obs: bool = False,
-        agent_view_size: int = 7,
+        agent_view_size: int | None = None,
         actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -43,6 +61,44 @@ class MultiGridEnv(gym.Env):
         highlight_visible_cells: bool = False,
         tile_size: int = TILE_PIXELS,
     ) -> None:
+        """
+        Initialize a new grid world environment
+
+        Parameters
+        ----------
+        agents : list[gym_multigrid.core.agent.AgentT]
+            List of agents in the environment
+        grid_size : int | None = None
+            Size of the grid (if square).
+            If None, width and height must be set.
+        width : int | None = None
+            Width of the grid
+        height : int | None = None
+            Height of the grid
+        max_steps : int = 100
+            Maximum number of steps per episode
+        see_through_walls : bool = False
+            Whether agents can see through walls
+        partial_obs : bool = False
+            Whether agents have partial or full observation.
+            If True, the agent's observation is a square view area centered on the agent, specified by agent_view_size.
+        agent_view_size : int | None = None
+            Size of the square view area centered on the agent
+        actions_set : Type[ActionsT] = DefaultActions
+            Actions available to the agents
+        world : WorldT = DefaultWorld
+            World object that defines the objects in the environment
+        render_mode : Literal["human", "rgb_array"] = "rgb_array"
+            Rendering mode
+        uncached_object_types : list[str] = []
+            List of object types that should not be cached in the rendering cache
+        close_window : bool = False
+            Whether to close the rendering window
+        highlight_visible_cells : bool = False
+            Whether to highlight the cells visible to the agent
+        tile_size : int = TILE_PIXELS
+            Size of the tiles in the rendering
+        """
         self.agents = agents
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode: Literal["human", "rgb_array"] = render_mode
@@ -52,6 +108,16 @@ class MultiGridEnv(gym.Env):
         self.tile_size: int = tile_size
         # Does the agents have partial or full observation?
         self.partial_obs = partial_obs
+
+        if self.partial_obs and agent_view_size is None:
+            warnings.warn(
+                "Partial observation is enabled but agent_view_size is not set. Defaulting to 7.",
+                UserWarning,
+            )
+            agent_view_size = 7
+        else:
+            pass
+
         self.agent_view_size = agent_view_size
 
         # Can't set both grid_size and width/height
