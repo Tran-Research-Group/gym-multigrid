@@ -212,7 +212,7 @@ class MultiGridEnv(gym.Env):
     def _reset_gym(self, seed: int | None = None) -> None:
         super().reset(seed=seed)
 
-    def _reset_grid(self, width: int, height: int) -> None:
+    def _reset_grid(self) -> None:
         """
         Reset the grid to a new random state
 
