@@ -27,7 +27,7 @@ class GridConfig(TypedDict, total=False):
     actions_set: Type[ActionsT]
 
 
-class RenderingConfig(TypedDict, total=False):
+class RenderingConfig(TypedDict):
     render_mode: Literal["human", "rgb_array"]
     close_window: bool
     uncached_object_types: list[str]
@@ -39,16 +39,6 @@ class PartialObsConfig(TypedDict):
     agent_view_size: int | None
     see_through_walls: bool
     highlight_visible_cells: bool
-
-
-DEFAULT_RENDERING_CONFIG: RenderingConfig = {
-    """
-    `uncached_object_types` is a list of object types that should not be cached in the rendering cache
-    """
-    "render_mode": "rgb_array",
-    "close_window": False,
-    "tile_size": TILE_PIXELS,
-}
 
 
 DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
