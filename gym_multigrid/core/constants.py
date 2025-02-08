@@ -63,6 +63,21 @@ LABYRINTH_COLORS: dict[str, NDArray[np.uint]] = {
     "light_grey": np.array([200, 200, 200]),
 }
 
+PREY_PRED_COLORS: dict[str, NDArray[np.uint]] = {
+    "red": np.array([228, 3, 3]),
+    "orange": np.array([255, 140, 0]),
+    "yellow": np.array([255, 237, 0]),
+    "green": np.array([0, 128, 38]),
+    "blue": np.array([0, 77, 255]),
+    "purple": np.array([117, 7, 135]),
+    "brown": np.array([120, 79, 23]),
+    "grey": np.array([100, 100, 100]),
+    "light_red": np.array([255, 228, 225]),
+    "light_blue": np.array([240, 248, 255]),
+    "white": np.array([255, 250, 250]),
+    "light_grey": np.array([200, 200, 200]),
+}
+
 COLOR_NAMES = sorted(list(COLORS.keys()))
 
 # Used to map colors to integers
