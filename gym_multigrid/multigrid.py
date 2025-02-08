@@ -1,11 +1,12 @@
 import math
 import warnings
-from typing import Literal, Type, TypeVar, Callable, TypedDict
+from typing import Any, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
 
 import numpy as np
 from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium import spaces
+from gymnasium.core import ObsType, ActType
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
@@ -49,7 +50,7 @@ DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
 }
 
 
-class MultiGridEnv(gym.Env):
+class MultiGridEnv(gym.Env[ObsType, ActType]):
     """
     2D grid world game environment
     """
@@ -243,7 +244,7 @@ class MultiGridEnv(gym.Env):
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ):
+    ) -> tuple[ObsType, dict]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
         # If you only use this RNG, you do not need to worry much about seeding,
@@ -524,7 +525,7 @@ class MultiGridEnv(gym.Env):
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict]:
         """
         Example method showing potential implementation of the step method.
         Implement this method in your own environment.
