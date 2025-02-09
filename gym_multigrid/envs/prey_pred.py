@@ -638,7 +638,12 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
         # Add agent ids to the observation
         for agent in self.agents:
-            obs[1, agent.pos[0], agent.pos[1]] = self.world.OBJECT_TO_IDX[agent.type]
+            if not agent.terminated:
+                obs[1, agent.pos[0], agent.pos[1]] = self.world.OBJECT_TO_IDX[
+                    agent.type
+                ]
+            else:
+                pass
 
         return obs
 
