@@ -155,6 +155,62 @@ class Prey(Agent):
         self._pos = pos
         self.neighbor_pos = pos + self.neighbor_pos_offsets
 
+    def check_fix_condition(self, grid: Grid) -> bool:
+        """
+        Check if the prey is in a fixable condition.
+
+        Parameters
+        ----------
+        grid : Grid
+            The grid of the environment.
+
+        Returns
+        -------
+        fixable : bool
+            True if the prey is in a fixable condition, False otherwise.
+        """
+        num_required_preds_fix: int = self.prey_type["num_required_preds_fix"]
+        num_neighbor_preds: int = 0
+
+        for neighbor_pos in self.neighbor_pos:
+            cell: None | WorldObjT = grid.get(*neighbor_pos)
+            if cell is not None and cell.type == "predator":
+                num_neighbor_preds += 1
+            else:
+                pass
+
+        fixable: bool = num_neighbor_preds >= num_required_preds_fix
+
+        return fixable
+
+    def check_capture_condition(self, grid: Grid) -> bool:
+        """
+        Check if the prey is in a capturable condition.
+
+        Parameters
+        ----------
+        grid : Grid
+            The grid of the environment.
+
+        Returns
+        -------
+        capturable : bool
+            True if the prey is in a capturable condition, False otherwise.
+        """
+        num_required_preds_capture: int = self.prey_type["num_required_preds_capture"]
+        num_neighbor_preds: int = 0
+
+        for neighbor_pos in self.neighbor_pos:
+            cell: None | WorldObjT = grid.get(*neighbor_pos)
+            if cell is not None and cell.type == "predator":
+                num_neighbor_preds += 1
+            else:
+                pass
+
+        capturable: bool = num_neighbor_preds >= num_required_preds_capture
+
+        return capturable
+
 
 class Predator(Agent):
     def __init__(
@@ -242,6 +298,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
     def __init__(
         self,
+        max_episode_steps: int = 300,
         observation_config: ObservationConfig = DEFAULT_OBSERVATION_CONFIG,
         pred_configs: list[PredatorConfig] = DEFAULT_PREDATOR_CONFIGS,
         prey_configs: list[PreyConfig] = DEFAULT_PREY_CONFIGS,
@@ -249,6 +306,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         verbose: bool = False,
     ):
+        self.max_episode_steps: int = max_episode_steps
         self.verbose: bool = verbose
 
         world = PreyPredWorld
@@ -474,6 +532,8 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
     def reset(
         self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
+        self.step_count: int = 0
+
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
 
@@ -615,7 +675,6 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             Additional information about the environment.
         """
         terminated: bool = False
-        truncated: bool = False
         reward: float = 0
 
         actions = np.array(actions)
@@ -637,20 +696,36 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                 if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
                     continue
                 else:
-                    match agent:
-                        case Prey():
-                            pass
-                        case Predator():
-                            pass
-                        case _:
-                            raise ValueError(f"Invalid agent type: {type(agent)}")
+                    if isinstance(agent, Prey) and agent.check_fix_condition(self.grid):
+                        next_pos = agent.pos
+                    else:
+                        pass
 
-                    # Check preys' capture and fix conditions
+                    # Move agent
+                    self.grid.set(*next_pos, agent)
+                    self.grid.set(*agent.pos, self.init_grid.get(*agent.pos))
+                    agent.pos = next_pos
 
-                    # Remove dead preys from the grid
+                    # Determine rewards and remove captured preys from the grid
+                    for prey in self.agents[self.num_preds :]:
+                        if prey.terminated:
+                            continue
+                        else:
+                            prey_captured: bool = prey.check_capture_condition(
+                                self.grid
+                            )
+                            if prey_captured:
+                                prey.terminated = True
+                                reward += prey.prey_type["capture_reward"]
+                                self.grid.set(*prey.pos, self.init_grid.get(*prey.pos))
+                            else:
+                                continue
 
         # Terminate the episode if all the prey are captured
         terminated = all(prey.terminated for prey in self.agents[self.num_preds :])
+        truncated = self.step_count >= self.max_episode_steps
+
+        self.step_count += 1
 
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 

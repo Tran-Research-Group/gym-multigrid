@@ -150,6 +150,7 @@ register(
     id="multigrid-preypred-v0",
     entry_point="gym_multigrid.envs:PreyPredEnv",
     kwargs={
+        "max_episode_steps": 300,
         "observation_config": {"encode_prey_areas": True},
         "pred_configs": [
             {"init_pos": (6, 6), "policy_type": "ego"},
