@@ -1,4 +1,5 @@
 from typing import Any, Literal, TypedDict, Type
+import warnings
 import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
@@ -85,6 +86,10 @@ class PreyConfig(TypedDict):
     type: str
     territory_dims: tuple[int, int]
     territory_left_top_corner: tuple[int, int]
+
+
+class ResetOptions(TypedDict):
+    agent_pos_list: list[tuple[int, int]]
 
 
 class Prey(Agent):
@@ -456,11 +461,18 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         return observation_space
 
     def reset(
-        self, seed: int | None = None, options: dict | None = None
+        self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
-        self._reset_agents()
+
+        # Reset the agents. If agent_pos_list is provided, use it to reset the agents
+        agent_pos_list: list[tuple[int, int]] | None = None
+        if options is not None:
+            agent_pos_list = options.get("agent_pos_list", None)
+        else:
+            pass
+        self._reset_agents(agent_pos_list=agent_pos_list)
 
         obs: NDArray[np.int_] = self._get_obs()
         info: dict[str, Any] = self._get_info()
@@ -538,15 +550,33 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
         self.init_grid: Grid = self.grid.copy()
 
-    def _reset_agents(self):
+    def _reset_agents(
+        self, agent_pos_list: list[tuple[int, int]] | None = None
+    ) -> None:
         """
         Reset the agents in the environment.
         """
         for agent in self.agents:
             agent.reset(self.np_random)
 
+        use_agent_pos_list: bool = agent_pos_list is not None
+        if agent_pos_list is not None:
+            if len(agent_pos_list) != len(self.agents):
+                warnings.warn(
+                    f"""Invalid agent position list: Expected {len(self.agents)} positions, got {len(agent_pos_list)}.
+                    Resetting agents to their initial positions.""",
+                    UserWarning,
+                )
+                use_agent_pos_list = False
+            else:
+                pass
+
         for agent in self.agents:
-            agent_pos: tuple[int, int] = agent.get_init_pos()
+            agent_pos: tuple[int, int] = (
+                agent.get_init_pos()
+                if not use_agent_pos_list
+                else agent_pos_list.pop(0)
+            )
             self.place_agent(agent, agent_pos)
 
     def step(
