@@ -32,6 +32,9 @@ class RwPolicy(BaseAgentPolicy[ObsType, int]):
     def act(self, observation: ObsType, options: dict[str, Any]) -> int:
         return self.random_generator.choice(self.action_set)
 
+    def reset(self) -> None:
+        pass
+
 
 PREY_PRED_POLICIES: dict[str, Type[AgentPolicyT]] = {
     "random": RwPolicy,

@@ -165,17 +165,17 @@ register(
             {
                 "type": "easy_prey",
                 "territory_dims": (4, 4),
-                "territory_left_top_corner": (8, 2),
+                "territory_left_top_corner": (9, 2),
             },
             {
                 "type": "hard_prey",
                 "territory_dims": (4, 4),
-                "territory_left_top_corner": (2, 8),
+                "territory_left_top_corner": (2, 9),
             },
             {
                 "type": "hard_prey",
                 "territory_dims": (4, 4),
-                "territory_left_top_corner": (8, 8),
+                "territory_left_top_corner": (9, 9),
             },
         ],
         "prey_types": [

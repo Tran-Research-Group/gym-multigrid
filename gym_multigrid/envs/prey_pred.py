@@ -188,17 +188,17 @@ DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
     {
         "type": "easy_prey",
         "territory_dims": (4, 4),
-        "territory_left_top_corner": (8, 2),
+        "territory_left_top_corner": (9, 2),
     },
     {
         "type": "hard_prey",
         "territory_dims": (4, 4),
-        "territory_left_top_corner": (2, 8),
+        "territory_left_top_corner": (2, 9),
     },
     {
         "type": "hard_prey",
         "territory_dims": (4, 4),
-        "territory_left_top_corner": (8, 8),
+        "territory_left_top_corner": (9, 9),
     },
 ]
 DEFAULT_PREY_TYPES: list[PreyType] = [
@@ -226,7 +226,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
     def __init__(
         self,
-        observation_options: ObservationConfig = DEFAULT_OBSERVATION_CONFIG,
+        observation_config: ObservationConfig = DEFAULT_OBSERVATION_CONFIG,
         pred_configs: list[PredatorConfig] = DEFAULT_PREDATOR_CONFIGS,
         prey_configs: list[PreyConfig] = DEFAULT_PREY_CONFIGS,
         prey_types: list[PreyType] = DEFAULT_PREY_TYPES,
@@ -248,7 +248,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         else:
             pass
 
-        self.observation_options: ObservationConfig = observation_options
+        self.observation_config: ObservationConfig = observation_config
         self.pred_configs: list[PredatorConfig] = pred_configs
         self.prey_configs: list[PreyConfig] = prey_configs
         self.prey_types: list[PreyType] = prey_types
@@ -256,11 +256,11 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         self.num_preys: int = len(prey_configs)
         self.num_preds: int = len(pred_configs)
 
-        grid_config = GridConfig(
-            grid_size=15,
-            action_set=NavigationActions,
-            world=world,
-        )
+        grid_config: GridConfig = {
+            "grid_size": 15,
+            "actions_set": NavigationActions,
+            "world": world,
+        }
         rendering_config: RenderingConfig = {
             "render_mode": render_mode,
             "uncached_object_types": ["predator"]
@@ -269,7 +269,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
 
         agents: list[Predator | Prey] = self._gen_agents(
-            pred_configs, prey_configs, prey_types
+            pred_configs, prey_configs, prey_types, world
         )
 
         super().__init__(
@@ -404,6 +404,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         pred_configs: list[PredatorConfig],
         prey_configs: list[PreyConfig],
         prey_types: list[PreyType],
+        world: WorldT,
     ) -> list[Predator | Prey]:
         """
         Generate the agents for the environment.
@@ -421,7 +422,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
         for i, pred_config in enumerate(pred_configs):
             predator: Predator = Predator(
-                world=self.world,
+                world=world,
                 index=i,
                 pred_config=pred_config,
                 view_size=None,
@@ -437,7 +438,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             prey: Prey = Prey(
                 prey_config=prey_config,
                 prey_type=prey_type,
-                world=self.world,
+                world=world,
                 index=j,
                 view_size=None,
             )
@@ -454,7 +455,9 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         )
         return observation_space
 
-    def reset(self, seed=None) -> tuple[NDArray[np.int_], dict[str, Any]]:
+    def reset(
+        self, seed: int | None = None, options: dict | None = None
+    ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
         self._reset_agents()
@@ -486,7 +489,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                     obs[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
                 elif (
                     cell.type == "prey_area"
-                    and not self.observation_options["encode_prey_areas"]
+                    and not self.observation_config["encode_prey_areas"]
                 ):
                     obs[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
                 else:
@@ -512,7 +515,12 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         height : int
             The height of the grid.
         """
-        self.grid = Grid(width, height)
+        self.grid = Grid(width, height, self.world)
+
+        # Put white floors everywhere
+        self.grid.rect_filled(
+            0, 0, width, height, Floor(world=self.world, color="white", type="empty")
+        )
 
         # Put walls
         self.grid.wall_rect(0, 0, width, height)
@@ -539,7 +547,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
         for agent in self.agents:
             agent_pos: tuple[int, int] = agent.get_init_pos()
-            self.place_agent(agent, *agent_pos)
+            self.place_agent(agent, agent_pos)
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
