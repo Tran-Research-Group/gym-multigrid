@@ -5,7 +5,13 @@ from numpy.typing import NDArray
 from gym_multigrid.core.constants import PREY_PRED_COLORS
 from gym_multigrid.core.object import Floor
 from gym_multigrid.core.world import World, WorldT
-from gym_multigrid.core.agent import ActionsT, NavigationActions, Agent, PolicyAgent
+from gym_multigrid.core.agent import (
+    ActionsT,
+    AgentT,
+    NavigationActions,
+    Agent,
+    PolicyAgent,
+)
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.policy import AgentPolicyT
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
@@ -42,7 +48,7 @@ class ObservationConfig(TypedDict):
 
 class PredatorConfig(TypedDict):
     init_pos: tuple[int, int]
-    policy_typ: str | None
+    policy_type: Literal["random", "given"]
 
 
 class PreyType(TypedDict):
@@ -154,9 +160,11 @@ DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
 DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
     {
         "init_pos": (6, 6),
+        "policy_type": "given",
     },
     {
         "init_pos": (8, 8),
+        "policy_type": "random",
     },
 ]
 
@@ -218,11 +226,13 @@ class PreyPredEnv(MultiGridEnv):
 
         world = PreyPredWorld
 
-        # Check if the preys configuration and prey types are valid
-        valid_configs, error_messages = self._check_prey_configs(
+        # Check if the pred & prey configurations and prey types are valid
+        pred_configs_valid, pred_error_messages = self._check_pred_configs(pred_configs)
+        prey_configs_valid, prey_error_messages = self._check_prey_configs(
             prey_configs, prey_types, world
         )
-        if not valid_configs:
+        if not pred_configs_valid or not prey_configs_valid:
+            error_messages = pred_error_messages + prey_error_messages
             raise ValueError("\n".join(error_messages))
         else:
             pass
@@ -249,6 +259,69 @@ class PreyPredEnv(MultiGridEnv):
             **rendering_config,
             **partial_obs_config,
         )
+
+    def _check_pred_configs(
+        self, pred_configs: list[PredatorConfig]
+    ) -> tuple[bool, list[str]]:
+        """
+        Check if the predator configurations are valid.
+
+        Parameters
+        ----------
+        pred_configs : list[PredatorConfig]
+            The configuration for the predator agents in the environment.
+
+        Returns
+        -------
+        success : bool
+            True if the configuration is valid, False otherwise.
+        error_messages : list[str]
+            A list of error messages if the configuration is invalid.
+        """
+
+        success: bool = True
+        error_messages: list[str] = []
+
+        # 1. the first predator must have a `given` policy whose action is given by step()
+        # 2. there should be only one predator with a `given` policy
+        # 3. the initial positions of the predators should not overlap
+
+        given_policy_predator_count: int = 0
+        given_policy_predator_index: int | None = None
+        init_positions: list[tuple[int, int]] = []
+
+        for pred_config in pred_configs:
+            if pred_config["policy_type"] == "given":
+                given_policy_predator_count += 1
+                given_policy_predator_index = pred_configs.index(pred_config)
+            else:
+                pass
+
+            if pred_config["init_pos"] in init_positions:
+                success = False
+                error_messages.append(
+                    f"Invalid predator config: {pred_config['init_pos']} is already occupied."
+                )
+            else:
+                init_positions.append(pred_config["init_pos"])
+
+        if given_policy_predator_count != 1:
+            success = False
+            error_messages.append(
+                "Invalid predator config: There should be exactly one predator with a `given` policy."
+            )
+        else:
+            pass
+
+        if given_policy_predator_index != 0:
+            success = False
+            error_messages.append(
+                "Invalid predator config: The first predator must have a `given` policy."
+            )
+        else:
+            pass
+
+        return success, error_messages
 
     def _check_prey_configs(
         self, prey_configs: list[PreyConfig], prey_types: list[PreyType], world: WorldT
@@ -306,6 +379,57 @@ class PreyPredEnv(MultiGridEnv):
                 )
 
         return success, error_messages
+
+    def _gen_agents(
+        self,
+        pred_configs: list[PredatorConfig],
+        prey_configs: list[PreyConfig],
+        prey_types: list[PreyType],
+    ) -> list[AgentT]:
+        """
+        Generate the agents for the environment.
+
+        Parameters
+        ----------
+        pred_configs : list[PredatorConfig]
+            The configuration for the predator agents in the environment.
+        prey_configs : list[PreyConfig]
+            The configuration for the prey agents in the environment.
+        prey_types : list[PreyType]
+            The configuration for the prey types in the environment.
+        """
+        agents: list[Agent] = []
+
+        for pred_config in pred_configs:
+            predator: Predator = Predator(
+                world=self.world,
+                index=len(self.agents),
+                pred_config=pred_config,
+                view_size=5,
+            )
+            agents.append(predator)
+
+        for prey_config in prey_configs:
+            prey_type: PreyType = next(
+                prey_type
+                for prey_type in prey_types
+                if prey_type["name"] == prey_config["type"]
+            )
+            prey: Prey = Prey(
+                prey_config=prey_config,
+                prey_type=prey_type,
+                world=self.world,
+                index=len(self.agents),
+                view_size=5,
+            )
+            agents.append(prey)
+
+        return agents
+
+    def reset(self, *, seed=None, options=None):
+        self._reset_gym(seed=seed)
+        self._gen_grid(self.width, self.height)
+        self._reset_agents()
 
     def _gen_grid(self, width: int, height: int) -> None:
         """
