@@ -213,19 +213,6 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
     def _reset_gym(self, seed: int | None = None) -> None:
         super().reset(seed=seed)
 
-    def _reset_grid(self) -> None:
-        """
-        Reset the grid to a new random state
-
-        Parameters
-        ----------
-        width : int
-            Width of the grid
-        height : int
-            Height of the grid
-        """
-        self._gen_grid(self.width, self.height)
-
     def _reset_agents(self) -> None:
         """
         Reset the agents to their initial positions
@@ -255,7 +242,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
-        self._reset_grid()
+        self._gen_grid(self.width, self.height)
 
         # Agent status should be reset inside self._gen_grid
         self._reset_agents()
