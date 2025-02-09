@@ -19,15 +19,17 @@ def test_preypred_step() -> None:
     env.reset()
     frames = [env.render()]
 
-    while True:
+    for _ in range(300):
         actions = [env.action_space.sample() for _ in range(3)]
         obs, reward, terminated, truncated, info = env.step(actions)
         frames.append(env.render())
         if terminated or truncated:
             break
 
+    assert not truncated
+
     os.makedirs(os.path.dirname(animation_path), exist_ok=True)
-    imageio.mimsave(animation_path, frames, duration=0.5, loop=20)
+    imageio.mimsave(animation_path, frames, duration=2, loop=20)
     assert os.path.exists(animation_path)
 
 
