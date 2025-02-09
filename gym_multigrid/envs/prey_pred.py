@@ -1,17 +1,12 @@
-from typing import Literal, TypedDict, Type
+from typing import Any, Literal, TypedDict, Type
 import numpy as np
 from numpy.typing import NDArray
+from gymnasium import spaces
 
 from gym_multigrid.core.constants import PREY_PRED_COLORS
-from gym_multigrid.core.object import Floor
+from gym_multigrid.core.object import Floor, WorldObjT
 from gym_multigrid.core.world import World, WorldT
-from gym_multigrid.core.agent import (
-    ActionsT,
-    AgentT,
-    NavigationActions,
-    Agent,
-    PolicyAgent,
-)
+from gym_multigrid.core.agent import NavigationActions, Agent
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.policy import AgentPolicyT
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
@@ -42,8 +37,8 @@ PreyPredWorld = World(
 
 class ObservationConfig(TypedDict):
     encode_prey_areas: bool
-    remove_dead_preys: bool
-    encode_dead_prey_as: Literal["wall", "dead", "status"]
+    # remove_dead_preys: bool
+    # encode_dead_prey_as: Literal["wall", "dead", "status"]
 
 
 class PredatorConfig(TypedDict):
@@ -116,6 +111,24 @@ class Prey(Agent):
             view_size=view_size,
         )
 
+    def get_init_pos(self) -> tuple[int, int]:
+        # Randomly select a position within the prey territory
+        territory_dims: tuple[int, int] = self.prey_config["territory_dims"]
+        territory_left_top_corner: tuple[int, int] = self.prey_config[
+            "territory_left_top_corner"
+        ]
+
+        x: int = self.policy.random_generator.integers(
+            territory_left_top_corner[0],
+            territory_left_top_corner[0] + territory_dims[0],
+        )
+        y: int = self.policy.random_generator.integers(
+            territory_left_top_corner[1],
+            territory_left_top_corner[1] + territory_dims[1],
+        )
+
+        return x, y
+
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
         self.policy: AgentPolicyT = self.policy_class(
@@ -123,7 +136,7 @@ class Prey(Agent):
             random_generator=env_generator,
         )
 
-    def act(self, observation: NDArray) -> int:
+    def act(self, observation: NDArray, options: dict[str, Any]) -> int:
         return self.policy.act(observation)
 
 
@@ -137,24 +150,37 @@ class Predator(Agent):
         policy_dict: dict[str, Type[AgentPolicyT]] = PREY_PRED_POLICIES,
     ):
         self.pred_config: PredatorConfig = pred_config
+
         super().__init__(
             world=world,
             index=index,
             actions=NavigationActions,
-            color="red",
-            bg_color="light_grey",
+            color="orange",
+            bg_color="white",
             type="predator",
             view_size=view_size,
         )
 
+        self.policy_class: Type[AgentPolicyT] = policy_dict[pred_config["policy_type"]]
+
+    def get_init_pos(self) -> tuple[int, int]:
+        return self.pred_config["init_pos"]
+
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
+        self.policy: AgentPolicyT = self.policy_class(
+            action_set=self.actions,
+            random_generator=env_generator,
+        )
+
+    def act(self, observation: NDArray, options: dict[str, Any]) -> int:
+        return self.policy.act(observation)
 
 
 DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
     "encode_prey_areas": True,
-    "remove_dead_agents": True,
-    "encode_dead_agents_as": "wall",
+    # "remove_dead_agents": True,
+    # "encode_dead_agents_as": "wall",
 }
 
 DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
@@ -162,6 +188,7 @@ DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
         "init_pos": (6, 6),
         "policy_type": "given",
     },
+    {"init_pos": (7, 7), "policy_type": "random"},
     {
         "init_pos": (8, 8),
         "policy_type": "random",
@@ -208,7 +235,7 @@ DEFAULT_PREY_TYPES: list[PreyType] = [
 ]
 
 
-class PreyPredEnv(MultiGridEnv):
+class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
     """
     Environment in which the predator must catch the prey.
     """
@@ -254,7 +281,12 @@ class PreyPredEnv(MultiGridEnv):
         }
         partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
 
+        agents: list[Predator | Prey] = self._gen_agents(
+            pred_configs, prey_configs, prey_types
+        )
+
         super().__init__(
+            agents=agents,
             **grid_config,
             **rendering_config,
             **partial_obs_config,
@@ -385,7 +417,7 @@ class PreyPredEnv(MultiGridEnv):
         pred_configs: list[PredatorConfig],
         prey_configs: list[PreyConfig],
         prey_types: list[PreyType],
-    ) -> list[AgentT]:
+    ) -> list[Predator | Prey]:
         """
         Generate the agents for the environment.
 
@@ -400,16 +432,16 @@ class PreyPredEnv(MultiGridEnv):
         """
         agents: list[Agent] = []
 
-        for pred_config in pred_configs:
+        for i, pred_config in enumerate(pred_configs):
             predator: Predator = Predator(
                 world=self.world,
-                index=len(self.agents),
+                index=i,
                 pred_config=pred_config,
-                view_size=5,
+                view_size=None,
             )
             agents.append(predator)
 
-        for prey_config in prey_configs:
+        for j, prey_config in enumerate(prey_configs):
             prey_type: PreyType = next(
                 prey_type
                 for prey_type in prey_types
@@ -419,17 +451,63 @@ class PreyPredEnv(MultiGridEnv):
                 prey_config=prey_config,
                 prey_type=prey_type,
                 world=self.world,
-                index=len(self.agents),
-                view_size=5,
+                index=j,
+                view_size=None,
             )
             agents.append(prey)
 
         return agents
 
-    def reset(self, *, seed=None, options=None):
+    def _set_observation_space(self) -> spaces.Box:
+        observation_space = spaces.Box(
+            low=0,
+            high=len(self.world.OBJECT_TO_IDX) - 1,
+            shape=(self.width, self.height, 2),
+            dtype=np.int_,
+        )
+        return observation_space
+
+    def reset(self, seed=None) -> tuple[NDArray[np.int_], dict[str, Any]]:
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
         self._reset_agents()
+
+        obs: NDArray[np.int_] = self._get_obs()
+        info: dict[str, Any] = self._get_info()
+
+        return obs, info
+
+    def _get_obs(self) -> NDArray[np.int_]:
+        """
+        Get the observation of the environment.
+
+        Returns
+        -------
+        observation : NDArray[np.int_]
+            The observation of the environment.
+            1st layer: static objects
+            2nd layer: dynamic objects (agents)
+        """
+
+        obs: NDArray[np.int_] = np.zeros((self.width, self.height, 2), dtype=np.int_)
+
+        # Add static objects ids to the observation
+        for i in range(self.width):
+            for j in range(self.height):
+                cell: None | WorldObjT = self.grid.get(i, j)
+                if cell is None:
+                    obs[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
+                else:
+                    obs[i, j, 0] = self.world.OBJECT_TO_IDX[cell.type]
+
+        # Add agent ids to the observation
+        for agent in self.agents:
+            obs[agent.pos[0], agent.pos[1], 1] = self.world.OBJECT_TO_IDX[agent.type]
+
+        return obs
+
+    def _get_info(self):
+        return super()._get_info()
 
     def _gen_grid(self, width: int, height: int) -> None:
         """
@@ -460,4 +538,39 @@ class PreyPredEnv(MultiGridEnv):
 
         self.init_grid: Grid = self.grid.copy()
 
-    def _reset_agents(self): ...
+    def _reset_agents(self):
+        """
+        Reset the agents in the environment.
+        """
+        for agent in self.agents:
+            agent.reset(self.np_random)
+
+        for agent in self.agents:
+            agent_pos: tuple[int, int] = agent.get_init_pos()
+            self.place_agent(agent, *agent_pos)
+
+    def step(
+        self, action: int
+    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+        """
+        Take a step in the environment.
+
+        Parameters
+        ----------
+        action : int
+            The action to take.
+
+        Returns
+        -------
+        observation : NDArray[np.int_]
+            The observation of the environment.
+        reward : float
+            The reward for the action.
+        terminated: bool
+            Whether the episode has terminated.
+        terminated: bool
+            Whether the episode has terminated.
+        info : dict[str, Any]
+            Additional information about the environment.
+        """
+        ...
