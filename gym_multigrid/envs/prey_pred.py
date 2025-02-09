@@ -111,11 +111,15 @@ class Prey(Agent):
         )
         self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
 
+        agent_color: Literal["blue", "green"] = (
+            "blue" if prey_config["type"] == "easy_prey" else "green"
+        )
+
         super().__init__(
             world=world,
             index=index,
             actions=NavigationActions,
-            color="blue",
+            color=agent_color,
             bg_color="light_grey",
             type=prey_type["name"],
             view_size=view_size,
@@ -158,6 +162,36 @@ class Prey(Agent):
         self._pos = pos
         if pos is not None:
             self.neighbor_pos = pos + self.neighbor_pos_offsets
+
+    def check_pos_in_territory(self, pos: tuple[int, int]) -> bool:
+        """
+        Check if the given position is within the prey territory.
+
+        Parameters
+        ----------
+        pos : tuple[int, int]
+            The position to check.
+
+        Returns
+        -------
+        in_territory : bool
+            True if the position is within the prey territory, False otherwise.
+        """
+        territory_dims: tuple[int, int] = self.prey_config["territory_dims"]
+        territory_left_top_corner: tuple[int, int] = self.prey_config[
+            "territory_left_top_corner"
+        ]
+
+        in_territory: bool = (
+            territory_left_top_corner[0]
+            <= pos[0]
+            < territory_left_top_corner[0] + territory_dims[0]
+            and territory_left_top_corner[1]
+            <= pos[1]
+            < territory_left_top_corner[1] + territory_dims[1]
+        )
+
+        return in_territory
 
     def check_fix_condition(self, grid: Grid) -> bool:
         """
@@ -702,15 +736,33 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                 if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
                     continue
                 else:
-                    if isinstance(agent, Prey) and agent.check_fix_condition(self.grid):
-                        next_pos = agent.pos
+                    if isinstance(agent, Prey) and (
+                        agent.check_fix_condition(self.grid)
+                        or not agent.check_pos_in_territory(next_pos)
+                    ):
+                        continue
                     else:
                         pass
 
                     # Move agent
                     self.grid.set(*next_pos, agent)
                     self.grid.set(*agent.pos, self.init_grid.get(*agent.pos))
+                    # Change the dir of the agent
+                    if agent.pos != next_pos:
+                        dir_vec = (
+                            next_pos[0] - agent.pos[0],
+                            next_pos[1] - agent.pos[1],
+                        )
+                        for dir, vec in enumerate(agent.dir_to_vec):
+                            if vec[0] == dir_vec[0] and vec[1] == dir_vec[1]:
+                                agent.dir = dir
+                                break
                     agent.pos = next_pos
+
+                    # Update the agent's bg_color
+                    init_grid_cell: WorldObjT | None = self.init_grid.get(*agent.pos)
+                    if init_grid_cell is not None:
+                        agent.bg_color = self.init_grid.get(*agent.pos).color
 
                     # Determine rewards and remove captured preys from the grid
                     for prey in self.agents[self.num_preds :]:
