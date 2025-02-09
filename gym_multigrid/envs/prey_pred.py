@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from gymnasium import spaces
 
 from gym_multigrid.core.constants import PREY_PRED_COLORS
-from gym_multigrid.core.object import Floor, WorldObjT
+from gym_multigrid.core.object import Floor, WorldObj, WorldObjT
 from gym_multigrid.core.world import World, WorldT
 from gym_multigrid.core.agent import NavigationActions, Agent
 from gym_multigrid.core.grid import Grid
@@ -106,6 +106,11 @@ class Prey(Agent):
         self.prey_type: PreyType = prey_type
         self.policy_class: Type[AgentPolicyT] = policy_dict[prey_type["policy"]]
 
+        self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
+            [[-1, 0], [1, 0], [0, -1], [0, 1]]
+        )
+        self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
+
         super().__init__(
             world=world,
             index=index,
@@ -140,9 +145,15 @@ class Prey(Agent):
             action_set=self.actions,
             random_generator=env_generator,
         )
+        self.neighbor_pos = self.pos + self.neighbor_pos_offsets
 
     def act(self, observation: NDArray, options: dict[str, Any]) -> int:
         return self.policy.act(observation)
+
+    @Agent.pos.setter
+    def pos(self, pos: NDArray[np.int_]) -> None:
+        self._pos = pos
+        self.neighbor_pos = pos + self.neighbor_pos_offsets
 
 
 class Predator(Agent):
@@ -581,7 +592,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict[str, Any]]:
+    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
         """
         Take a step in the environment.
 
@@ -605,7 +616,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         """
         terminated: bool = False
         truncated: bool = False
-        rewards: list[float] = [0.0 for _ in self.agents]
+        reward: float = 0
 
         actions = np.array(actions)
         prey_actions = [agent.act(self._get_obs(), {}) for agent in self.agents]
@@ -617,25 +628,74 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             agent: Prey | Predator = self.agents[i]
             action: int = all_actions[i]
 
-            match action:
-                case self.actions.stay:
-                    pass
-                case self.actions.left:
-                    next_pos = agent.west_pos()
-                    next_cell = self.grid.get(*next_pos)
-                case self.actions.right:
-                    next_pos = agent.east_pos()
-                    next_cell = self.grid.get(*next_pos)
-                case self.actions.up:
-                    next_pos = agent.north_pos()
-                    next_cell = self.grid.get(*next_pos)
-                case self.actions.down:
-                    next_pos = agent.south_pos()
-                    next_cell = self.grid.get(*next_pos)
+            next_pos: tuple[int, int] = self._get_next_pos(agent, action)
+            next_cell: None | WorldObjT = self.grid.get(*next_pos)
+
+            if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
+                continue
+            else:
+                match agent:
+                    case Prey():
+                        pass
+                    case Predator():
+                        pass
+                    case _:
+                        raise ValueError(f"Invalid agent type: {type(agent)}")
 
         # Terminate the episode if all the prey are captured
         terminated = all(prey.terminated for prey in self.agents[self.num_preds :])
 
-        return self._get_obs(), rewards, terminated, truncated, self._get_info()
+        return self._get_obs(), reward, terminated, truncated, self._get_info()
 
-    def _move_agent(self) -> None: ...
+    def _get_next_pos(self, agent: Predator | Prey, action: int) -> tuple[int, int]:
+        next_pos: NDArray[np.int_]
+        match action:
+            case self.actions.stay:
+                next_pos = agent.pos
+            case self.actions.left:
+                next_pos = agent.west_pos()
+            case self.actions.right:
+                next_pos = agent.east_pos()
+            case self.actions.up:
+                next_pos = agent.north_pos()
+            case self.actions.down:
+                next_pos = agent.south_pos()
+            case _:
+                raise ValueError(f"Invalid action: {action}")
+
+        next_pos: tuple[int, int] = (next_pos[0], next_pos[1])
+
+        return next_pos
+
+    def _move_prey(self, prey: Prey, next_pos: tuple[int, int]) -> None:
+        """
+        Move the prey agent to the next position.
+
+        Parameters
+        ----------
+        prey : Prey
+            The prey agent to move.
+        next_pos : tuple[int, int]
+            The next position to move the agent to.
+        """
+        next_cell: None | WorldObjT = self.grid.get(*next_pos)
+
+        agent_moves: bool = False
+
+    def _move_pred(self, pred: Predator, next_pos: tuple[int, int]) -> float:
+        """
+        Move the predator agent to the next position.
+
+        Parameters
+        ----------
+        pred : Predator
+            The predator agent to move.
+        next_pos : tuple[int, int]
+            The next position to move the agent to.
+
+        Returns
+        -------
+        reward : float
+            The reward for the action.
+        """
+        pass
