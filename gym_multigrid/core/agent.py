@@ -115,7 +115,6 @@ class Agent(WorldObj):
             pass
 
         super().__init__(world, type, color, bg_color)
-        self._pos: Position | None = None
         self.dir: int | None = None
         self.init_dir: int | None = None
         self.index = index
@@ -258,14 +257,6 @@ class Agent(WorldObj):
         grid.set(*self.pos, self)
 
         self.bg_color = bg_color
-
-    @property
-    def pos(self):
-        return self._pos
-
-    @pos.setter
-    def pos(self, value):
-        self._pos = value
 
     @property
     def dir_vec(self):
