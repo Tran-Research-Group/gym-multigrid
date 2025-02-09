@@ -628,19 +628,26 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             agent: Prey | Predator = self.agents[i]
             action: int = all_actions[i]
 
-            next_pos: tuple[int, int] = self._get_next_pos(agent, action)
-            next_cell: None | WorldObjT = self.grid.get(*next_pos)
-
-            if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
+            if agent.terminated:
                 continue
             else:
-                match agent:
-                    case Prey():
-                        pass
-                    case Predator():
-                        pass
-                    case _:
-                        raise ValueError(f"Invalid agent type: {type(agent)}")
+                next_pos: tuple[int, int] = self._get_next_pos(agent, action)
+                next_cell: None | WorldObjT = self.grid.get(*next_pos)
+
+                if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
+                    continue
+                else:
+                    match agent:
+                        case Prey():
+                            pass
+                        case Predator():
+                            pass
+                        case _:
+                            raise ValueError(f"Invalid agent type: {type(agent)}")
+
+                    # Check preys' capture and fix conditions
+
+                    # Remove dead preys from the grid
 
         # Terminate the episode if all the prey are captured
         terminated = all(prey.terminated for prey in self.agents[self.num_preds :])
