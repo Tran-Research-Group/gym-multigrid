@@ -43,7 +43,7 @@ class ObservationConfig(TypedDict):
 
 class PredatorConfig(TypedDict):
     init_pos: tuple[int, int]
-    policy_type: Literal["random", "given"]
+    policy_type: Literal["teammate", "ego"]
 
 
 class PreyType(TypedDict):
@@ -57,7 +57,7 @@ class PreyType(TypedDict):
     policy : Literal["random"]
         The policy used by the prey agent.
     capture_reward : float
-        The reward given to the predator for capturing a prey of this type.
+        The reward ego to the predator for capturing a prey of this type.
     num_required_preds_capture : Literal[1, 2, 3, 4]
         The number of neighboring predators required to capture a prey of this type.
     num_required_preds_fix : Literal[1, 2, 3]
@@ -147,7 +147,6 @@ class Predator(Agent):
         index: int,
         pred_config: PredatorConfig,
         view_size: int | None = None,
-        policy_dict: dict[str, Type[AgentPolicyT]] = PREY_PRED_POLICIES,
     ):
         self.pred_config: PredatorConfig = pred_config
 
@@ -161,20 +160,11 @@ class Predator(Agent):
             view_size=view_size,
         )
 
-        self.policy_class: Type[AgentPolicyT] = policy_dict[pred_config["policy_type"]]
-
     def get_init_pos(self) -> tuple[int, int]:
         return self.pred_config["init_pos"]
 
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
-        self.policy: AgentPolicyT = self.policy_class(
-            action_set=self.actions,
-            random_generator=env_generator,
-        )
-
-    def act(self, observation: NDArray, options: dict[str, Any]) -> int:
-        return self.policy.act(observation)
 
 
 DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
@@ -184,15 +174,9 @@ DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
 }
 
 DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
-    {
-        "init_pos": (6, 6),
-        "policy_type": "given",
-    },
-    {"init_pos": (7, 7), "policy_type": "random"},
-    {
-        "init_pos": (8, 8),
-        "policy_type": "random",
-    },
+    {"init_pos": (6, 6), "policy_type": "ego"},
+    {"init_pos": (7, 7), "policy_type": "teammate"},
+    {"init_pos": (8, 8), "policy_type": "teammate"},
 ]
 
 DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
@@ -235,7 +219,7 @@ DEFAULT_PREY_TYPES: list[PreyType] = [
 ]
 
 
-class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
+class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
     """
     Environment in which the predator must catch the prey.
     """
@@ -268,6 +252,9 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
         self.pred_configs: list[PredatorConfig] = pred_configs
         self.prey_configs: list[PreyConfig] = prey_configs
         self.prey_types: list[PreyType] = prey_types
+
+        self.num_preys: int = len(prey_configs)
+        self.num_preds: int = len(pred_configs)
 
         grid_config = GridConfig(
             grid_size=15,
@@ -314,18 +301,18 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
         success: bool = True
         error_messages: list[str] = []
 
-        # 1. the first predator must have a `given` policy whose action is given by step()
-        # 2. there should be only one predator with a `given` policy
+        # 1. the first predator must have a `ego` policy whose action is ego by step()
+        # 2. there should be only one predator with a `ego` policy
         # 3. the initial positions of the predators should not overlap
 
-        given_policy_predator_count: int = 0
-        given_policy_predator_index: int | None = None
+        ego_predator_count: int = 0
+        ego_predator_index: int | None = None
         init_positions: list[tuple[int, int]] = []
 
         for pred_config in pred_configs:
-            if pred_config["policy_type"] == "given":
-                given_policy_predator_count += 1
-                given_policy_predator_index = pred_configs.index(pred_config)
+            if pred_config["policy_type"] == "ego":
+                ego_predator_count += 1
+                ego_predator_index = pred_configs.index(pred_config)
             else:
                 pass
 
@@ -337,18 +324,18 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
             else:
                 init_positions.append(pred_config["init_pos"])
 
-        if given_policy_predator_count != 1:
+        if ego_predator_count != 1:
             success = False
             error_messages.append(
-                "Invalid predator config: There should be exactly one predator with a `given` policy."
+                "Invalid predator config: There should be exactly one predator with a `ego` policy."
             )
         else:
             pass
 
-        if given_policy_predator_index != 0:
+        if ego_predator_index != 0:
             success = False
             error_messages.append(
-                "Invalid predator config: The first predator must have a `given` policy."
+                "Invalid predator config: The first predator must have a `ego` policy."
             )
         else:
             pass
@@ -497,6 +484,11 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
                 cell: None | WorldObjT = self.grid.get(i, j)
                 if cell is None:
                     obs[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
+                elif (
+                    cell.type == "prey_area"
+                    and not self.observation_options["encode_prey_areas"]
+                ):
+                    obs[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
                 else:
                     obs[i, j, 0] = self.world.OBJECT_TO_IDX[cell.type]
 
@@ -550,8 +542,8 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
             self.place_agent(agent, *agent_pos)
 
     def step(
-        self, action: int
-    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+        self, actions: list[int] | NDArray[np.int_]
+    ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict[str, Any]]:
         """
         Take a step in the environment.
 
@@ -573,4 +565,39 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], int]):
         info : dict[str, Any]
             Additional information about the environment.
         """
-        ...
+        terminated: bool = False
+        truncated: bool = False
+        rewards: list[float] = [0.0 for _ in self.agents]
+
+        actions = np.array(actions)
+        prey_actions = [agent.act(self._get_obs(), {}) for agent in self.agents]
+        all_actions = np.concatenate((actions, prey_actions))
+        # Order to apply the actions to the agents
+        order: NDArray[np.int_] = self.np_random.permutation(len(self.agents))
+
+        for i in order:
+            agent: Prey | Predator = self.agents[i]
+            action: int = all_actions[i]
+
+            match action:
+                case self.actions.stay:
+                    pass
+                case self.actions.left:
+                    next_pos = agent.west_pos()
+                    next_cell = self.grid.get(*next_pos)
+                case self.actions.right:
+                    next_pos = agent.east_pos()
+                    next_cell = self.grid.get(*next_pos)
+                case self.actions.up:
+                    next_pos = agent.north_pos()
+                    next_cell = self.grid.get(*next_pos)
+                case self.actions.down:
+                    next_pos = agent.south_pos()
+                    next_cell = self.grid.get(*next_pos)
+
+        # Terminate the episode if all the prey are captured
+        terminated = all(prey.terminated for prey in self.agents[self.num_preds :])
+
+        return self._get_obs(), rewards, terminated, truncated, self._get_info()
+
+    def _move_agent(self) -> None: ...
