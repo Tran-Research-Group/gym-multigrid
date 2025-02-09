@@ -145,15 +145,19 @@ class Prey(Agent):
             action_set=self.actions,
             random_generator=env_generator,
         )
-        self.neighbor_pos = self.pos + self.neighbor_pos_offsets
+        if self.pos is not None:
+            self.neighbor_pos = self.pos + self.neighbor_pos_offsets
+        else:
+            self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
 
     def act(self, observation: NDArray, options: dict[str, Any]) -> int:
-        return self.policy.act(observation)
+        return self.policy.act(observation, options)
 
     @Agent.pos.setter
     def pos(self, pos: NDArray[np.int_]) -> None:
         self._pos = pos
-        self.neighbor_pos = pos + self.neighbor_pos_offsets
+        if pos is not None:
+            self.neighbor_pos = pos + self.neighbor_pos_offsets
 
     def check_fix_condition(self, grid: Grid) -> bool:
         """
@@ -678,7 +682,9 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         reward: float = 0
 
         actions = np.array(actions)
-        prey_actions = [agent.act(self._get_obs(), {}) for agent in self.agents]
+        prey_actions = [
+            agent.act(self._get_obs(), {}) for agent in self.agents[self.num_preds :]
+        ]
         all_actions = np.concatenate((actions, prey_actions))
         # Order to apply the actions to the agents
         order: NDArray[np.int_] = self.np_random.permutation(len(self.agents))
