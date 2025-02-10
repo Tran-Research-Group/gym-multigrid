@@ -39,4 +39,4 @@ while True:
         break
 
 os.makedirs(os.path.dirname(animation_path_2), exist_ok=True)
-imageio.mimsave(animation_path, frames, duration=2, loop=20)
+imageio.mimsave(animation_path_2, frames, duration=2, loop=20)
