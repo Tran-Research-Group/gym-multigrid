@@ -1,16 +1,19 @@
+import enum
 from typing import Any, Literal, TypedDict, Type
 import warnings
 import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
 
-from gym_multigrid.core.constants import PREY_PRED_COLORS
+from gym_multigrid.core.constants import PREY_PRED_COLORS, NAV_DIR_TO_VEC
 from gym_multigrid.core.object import Floor, WorldObj, WorldObjT
 from gym_multigrid.core.world import World, WorldT
 from gym_multigrid.core.agent import NavigationActions, Agent
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.policy import AgentPolicyT
+from gym_multigrid.policy.base import BaseAgentPolicy
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
+from gym_multigrid.policy.prey_pred.utils import a_star
 from gym_multigrid.multigrid import (
     MultiGridEnv,
     GridConfig,
@@ -18,10 +21,9 @@ from gym_multigrid.multigrid import (
     PartialObsConfig,
     DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
 )
-from gym_multigrid.typing import Position
 
 PreyPredWorld = World(
-    encode_dim=3,
+    encode_dim=2,
     normalize_obs=1,
     COLORS=PREY_PRED_COLORS,
     OBJECT_TO_IDX={
@@ -123,6 +125,7 @@ class Prey(Agent):
             bg_color="light_grey",
             type=prey_type["name"],
             view_size=view_size,
+            dir_to_vec=NAV_DIR_TO_VEC,
         )
 
     def get_init_pos(self) -> tuple[int, int]:
@@ -268,6 +271,7 @@ class Predator(Agent):
             bg_color="white",
             type="predator",
             view_size=view_size,
+            dir_to_vec=NAV_DIR_TO_VEC,
         )
 
     def get_init_pos(self) -> tuple[int, int]:
@@ -793,14 +797,18 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                     self.grid.set(*agent.pos, self.init_grid.get(*agent.pos))
                     # Change the dir of the agent
                     if agent.pos != next_pos:
-                        dir_vec = (
-                            next_pos[0] - agent.pos[0],
-                            next_pos[1] - agent.pos[1],
+                        dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(
+                            agent.pos
                         )
-                        for dir, vec in enumerate(agent.dir_to_vec):
-                            if vec[0] == dir_vec[0] and vec[1] == dir_vec[1]:
-                                agent.dir = dir
-                                break
+                        # dir_vec = (
+                        #     next_pos[0] - agent.pos[0],
+                        #     next_pos[1] - agent.pos[1],
+                        # )
+                        # for dir, vec in enumerate(agent.dir_to_vec):
+                        #     if vec[0] == dir_vec[0] and vec[1] == dir_vec[1]:
+                        #         agent.dir = dir
+                        #         break
+                        agent.dir = agent.vec2dir(dir_vec)
                     agent.pos = next_pos
 
                     # Update the agent's bg_color
@@ -883,3 +891,74 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             The reward for the action.
         """
         pass
+
+
+class GreedyPredatorActionOption(TypedDict):
+    preys: list[Prey]
+    grid: Grid
+
+
+class GreedyPredatorPolicy(BaseAgentPolicy[NDArray[np.int_], int]):
+    def __init__(
+        self,
+        target_list: list[Literal[0, 1]],
+        random_prob: float = 0.1,
+        action_set: Type[enum.IntEnum] | None = None,
+        random_generator: np.random.Generator | None = None,
+    ):
+        self.target_list: list[Literal[0, 1]] = target_list
+        self.random_prob: float = random_prob
+
+        super().__init__(action_set, random_generator)
+
+    def act(
+        self, observation: NDArray[np.int_], options: GreedyPredatorActionOption
+    ) -> int:
+        """
+        Choose an action for the predator agent.
+
+        Parameters
+        ----------
+        observation : NDArray[np.int_]
+            The observation of the environment.
+        options : GreedyPredatorActionOption
+            Additional options for the action.
+
+        Returns
+        -------
+        action : int
+            The action to take.
+        """
+        preys: list[Prey] = options["preys"]
+        grid: Grid = options["grid"]
+
+        target_prey: None | Prey = None
+
+        for prey, target_candidate in zip(preys, self.target_list):
+            if target_candidate == 1 and not prey.terminated:
+                target_prey = prey
+                break
+            else:
+                pass
+
+        # If there is no target prey, choose a random action
+        # Else, choose the greedy action to move towards the target prey with random probability `random_prob`
+
+        act_randomly: bool = (
+            False
+            if target_prey is not None
+            and self.random_generator.random() >= self.random_prob
+            else True
+        )
+
+        action: int
+
+        match act_randomly:
+            case True:
+                action = self.random_generator.integers(0, len(self.action_set))
+            case False:
+                path: list[tuple[int, int]] = a_star(
+                    
+                    
+
+        return action
