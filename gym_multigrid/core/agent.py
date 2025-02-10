@@ -401,6 +401,26 @@ class Agent(WorldObj):
 
         return self.relative_coords(x, y) is not None
 
+    def dir2vec(self, direction: int, in_tuple: bool = False) -> NDArray[np.int_]:
+        """
+        Get the vector corresponding to the given direction
+        """
+        return (
+            self.dir_to_vec[direction]
+            if not in_tuple
+            else tuple(self.dir_to_vec[direction])
+        )
+
+    def vec2dir(self, vec: NDArray[np.int_]) -> int:
+        """
+        Get the direction index corresponding to the given vector
+        """
+        for i, d in enumerate(self.dir_to_vec):
+            if np.array_equal(d, vec):
+                return i
+
+        raise ValueError("Invalid direction vector")
+
 
 class PolicyAgent(Agent):
     """
