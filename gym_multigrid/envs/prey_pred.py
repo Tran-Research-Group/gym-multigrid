@@ -256,6 +256,26 @@ class Prey(Agent):
 
         return capturable
 
+    def pos_in_neighbor(self, pos: tuple[int, int]) -> bool:
+        """
+        Check if the given position is in the prey's neighborhood.
+
+        Parameters
+        ----------
+        pos : tuple[int, int]
+            The position to check.
+
+        Returns
+        -------
+        in_neighbor : bool
+            True if the position is in the prey's neighborhood, False otherwise.
+        """
+        in_neighbor: bool = any(
+            np.all(pos == neighbor_pos) for neighbor_pos in self.neighbor_pos
+        )
+
+        return in_neighbor
+
 
 class Predator(Agent):
     def __init__(
@@ -1011,7 +1031,10 @@ class GreedyPredatorPolicy(BasePolicy):
         act_randomly: bool = (
             False
             if target_prey is not None
-            and self.random_generator.random() >= self.random_prob
+            and (
+                target_prey.pos_in_neighbor(current_pos)
+                or self.random_generator.random() >= self.random_prob
+            )
             else True
         )
 
