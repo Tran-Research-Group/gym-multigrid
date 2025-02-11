@@ -78,7 +78,7 @@ def a_star(
                 # Make sure within a range and avoid obstacles or other agents
                 if (
                     loc_inside_map(new_loc, grid)
-                    and loc_can_overlap(new_loc, end, grid)
+                    and loc_can_overlap(new_loc, grid)
                     or new_loc == end
                 ):
                     # Create the f, g, and h values

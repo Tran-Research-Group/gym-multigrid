@@ -160,7 +160,11 @@ class Prey(Agent):
     def act(self, observation: NDArray, options: dict[str, Any]) -> int:
         return self.policy.act(observation, options)
 
-    @Agent.pos.setter
+    @property
+    def pos(self) -> tuple[int, int]:
+        return (self._pos[0], self._pos[1]) if self._pos is not None else None
+
+    @pos.setter
     def pos(self, pos: NDArray[np.int_]) -> None:
         self._pos = pos
         if pos is not None:
@@ -251,10 +255,6 @@ class Prey(Agent):
         capturable: bool = num_neighbor_preds >= num_required_preds_capture
 
         return capturable
-
-    @property
-    def pos(self) -> tuple[int, int]:
-        return (self._pos[0], self._pos[1])
 
 
 class Predator(Agent):
@@ -896,14 +896,20 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         """
         pass
 
+    @property
+    def prey_agents(self) -> list[Prey]:
+        return self.agents[self.num_preds :]
+
 
 class BasePolicy:
     def __init__(
         self,
+        action_set: Type[enum.IntEnum] | None = NavigationActions,
         dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
         self.dir_to_vec: list[NDArray[np.int_]] = dir_to_vec
+        self.action_set: Type[enum.IntEnum] = action_set
         self.random_generator: np.random.Generator = (
             random_generator
             if random_generator is not None
@@ -959,12 +965,17 @@ class GreedyPredatorPolicy(BasePolicy):
         self,
         target_list: list[Literal[0, 1]],
         random_prob: float = 0.1,
+        action_set: Type[enum.IntEnum] | None = NavigationActions,
         dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
         self.target_list: list[Literal[0, 1]] = target_list
         self.random_prob: float = random_prob
-        super().__init__(dir_to_vec, random_generator)
+        super().__init__(
+            action_set=action_set,
+            dir_to_vec=dir_to_vec,
+            random_generator=random_generator,
+        )
 
     def act(self, action_option: GreedyPredatorActionOption) -> int:
         """
@@ -1004,14 +1015,15 @@ class GreedyPredatorPolicy(BasePolicy):
             else True
         )
 
+        action: int
+
         match act_randomly:
             case True:
                 action = self.random_generator.integers(0, len(self.action_set))
             case False:
                 path: list[tuple[int, int]] = a_star(current_pos, target_prey.pos, grid)
-
-        next_pos: tuple[int, int] = path[1] if len(path) > 1 else current_pos
-        dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(current_pos)
-        action: int = self.vec2dir(dir_vec)
+                next_pos: tuple[int, int] = path[1] if len(path) > 1 else current_pos
+                dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(current_pos)
+                action = self.vec2dir(dir_vec)
 
         return action
