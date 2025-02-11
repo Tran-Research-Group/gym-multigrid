@@ -252,6 +252,10 @@ class Prey(Agent):
 
         return capturable
 
+    @property
+    def pos(self) -> tuple[int, int]:
+        return (self._pos[0], self._pos[1])
+
 
 class Predator(Agent):
     def __init__(
@@ -893,27 +897,20 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         pass
 
 
-class GreedyPredatorActionOption(TypedDict):
-    preys: list[Prey]
-    grid: Grid
-
-
-class GreedyPredatorPolicy(BaseAgentPolicy[NDArray[np.int_], int]):
+class BasePolicy:
     def __init__(
         self,
-        target_list: list[Literal[0, 1]],
-        random_prob: float = 0.1,
-        action_set: Type[enum.IntEnum] | None = None,
+        dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
-        self.target_list: list[Literal[0, 1]] = target_list
-        self.random_prob: float = random_prob
+        self.dir_to_vec: list[NDArray[np.int_]] = dir_to_vec
+        self.random_generator: np.random.Generator = (
+            random_generator
+            if random_generator is not None
+            else np.random.default_rng()
+        )
 
-        super().__init__(action_set, random_generator)
-
-    def act(
-        self, observation: NDArray[np.int_], options: GreedyPredatorActionOption
-    ) -> int:
+    def act(self, action_option: dict[str, Any]) -> int:
         """
         Choose an action for the predator agent.
 
@@ -929,8 +926,65 @@ class GreedyPredatorPolicy(BaseAgentPolicy[NDArray[np.int_], int]):
         action : int
             The action to take.
         """
-        preys: list[Prey] = options["preys"]
-        grid: Grid = options["grid"]
+        ...
+
+    def vec2dir(self, vec: NDArray[np.int_]) -> int:
+        """
+        Convert a vector to a direction.
+
+        Parameters
+        ----------
+        vec : NDArray[np.int_]
+            The vector to convert.
+
+        Returns
+        -------
+        dir : int
+            The direction corresponding to the vector.
+        """
+        for dir, dir_vec in enumerate(self.dir_to_vec):
+            if np.array_equal(dir_vec, vec):
+                return dir
+        raise ValueError(f"Invalid vector: {vec}")
+
+
+class GreedyPredatorActionOption(TypedDict):
+    current_pos: tuple[int, int]
+    preys: list[Prey]
+    grid: Grid
+
+
+class GreedyPredatorPolicy(BasePolicy):
+    def __init__(
+        self,
+        target_list: list[Literal[0, 1]],
+        random_prob: float = 0.1,
+        dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
+        random_generator: np.random.Generator | None = None,
+    ):
+        self.target_list: list[Literal[0, 1]] = target_list
+        self.random_prob: float = random_prob
+        super().__init__(dir_to_vec, random_generator)
+
+    def act(self, action_option: GreedyPredatorActionOption) -> int:
+        """
+        Choose an action for the predator agent.
+
+        Parameters
+        ----------
+        observation : NDArray[np.int_]
+            The observation of the environment.
+        options : GreedyPredatorActionOption
+            Additional options for the action.
+
+        Returns
+        -------
+        action : int
+            The action to take.
+        """
+        current_pos: tuple[int, int] = action_option["current_pos"]
+        preys: list[Prey] = action_option["preys"]
+        grid: Grid = action_option["grid"]
 
         target_prey: None | Prey = None
 
@@ -943,7 +997,6 @@ class GreedyPredatorPolicy(BaseAgentPolicy[NDArray[np.int_], int]):
 
         # If there is no target prey, choose a random action
         # Else, choose the greedy action to move towards the target prey with random probability `random_prob`
-
         act_randomly: bool = (
             False
             if target_prey is not None
@@ -951,14 +1004,14 @@ class GreedyPredatorPolicy(BaseAgentPolicy[NDArray[np.int_], int]):
             else True
         )
 
-        action: int
-
         match act_randomly:
             case True:
                 action = self.random_generator.integers(0, len(self.action_set))
             case False:
-                path: list[tuple[int, int]] = a_star(
-                    
-                    
+                path: list[tuple[int, int]] = a_star(current_pos, target_prey.pos, grid)
+
+        next_pos: tuple[int, int] = path[1] if len(path) > 1 else current_pos
+        dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(current_pos)
+        action: int = self.vec2dir(dir_vec)
 
         return action
