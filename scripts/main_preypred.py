@@ -42,7 +42,6 @@ while True:
         greedy_policy_1.act(agent_1_option),
         greedy_policy_2.act(agent_2_option),
     ]
-    actions = [env.action_space.sample() for _ in range(3)]
     obs, reward, terminated, truncated, _ = env.step(actions)
     print(f"Reward: {reward}")
     pprint.pprint(obs)
