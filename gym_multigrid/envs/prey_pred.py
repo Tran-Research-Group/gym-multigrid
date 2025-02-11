@@ -667,7 +667,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         # Add agent ids to the observation
         for agent in self.agents:
             if not agent.terminated:
-                obs[1, agent.pos[0], agent.pos[1]] = self.world.OBJECT_TO_IDX[
+                obs[1, agent.pos[1], agent.pos[0]] = self.world.OBJECT_TO_IDX[
                     agent.type
                 ]
             else:
@@ -718,14 +718,14 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             for j in range(self.height):
                 cell: None | WorldObjT = self.grid.get(i, j)
                 if cell is None:
-                    static_obs[i, j] = self.world.OBJECT_TO_IDX["empty"]
+                    static_obs[j, i] = self.world.OBJECT_TO_IDX["empty"]
                 elif (
                     cell.type == "prey_area"
                     and not self.observation_config["encode_prey_areas"]
                 ):
-                    static_obs[i, j] = self.world.OBJECT_TO_IDX["empty"]
+                    static_obs[j, i] = self.world.OBJECT_TO_IDX["empty"]
                 else:
-                    static_obs[i, j] = self.world.OBJECT_TO_IDX[cell.type]
+                    static_obs[j, i] = self.world.OBJECT_TO_IDX[cell.type]
 
         self.static_obs: NDArray[np.int_] = static_obs
 
