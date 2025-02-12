@@ -825,8 +825,8 @@ class CtfMvNEnv(MultiGridEnv):
                 else -1
             ),
             "red_actions": [0 for _ in range(self.num_red_agents)],
-            "blue_init_positions": [(0,0) for traj in self.blue_traj],
-            "red_init_positions": [(0,0) for traj in self.red_traj]
+            "blue_init_positions": [(0,0) for i in range(self.num_blue_agents)],
+            "red_init_positions": [(0,0) for i in range(self.num_red_agents)]
         } | self.ep_game_stats
         return info
 
