@@ -93,6 +93,11 @@ class Grid:
         for j in range(0, length):
             self.set(x, y + j, obj_type(self.world))
 
+    def rect_filled(self, x: int, y: int, w: int, h: int, obj: WorldObjT) -> None:
+        for i in range(w):
+            for j in range(h):
+                self.set(x + i, y + j, obj)
+
     def wall_rect(self, x: int, y: int, w: int, h: int) -> None:
         self.horz_wall(x, y, w)
         self.horz_wall(x, y + h - 1, w)

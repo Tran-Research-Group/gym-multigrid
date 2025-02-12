@@ -35,7 +35,15 @@ class WorldObj:
         self.init_pos: Final[Position | None] = None
 
         # Current position of the object
-        self.pos: Position | None = None
+        self._pos: Position | None = None
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, value):
+        self._pos = value
 
     def reset(self) -> None:
         """

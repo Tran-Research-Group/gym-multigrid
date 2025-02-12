@@ -102,7 +102,7 @@ class Agent(WorldObj):
         self,
         world: WorldT,
         index: int = 0,
-        view_size: int = 7,
+        view_size: int | None = None,
         actions: Type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
@@ -115,7 +115,6 @@ class Agent(WorldObj):
             pass
 
         super().__init__(world, type, color, bg_color)
-        self.pos: Position | None = None
         self.dir: int | None = None
         self.init_dir: int | None = None
         self.index = index
@@ -287,7 +286,7 @@ class Agent(WorldObj):
 
         return self.pos + self.dir_vec
 
-    def west_pos(self) -> Position:
+    def west_pos(self) -> NDArray[np.int_]:
         """
         Get the position of the cell to the left of the agent
         """
@@ -296,7 +295,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([-1, 0])
 
-    def east_pos(self) -> Position:
+    def east_pos(self) -> NDArray[np.int_]:
         """
         Get the position of the cell to the right of the agent
         """
@@ -305,7 +304,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([1, 0])
 
-    def north_pos(self) -> Position:
+    def north_pos(self) -> NDArray[np.int_]:
         """
         Get the position of the cell above the agent
         """
@@ -314,7 +313,7 @@ class Agent(WorldObj):
         else:
             return self.pos + np.array([0, -1])
 
-    def south_pos(self) -> Position:
+    def south_pos(self) -> NDArray[np.int_]:
         """
         Get the position of the cell below the agent
         """
@@ -402,6 +401,26 @@ class Agent(WorldObj):
 
         return self.relative_coords(x, y) is not None
 
+    def dir2vec(self, direction: int, in_tuple: bool = False) -> NDArray[np.int_]:
+        """
+        Get the vector corresponding to the given direction
+        """
+        return (
+            self.dir_to_vec[direction]
+            if not in_tuple
+            else tuple(self.dir_to_vec[direction])
+        )
+
+    def vec2dir(self, vec: NDArray[np.int_]) -> int:
+        """
+        Get the direction index corresponding to the given vector
+        """
+        for i, d in enumerate(self.dir_to_vec):
+            if np.array_equal(d, vec):
+                return i
+
+        raise ValueError("Invalid direction vector")
+
 
 class PolicyAgent(Agent):
     """
@@ -413,7 +432,7 @@ class PolicyAgent(Agent):
         policy: AgentPolicyT,
         world: WorldT,
         index: int = 0,
-        view_size: int = 7,
+        view_size: int | None = None,
         actions: type[ActionsT] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
