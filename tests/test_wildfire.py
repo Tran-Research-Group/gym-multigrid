@@ -1,6 +1,5 @@
 import sys
 import os
-import pytest
 import numpy as np
 import gymnasium as gym
 
@@ -9,17 +8,20 @@ from gym_multigrid.utils.misc import save_frames_as_gif
 
 
 def test_wildfire() -> None:
-    """Function to test the environment's functionality. Runs episodes with random agents in the Wildfire environment and save episode renders as GIFs."""
+    """Function to manually test the environment's functionality. Runs episodes with random agents in the Wildfire environment and save episode renders as GIFs."""
+    # initialize environment. Set the arguments as desired.
     env = gym.make(
         "wildfire-v0",
-        alpha=0.3,
-        beta=0.8,
-        max_episode_steps=1,
+        alpha=0.15,
+        beta=0.9,
+        delta_beta=0.7,
+        max_episode_steps=100,
         num_agents=2,
         agent_start_positions=((4, 6), (10, 12)),
         size=17,
         initial_fire_size=3,
         cooperative_reward=False,
+        altruism_weight=0.2,
         render_selfish_region_boundaries=True,
         log_selfish_region_metrics=True,
         selfish_region_xmin=[2, 8],
@@ -27,10 +29,11 @@ def test_wildfire() -> None:
         selfish_region_ymin=[4, 10],
         selfish_region_ymax=[8, 14],
     )
+
+    # run episodes
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
-    steps = 0
     num_episodes = 1
 
     for ep in range(num_episodes):
@@ -38,14 +41,11 @@ def test_wildfire() -> None:
             actions = {
                 f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
             }
-            obs, reward, terminated, truncated, _ = env.step(actions)
-            steps += 1
+            obs, reward, done, _ = env.step(actions)
             frames.append(env.render())
             if terminated or truncated:
                 break
-        save_frames_as_gif(
-            frames, path="./", filename="wildfire", ep=ep, fps=0.1, dpi=20
-        )
+        save_frames_as_gif(frames, path="./", filename="wildfire", ep=ep, fps=1, dpi=40)
 
 
 test_wildfire()

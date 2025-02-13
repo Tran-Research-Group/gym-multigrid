@@ -154,58 +154,47 @@ def render_agent_tiles(
     return img
 
 
-def get_initial_fire_coordinates(x, y, grid_size, n, without_wall_coordinates=False):
-    """Generate the coordinates of trees on fire in a uniformly randomly located square fire region of size n by n.
+def get_initial_fire_coordinates(x, y, grid_size, fire_size):
+    """Generate the coordinates of trees on fire in a uniformly randomly located square fire region of specified size.
 
     Parameters:
-    ----------
+    -------
         x : int
-            the x-coordinate of the center cell of the fire region if n is odd, or the x-coordinate of the top-left corner cell of the fire region if n is even
+            the x-coordinate of the center cell of the fire region if n is odd, or the x-coordinate of the top-left corner cell of the fire region if n is even.
         y : int
-            the y-coordinate of the center cell of the fire region if n is odd, or the y-coordinate of the top-left corner cell of the fire region if n is even
+            the y-coordinate of the center cell of the fire region if n is odd, or the y-coordinate of the top-left corner cell of the fire region if n is even.
         grid_size : int
-            the side of the square grid
-        n : int
-            the side of the square fire region
-        without_wall_coordinates : bool, optional
-            if True, the coordinates (x, y) are assumed to be given in, and output coordinates are returned in, grid without wall coordinates.
-
+            the size of square gridworld. Note that the gridworld includes walls.
+        fire_size : int
+            the side of the square fire region.
     Returns:
     -------
     coordinates : list(tuple(int, int))
         a list of tuples, where each tuple represents the position coordinates of a tree on fire in the fire region.
     """
 
-    if without_wall_coordinates:
-        # convert grid without wall coordinates to grid with wall coordinates
-        x += 1
-        y += 1
-
-    if n % 2 == 0:
+    if fire_size % 2 == 0:
         # side of the fire region is an even number
         coordinates = []
         # loop through the positions of cells in the fire region. The top-left corner cell is (x, y)
-        for i in range(x, x + n):
-            for j in range(y, y + n):
+        for i in range(x, x + fire_size):
+            for j in range(y, y + fire_size):
                 coordinates.append((i, j))
         return coordinates
     else:
         # side of the fire region is an odd number
         # offset is the distance from the center cell to the edge cell of a fire region of size n by n
-        offset = int((n - 1) / 2)
+        offset = int((fire_size - 1) / 2)
 
-        # determine range of x and y coordinates lying within the fire region. The center cell is (x, y).
+        # determine range of x and y coordinates lying within the fire region. The center cell is (x, y). The subtraction of 2 from grid size is due to the walls.
         start_x = max(1, x - offset)
-        end_x = min(grid_size, x + offset)
+        end_x = min(grid_size - 2, x + offset)
         start_y = max(1, y - offset)
-        end_y = min(grid_size, y + offset)
+        end_y = min(grid_size - 2, y + offset)
 
         coordinates = []
         # loop through the positions of cells in the fire region
         for x in range(start_x, end_x + 1):
             for y in range(start_y, end_y + 1):
-                if without_wall_coordinates:
-                    coordinates.append((x - 1, y - 1))
-                else:
-                    coordinates.append((x, y))
+                coordinates.append((x, y))
         return coordinates

@@ -45,6 +45,7 @@ class WildfireEnv(MultiGridEnv):
         render_mode="rgb_array",
         render_selfish_region_boundaries=False,
         cooperative_reward=False,
+        altruism_weight=0.2,
         log_selfish_region_metrics=False,
         selfish_region_xmin=None,
         selfish_region_xmax=None,
@@ -87,6 +88,8 @@ class WildfireEnv(MultiGridEnv):
             whether to render boundaries of selfish regions, by default False
         cooperative_reward : bool, optional
             whether the agents use a cooperative reward, by default False. If True, the agents are fully cooperative and receive the same reward.
+        altruism_weight : float, optional
+            parameter to control altruism in the Markov game reward functions, by default 0.2. Only applicable if cooperative_reward is False. Should be in the range [0,1).
         log_selfish_region_metrics : bool, optional
             whether to log metrics related to trees in selfish regions, by default False
         selfish_region_xmin : list, optional
@@ -121,6 +124,9 @@ class WildfireEnv(MultiGridEnv):
         self.unburnt_trees = []
         self.trees_on_fire = 0
         self.cooperative_reward = cooperative_reward
+        self.altruism_weight = altruism_weight
+        if altruism_weight < 0 or altruism_weight >= 1:
+            raise ValueError("Altruism weight should be in the range [0,1).")
         self.render_selfish_region_boundaries = render_selfish_region_boundaries
         self.log_selfish_region_metrics = log_selfish_region_metrics
         if self.log_selfish_region_metrics:
@@ -129,6 +135,13 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_xmax = np.array(selfish_region_xmax)
             self.selfish_ymin = np.array(selfish_region_ymin)
             self.selfish_ymax = np.array(selfish_region_ymax)
+            # raise error if xmin > xmax or ymin > ymax
+            if np.any(self.selfish_xmin > self.selfish_xmax) or np.any(
+                self.selfish_ymin > self.selfish_ymax
+            ):
+                raise ValueError(
+                    "Invalid selfish region. xmin should be less than or equal to xmax and ymin should be less than or equal to ymax for every selfish region."
+                )
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
             self.selfish_region_size = (
@@ -280,7 +293,7 @@ class WildfireEnv(MultiGridEnv):
                 )
                 initial_fire = get_initial_fire_coordinates(
                     *top_left_corner,
-                    self.grid_size_without_walls,
+                    self.grid_size,
                     self.initial_fire_size,
                 )
             else:
@@ -299,7 +312,7 @@ class WildfireEnv(MultiGridEnv):
                 )
                 initial_fire = get_initial_fire_coordinates(
                     *fire_square_center,
-                    self.grid_size_without_walls,
+                    self.grid_size,
                     self.initial_fire_size,
                 )
             # agent_start_pos is specified during environment initialization
@@ -492,8 +505,8 @@ class WildfireEnv(MultiGridEnv):
 
         Returns
         -------
-        on_fire_trees : list[tuple[int,int]]
-            list of tuples containing position coordinates (x,y) of trees on fire. Coordinates are in grid without wall coordinates
+        trees_on_fire : list[tuple[int,int]]
+            list of tuples containing position coordinates (x,y) of trees on fire.
         time_step : float
             normalized time step of the episode at which time the state was recorded
         """
@@ -508,13 +521,13 @@ class WildfireEnv(MultiGridEnv):
         if print_interpretation:
             print("-------------------------------------------------------------")
             print("State interpretation:")
-        on_fire_trees = []
+        trees_on_fire = []
         for i in range(self.grid_size):
             for j in range(self.grid_size):
                 if state[1, j, i] == 1:
                     if print_interpretation:
                         print(f"Tree at position {(i,j)} is on fire.")
-                    on_fire_trees.append((i, j))
+                    trees_on_fire.append((i, j))
                 for o in self.agents:
                     index = o.index
                     if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + index, j, i] == 1:
@@ -523,7 +536,7 @@ class WildfireEnv(MultiGridEnv):
         if print_interpretation:
             print(f"Time step: {time_step}")
             print("-------------------------------------------------------------")
-        return on_fire_trees, time_step
+        return trees_on_fire, time_step
 
     def construct_state(self, trees_on_fire, agent_pos, time_step: int):
         """Construct the state representation vector of the environment for given positions of trees on fire and agents
@@ -531,11 +544,11 @@ class WildfireEnv(MultiGridEnv):
         Parameters
         ----------
         trees_on_fire : list
-            list of tuples containing position coordinates (x,y) of trees on fire. Coordinates should be in grid without wall coordinates
+            list of tuples containing position coordinates (x,y) of trees on fire.
         agent_pos : list
-            list of tuples containing position coordinates (x,y) of agents, in order of agent index. Coordinates should be in grid without wall coordinates
+            list of tuples containing position coordinates (x,y) of agents, in order of agent index.
         time_step : int
-            normalized time step of the episode at which time the state was recorded
+            normalized time step of the episode at which time the state was recorded.
 
         Returns
         -------
@@ -818,24 +831,15 @@ class WildfireEnv(MultiGridEnv):
             if self.cooperative_reward:
                 agent_rewards -= 0.5 * len(trees_to_fire_state)
             else:
-                if self.agent_groups:
-                    for a in self.agents:
-                        agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
-                            f"{self.idx_to_group[a.index]}"
-                        ] + 0.1 * (
-                            len(trees_to_fire_state)
-                            - num_trees_to_fire_state_sr[
-                                f"{self.idx_to_group[a.index]}"
-                            ]
-                        )
-                else:
-                    for a in self.agents:
-                        agent_rewards[a.index] -= 0.5 * num_trees_to_fire_state_sr[
-                            f"{a.index}"
-                        ] + 0.1 * (
+                for a in self.agents:
+                    agent_rewards[a.index] -= 0.5 * (
+                        num_trees_to_fire_state_sr[f"{a.index}"]
+                        + self.altruism_weight
+                        * (
                             len(trees_to_fire_state)
                             - num_trees_to_fire_state_sr[f"{a.index}"]
                         )
+                    )
             # agent rewards dictionary
             rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
 
