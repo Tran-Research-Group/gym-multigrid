@@ -1,59 +1,26 @@
-import enum
-from typing import Final, Literal, TypedDict
+from typing import Final, Literal, TypedDict, TypeAlias
 
 from gymnasium import spaces
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, AgentT
+from gym_multigrid.core.agent import Agent, AgentT, MazeActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
-from gym_multigrid.core.world import World
+from gym_multigrid.core.world import MazeWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.map import distance_area_point
-
-MazeColors: dict[str, NDArray] = {
-    "red": np.array([228, 3, 3]),
-    "orange": np.array([255, 140, 0]),
-    "yellow": np.array([255, 237, 0]),
-    "green": np.array([0, 128, 38]),
-    "blue": np.array([0, 77, 255]),
-    "purple": np.array([117, 7, 135]),
-    "brown": np.array([120, 79, 23]),
-    "grey": np.array([100, 100, 100]),
-    "light_red": np.array([255, 228, 225]),
-    "light_blue": np.array([240, 248, 255]),
-    "white": np.array([255, 250, 250]),
-}
+from gym_multigrid.utils.map import distance_area_point, load_text_map
 
 
-class MazeActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
-
-
-MazeWorld = World(
-    encode_dim=3,
-    normalize_obs=1,
-    COLORS=MazeColors,
-    OBJECT_TO_IDX={
-        "background": 0,
-        "agent": 1,
-        "flag": 2,
-        "obstacle": 3,
-    },
-)
-
-
-class Observation(TypedDict):
+class ObservationDict(TypedDict):
     agent: NDArray
     background: NDArray
     flag: NDArray
     obstacle: NDArray
+
+
+Observation: TypeAlias = ObservationDict | NDArray
 
 
 class MazeSingleAgentEnv(MultiGridEnv):
@@ -68,6 +35,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         flag_reward: float = 1.0,
         obstacle_penalty_ratio: float = 0.0,
         step_penalty_ratio: float = 0.01,
+        observation_option: Literal["positional", "map"] = "map",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         """
@@ -85,6 +53,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
             Penalty given to the agent for hitting an obstacle.
         step_penalty_ratio : float = 0.01
             Penalty given to the agent for each step taken.
+        observation_option : Literal["positional", "map"] = "map"
+            Observation option. If "positional", the observation is the flattened positions of the objects. If "map", the observation is the same with the map.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode.
         """
@@ -94,7 +64,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         self.actions_set = MazeActions
 
         self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = np.loadtxt(map_path).T
+        self._field_map: Final[NDArray] = load_text_map(map_path)
 
         height: int
         width: int
@@ -108,6 +78,10 @@ class MazeSingleAgentEnv(MultiGridEnv):
         )
         self.flag: Final[list[Position]] = list(
             zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["flag"]))
+        )
+
+        self.observation_option: Final[Literal["positional", "map"]] = (
+            observation_option
         )
 
         self._flag_reward: Final[float] = flag_reward
@@ -139,42 +113,67 @@ class MazeSingleAgentEnv(MultiGridEnv):
             render_mode=render_mode,
         )
 
-    def _set_observation_space(self) -> spaces.Dict:
-        observation_space: spaces.Dict = spaces.Dict(
-            {
-                "agent": spaces.Box(
-                    low=np.array([-1, -1]),
-                    high=np.array(self._field_map.shape) - 1,
+    def _set_observation_space(self) -> spaces.Dict | spaces.Box:
+        match self.observation_option:
+            case "positional":
+                observation_space = spaces.Dict(
+                    {
+                        "agent": spaces.Box(
+                            low=np.array([-1, -1]),
+                            high=np.array(self._field_map.shape) - 1,
+                            dtype=np.int64,
+                        ),
+                        "background": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.background))]
+                            ).flatten(),
+                            high=np.array(
+                                [
+                                    self._field_map.shape
+                                    for _ in range(len(self.background))
+                                ]
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "flag": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.flag))]
+                            ).flatten(),
+                            high=np.array(
+                                [self._field_map.shape for _ in range(len(self.flag))]
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                        "obstacle": spaces.Box(
+                            low=np.array(
+                                [[0, 0] for _ in range(len(self.obstacle))]
+                            ).flatten(),
+                            high=np.array(
+                                [
+                                    self._field_map.shape
+                                    for _ in range(len(self.obstacle))
+                                ]
+                            ).flatten()
+                            - 1,
+                            dtype=np.int64,
+                        ),
+                    }
+                )
+
+            case "map":
+                observation_space = spaces.Box(
+                    low=0,
+                    high=len(self.world.OBJECT_TO_IDX) - 1,
+                    shape=self._field_map.shape,
                     dtype=np.int64,
-                ),
-                "background": spaces.Box(
-                    low=np.array(
-                        [[0, 0] for _ in range(len(self.background))]
-                    ).flatten(),
-                    high=np.array(
-                        [self._field_map.shape for _ in range(len(self.background))]
-                    ).flatten()
-                    - 1,
-                    dtype=np.int64,
-                ),
-                "flag": spaces.Box(
-                    low=np.array([[0, 0] for _ in range(len(self.flag))]).flatten(),
-                    high=np.array(
-                        [self._field_map.shape for _ in range(len(self.flag))]
-                    ).flatten()
-                    - 1,
-                    dtype=np.int64,
-                ),
-                "obstacle": spaces.Box(
-                    low=np.array([[0, 0] for _ in range(len(self.obstacle))]).flatten(),
-                    high=np.array(
-                        [self._field_map.shape for _ in range(len(self.obstacle))]
-                    ).flatten()
-                    - 1,
-                    dtype=np.int64,
-                ),
-            }
-        )
+                )
+
+            case _:
+                raise ValueError(
+                    f"Invalid observation option: {self.observation_option}"
+                )
 
         return observation_space
 
@@ -206,7 +205,7 @@ class MazeSingleAgentEnv(MultiGridEnv):
         )
 
     def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
-        super().reset(seed)
+        super().reset(seed=seed)
 
         agent: Agent = self.agents[0]
 
@@ -223,14 +222,42 @@ class MazeSingleAgentEnv(MultiGridEnv):
         for a in self.agents:
             assert a.pos is not None
 
-        observation: Observation = {
-            "agent": np.array(self.agents[0].pos),
-            "background": np.array(self.background).flatten(),
-            "flag": np.array(self.flag).flatten(),
-            "obstacle": np.array(self.obstacle).flatten(),
-        }
+        observation: Observation
+
+        match self.observation_option:
+            case "positional":
+                observation = {
+                    "agent": np.array(self.agents[0].pos),
+                    "background": np.array(self.background).flatten(),
+                    "flag": np.array(self.flag).flatten(),
+                    "obstacle": np.array(self.obstacle).flatten(),
+                }
+            case "map":
+                observation = self._encode_map()
+
+            case _:
+                raise ValueError(
+                    f"Invalid observation option: {self.observation_option}"
+                )
 
         return observation
+
+    def _encode_map(self) -> NDArray:
+        encoded_map: NDArray = np.zeros((self.width, self.height))
+
+        for i, j in self.background:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["background"]
+        for i, j in self.obstacle:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
+        for i, j in self.flag:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["flag"]
+
+        assert self.agents[0].pos is not None
+        encoded_map[self.agents[0].pos[0], self.agents[0].pos[1]] = (
+            self.world.OBJECT_TO_IDX["agent"]
+        )
+
+        return encoded_map
 
     def _get_info(self) -> dict[str, float]:
         assert self.agents[0].pos is not None
