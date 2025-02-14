@@ -952,7 +952,7 @@ class CtfMvNEnv(MultiGridEnv):
             red_actions.append(red_action)
 
         blue_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
-        red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
+        red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.red_traj]
 
         # Just in case NN outputs are, for some reason, not discrete.
         rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
