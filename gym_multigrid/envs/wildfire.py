@@ -5,9 +5,11 @@
 from collections import OrderedDict
 from typing import Optional
 import random
+
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
 import numpy.typing as npt
+
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import WildfireWorld
 from gym_multigrid.core.agent import WildfireActions, Agent

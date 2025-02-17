@@ -1,8 +1,10 @@
 import enum
 import math
 from typing import Type, TypeVar
+
 import numpy as np
 from numpy.typing import NDArray
+
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
