@@ -16,6 +16,9 @@ COLORS = {
     "grey": np.array([100, 100, 100]),
     "light_red": np.array([234, 153, 153]),
     "light_blue": np.array([90, 170, 223]),
+    "black": np.array([0, 0, 0]),
+    "white": np.array([255, 255, 255]),
+    "medium_red": np.array([231, 80, 80]),
 }
 
 CTF_COLORS: dict[str, NDArray[np.uint]] = {
@@ -91,6 +94,20 @@ STATE_TO_IDX = {
     "locked": 2,
 }
 
+# Map of state names to integers
+STATE_TO_IDX_WILDFIRE = {
+    "healthy": 0,
+    "on fire": 1,
+    "burnt": 2,
+}
+
+# Map of state idx to color
+STATE_IDX_TO_COLOR_WILDFIRE = {
+    0: "green",
+    1: "orange",
+    2: "brown",
+}
+
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [
     # Pointing right (positive X)
@@ -127,6 +144,7 @@ OBJECT_TO_STR = {
     "goal": "G",
     "lava": "V",
     "agent": "a",
+    "tree": "T",
 }
 
 # Short string for opened door

@@ -1,11 +1,16 @@
 import numpy as np
 from numpy.typing import NDArray
 
+import numpy as np
+from numpy.typing import NDArray
+
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import CollectWorld
 from gym_multigrid.core.agent import CollectActions, Agent
 from gym_multigrid.core.object import Ball, WorldObjT
+from gym_multigrid.core.object import Ball, WorldObjT
 from gym_multigrid.core.grid import Grid
+from gym_multigrid.typing import Position
 from gym_multigrid.typing import Position
 
 
@@ -14,6 +19,27 @@ class CollectGameEnv(MultiGridEnv):
     Environment in which the agents have to collect the balls
     """
 
+    def __init__(self, *args, actions_set=CollectActions, **kwargs):
+        """
+        Initialize the CollectGameEnv.
+
+        Parameters
+        ----------
+        size : int
+            Size of grid if square. Default 10
+        num_balls : list[int]
+            Total number of balls present in environment.
+        agents_index : list[int]
+            Colour index for each agent.
+        balls_index : list[int]
+            Colour index for each ball type.
+        balls_reward : list[float]
+            Reward given for collecting each ball type.
+        respawn : bool
+            Whether or not balls respawn after being collected.
+        """
+        self.size = kwargs["size"]
+        self.num_balls = int(np.sum(np.array(kwargs["num_balls"])))
     def __init__(self, *args, actions_set=CollectActions, **kwargs):
         """
         Initialize the CollectGameEnv.
@@ -45,6 +71,9 @@ class CollectGameEnv(MultiGridEnv):
         self.actions_set = CollectActions
         partial_obs: bool = False
         self.info = {}
+        self.actions_set = CollectActions
+        partial_obs: bool = False
+        self.info = {}
         self.keys = [
             "agent1ball1",
             "agent1ball2",
@@ -57,8 +86,13 @@ class CollectGameEnv(MultiGridEnv):
         agents = []
         for i in self.agents_index:
             agents.append(Agent(self.world, i))
+        for i in self.agents_index:
+            agents.append(Agent(self.world, i))
 
         super().__init__(
+            grid_size=self.size,
+            width=None,
+            height=None,
             grid_size=self.size,
             width=None,
             height=None,
@@ -68,9 +102,21 @@ class CollectGameEnv(MultiGridEnv):
             agents=agents,
             partial_obs=partial_obs,
             actions_set=self.actions_set,
+            actions_set=self.actions_set,
             render_mode="rgb_array",
         )
 
+    def _gen_grid(self, width: int, height: int):
+        """
+        Generate grid and place all the balls and agents.
+
+        Parameters
+        ----------
+        width : int
+            width of grid
+        height : int
+            height of grid
+        """
     def _gen_grid(self, width: int, height: int):
         """
         Generate grid and place all the balls and agents.
@@ -96,9 +142,16 @@ class CollectGameEnv(MultiGridEnv):
             however type {type(self.num_balls)} was passed"
             )
 
+        if not isinstance(self.num_balls, list):
+            raise TypeError(
+                f"Expected num balls to be of type list, \
+            however type {type(self.num_balls)} was passed"
+            )
+
         for number, index, reward in zip(
             self.num_balls, self.balls_index, self.balls_reward
         ):
+            for _ in range(number):
             for _ in range(number):
                 self.place_obj(Ball(self.world, index, reward))
 
@@ -106,6 +159,7 @@ class CollectGameEnv(MultiGridEnv):
         for a in self.agents:
             self.place_agent(a)
 
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.collected_balls = 0
         self.info = {
@@ -117,6 +171,7 @@ class CollectGameEnv(MultiGridEnv):
             "agent2ball3": 0,
         }
         super().reset(seed=seed)
+        super().reset(seed=seed)
         state = self.grid.encode()
         return state, self.info
 
@@ -126,6 +181,10 @@ class CollectGameEnv(MultiGridEnv):
         """
         Compute the reward to be given upon success
         """
+        rewards[current_agent] += reward
+
+    def _respawn(self, color):
+        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
         rewards[current_agent] += reward
 
     def _respawn(self, color):
@@ -177,6 +236,12 @@ class CollectGameEnv(MultiGridEnv):
                 self.grid.set(*self.agents[agent_index].pos, None)
                 # update agent position variable
                 self.agents[agent_index].pos = next_pos
+                self._handle_pickup(agent_index, rewards, next_pos, next_cell)
+                # move agent to cell
+                self.grid.set(*next_pos, self.agents[agent_index])
+                self.grid.set(*self.agents[agent_index].pos, None)
+                # update agent position variable
+                self.agents[agent_index].pos = next_pos
         elif next_cell is None or next_cell.can_overlap():
             self.grid.set(*next_pos, self.agents[agent_index])
             self.grid.set(*self.agents[agent_index].pos, None)
@@ -191,22 +256,24 @@ class CollectGameEnv(MultiGridEnv):
         truncated: bool = False
         self.step_count += 1
         for i in order:
-            if actions[i] == self.actions.north:
+            if actions[i] == self.actions.NORTH:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.east:
+            elif actions[i] == self.actions.EAST:
                 next_pos = self.agents[i].east_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.south:
+            elif actions[i] == self.actions.SOUTH:
                 next_pos = self.agents[i].south_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.west:
+            elif actions[i] == self.actions.WEST:
                 next_pos = self.agents[i].west_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
+        if not self.respawn and self.collected_balls == self.num_balls:
+            terminated = True
         if not self.respawn and self.collected_balls == self.num_balls:
             terminated = True
         if self.step_count >= self.max_steps:
@@ -215,6 +282,54 @@ class CollectGameEnv(MultiGridEnv):
         obs = self.grid.encode()
         return obs, rewards, terminated, truncated, self.info
 
+    def phi_dim(self) -> int:
+        """
+        Helper method to get feature vector dimension
+
+        Returns
+        -------
+        int
+            length of feature vector = number of ball types
+        """
+        return self.num_ball_types
+
+
+class CollectGameEvenDist(CollectGameEnv):
+    """
+    Collect game instance that has the same amount of balls
+    for each type of ball present
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_balls_per_type = self.num_balls // len(self.balls_index)
+
+    def _gen_grid(self, width: int, height: int) -> None:
+        self.grid = Grid(width, height, self.world)
+
+        # Generate the surrounding walls
+        self.grid.horz_wall(0, 0)
+        self.grid.horz_wall(0, height - 1)
+        self.grid.vert_wall(0, 0)
+        self.grid.vert_wall(width - 1, 0)
+
+        if not isinstance(self.num_balls, int):
+            raise TypeError(
+                f"Expected num balls to be of type int, \
+            however type {type(self.num_balls)} was passed"
+            )
+        assert len(self.balls_reward) == self.num_ball_types
+        for ball_type in range(self.num_ball_types):
+            for _ in range(self.num_balls_per_type):
+                self.place_obj(
+                    Ball(
+                        self.world,
+                        self.balls_index[ball_type],
+                        self.balls_reward[ball_type],
+                    )
+                )
+        for a in self.agents:
+            self.place_agent(a)
     def phi_dim(self) -> int:
         """
         Helper method to get feature vector dimension

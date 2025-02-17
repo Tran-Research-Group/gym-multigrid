@@ -53,7 +53,26 @@ The details are [here](./docs/environments/ctf.md).
 Agents move around the grid to collect objects. The object respawns in a random location after being collected.
 
 ### Maze
+
 ### Wildfire
+![WildfireEnv Example](./assets/wildfire-env-example.gif)
+
+| Attribute             | Description    |
+| --------------------- | -------------- |
+| Actions               | `Discrete`  |
+| Agent Action Space    | `Discrete(5)`  |
+| Observations          | `Discrete`  |
+| Observability          | `Fully observable`  |
+| Agent Observation Space     | `Box([0,...],[1,...],(shape depends on number of agents,),float32)` |
+| States                | `Discrete`  |
+| State Space           | `Box([0,...],[1,...],(shape depends on number of agents,),float32)`  |
+| Agents                | `Cooperative or Non-cooperative or Group`       |
+| Number of Agents      | `>=1`            |
+| Termination Condition | `No trees on fire exist`         |
+| Truncation Steps      | `>=1`           |
+| Creation              | `gymnasium.make("wildfire-v0")` |
+
+Agents move over trees on fire to dump fire retardant. Initial fire is randomly located. Agents can be cooperative (shared reward) or non-cooperative (individual/group rewards). A non-cooperative agent preferentially protects a region of selfish interest within the grid. Above GIF contains two groups of agents with their selfish regions shown in same color.
 
 ## Extending multigrid
 Please see this [guide](https://docs.google.com/document/d/13bCjSzRvLkdGWx7er67VQwF87pJmRIkDR41fm6iMToI/edit?usp=sharing) for creating a custom multigrid environment. See [CONTRIBUTING.md](https://github.com/Tran-Research-Group/gym-multigrid/blob/main/CONTRIBUTING.md) for our code guidelines if you are interested in adding your environment to this repo.
