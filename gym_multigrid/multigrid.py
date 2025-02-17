@@ -112,11 +112,16 @@ class MultiGridEnv(gym.Env):
 
         return observation_space
 
-    def reset(self, seed: int | None = None, state=None):
+    def reset(
+        self,
+        seed: int | None = None,
+        options: dict[str, np.typing.NDArray] = {"state": None},
+    ):
         super().reset(seed=seed)
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
+        state = options["state"]
         if state is not None:
             self._gen_grid(self.width, self.height, state)
         else:

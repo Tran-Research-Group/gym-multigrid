@@ -13,7 +13,16 @@ This repo is intended to be a lightweight, multi-agent, gridworld environment. I
 ```
 
 ## Getting started
-To modify or contribute to this project, install gym-multigrid from source. This repo uses [poetry](https://python-poetry.org/docs/) library dependency management. To install the dependencies for this project run:
+The library is available on PyPI, so you can simply run ```pip install gym-multigrid``` to add the package to your dependency!
+
+Alternatively, if you would like to install specific branch version of the package (for example, `dev` branch), run:
+```
+ pip install git+https://github.com/Tran-Research-Group/gym-multigrid.git@dev    
+```
+
+To modify or contribute to this project, install gym-multigrid from source. 
+This repo uses [poetry](https://python-poetry.org/docs/) library dependency management. 
+To install the dependencies for this project run:
 ```
 git clone https://github.com/Tran-Research-Group/gym-multigrid.git
 cd gym-multigrid
@@ -22,24 +31,29 @@ poetry install
 
 ## Included environments
 ### Capture-the-Flag (CtF)
+![2 v 2 CtF Game](./assets/ctf_mvn_fight_policy.gif)
+
+Agents move around to capture enemy's flag.
+The details are [here](./docs/environments/ctf.md).
 
 ### Collect Game
 ![Collect Game Respawn](./assets/collect-game-respawn.gif)
 
-| Attribute             | Description    |
-| --------------------- | -------------- |
-| Action Space          | `Discrete(4)`  |
-| Observation Space     | `np.array` of shape `grid.width x grid.height` |
-| Observation Encoding  |`(OBJECT_IDX, COLOR_IDX, STATE)` |
-| Reward                | `(0, 1)`       |
-| Number of Agents      | `2`            |
-| Termination Condition | `None`         |
-| Truncation Steps      | `50`           |
+| Attribute             | Description                                                |
+| --------------------- | ---------------------------------------------------------- |
+| Action Space          | `Discrete(4)`                                              |
+| Observation Space     | `np.array` of shape `grid.width x grid.height`             |
+| Observation Encoding  | `(OBJECT_IDX, COLOR_IDX, STATE)`                           |
+| Reward                | `(0, 1)`                                                   |
+| Number of Agents      | `2`                                                        |
+| Termination Condition | `None`                                                     |
+| Truncation Steps      | `50`                                                       |
 | Creation              | `gymnasium.make("multigrid-collect-respawn-clustered-v0")` |
 
 Agents move around the grid to collect objects. The object respawns in a random location after being collected.
 
 ### Maze
+
 ### Wildfire
 ![WildfireEnv Example](./assets/wildfire-env-example.gif)
 
