@@ -3,7 +3,7 @@
 """
 
 from collections import OrderedDict
-from typing import Optional
+from typing import Any
 import random
 
 from gymnasium.spaces import Box, Dict, Discrete
@@ -606,7 +606,7 @@ class WildfireEnv(MultiGridEnv):
         return state
 
     def reset(
-        self, seed: Optional[int] = None, state: Optional[npt.NDArray] = None
+        self, seed: int | None = None, options: dict[str, npt.NDArray] = {"state": None}
     ) -> tuple[OrderedDict[str, npt.NDArray], dict[str, int]]:
         """Reset the state of the environment
 
@@ -614,9 +614,8 @@ class WildfireEnv(MultiGridEnv):
         ----------
         seed : int, optional
             seed for random number generator, by default None
-        state : ndarray, optional
-            specifies the initial state of the environment upon reset, by default None.
-            If none, initial state is chosen uniformly at random from initial state distribution.
+        options : dict, optional
+            dictionary containing additional options for resetting the environment, by default {"state": None}. The state option specifies the initial state of the environment upon reset. If none, initial state is chosen uniformly at random from initial state distribution.
 
         Returns
         -------
@@ -634,9 +633,12 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_trees_on_fire = np.zeros(len(self.selfish_xmin))
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
 
+        # parse options
+        state = options["state"]
+
         # reset the grid
         if state is not None:
-            super().reset(seed=seed, state=state)
+            super().reset(seed=seed, options={"state": state})
         else:
             super().reset(seed=seed)
 
