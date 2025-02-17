@@ -89,6 +89,7 @@ class PreyConfig(TypedDict):
     type: str
     territory_dims: tuple[int, int]
     territory_left_top_corner: tuple[int, int]
+    color: str
 
 
 class ResetOptions(TypedDict):
@@ -114,15 +115,11 @@ class Prey(Agent):
         )
         self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
 
-        agent_color: Literal["blue", "green"] = (
-            "blue" if prey_config["type"] == "easy_prey" else "green"
-        )
-
         super().__init__(
             world=world,
             index=index,
             actions=NavigationActions,
-            color=agent_color,
+            color=prey_config["color"],
             bg_color="light_grey",
             type=prey_type["name"],
             view_size=view_size,
@@ -323,21 +320,25 @@ DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
         "type": "easy_prey",
         "territory_dims": (4, 4),
         "territory_left_top_corner": (2, 2),
+        "color": "yellow",
     },
     {
         "type": "easy_prey",
         "territory_dims": (4, 4),
         "territory_left_top_corner": (9, 2),
+        "color": "yellow",
     },
     {
         "type": "hard_prey",
         "territory_dims": (4, 4),
         "territory_left_top_corner": (2, 9),
+        "color": "red",
     },
     {
         "type": "hard_prey",
         "territory_dims": (4, 4),
         "territory_left_top_corner": (9, 9),
+        "color": "red",
     },
 ]
 DEFAULT_PREY_TYPES: list[PreyType] = [

@@ -153,30 +153,34 @@ register(
         "max_episode_steps": 300,
         "observation_config": {"encode_prey_areas": True},
         "pred_configs": [
-            {"init_pos": (6, 6), "policy_type": "ego", "color": "red"},
-            {"init_pos": (7, 7), "policy_type": "teammate", "color": "orange"},
-            {"init_pos": (8, 8), "policy_type": "teammate", "color": "yellow"},
+            {"init_pos": (6, 6), "policy_type": "ego", "color": "green"},
+            {"init_pos": (7, 7), "policy_type": "teammate", "color": "purple"},
+            {"init_pos": (8, 8), "policy_type": "teammate", "color": "purple"},
         ],
         "prey_configs": [
             {
                 "type": "easy_prey",
                 "territory_dims": (4, 4),
                 "territory_left_top_corner": (2, 2),
+                "color": "yellow",
             },
             {
                 "type": "easy_prey",
                 "territory_dims": (4, 4),
                 "territory_left_top_corner": (9, 2),
+                "color": "yellow",
             },
             {
                 "type": "hard_prey",
                 "territory_dims": (4, 4),
                 "territory_left_top_corner": (2, 9),
+                "color": "red",
             },
             {
                 "type": "hard_prey",
                 "territory_dims": (4, 4),
                 "territory_left_top_corner": (9, 9),
+                "color": "red",
             },
         ],
         "prey_types": [
