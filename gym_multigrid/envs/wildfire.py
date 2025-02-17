@@ -946,7 +946,7 @@ class WildfireEnv(MultiGridEnv):
             img = self.grid.render(
                 tile_size,
                 highlight_masks=highlight_masks if highlight else None,
-                uncached_object_types=self.uncahed_object_types,
+                uncached_object_types=self.uncached_object_types,
                 x_min=self.selfish_xmin,
                 y_min=self.selfish_ymin,
                 x_max=self.selfish_xmax,
@@ -957,7 +957,7 @@ class WildfireEnv(MultiGridEnv):
             img = self.grid.render(
                 tile_size,
                 highlight_masks=highlight_masks if highlight else None,
-                uncached_object_types=self.uncahed_object_types,
+                uncached_object_types=self.uncached_object_types,
             )
 
         # Re-render the tiles containing agents to include trees below agent

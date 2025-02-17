@@ -1,5 +1,9 @@
+import sys
+import os
 import pytest
 import numpy as np
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.maze import MazeSingleAgentEnv
 
 
@@ -17,4 +21,5 @@ def test_maze() -> None:
         obs, reward, terminated, truncated, info = env.step(action)
         env.render()
         if terminated or truncated:
+            print(f"episode ended after {env.step_count} steps")
             break

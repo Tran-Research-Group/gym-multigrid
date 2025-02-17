@@ -20,6 +20,3 @@ def test_collect_game(env_id) -> None:
             print(f"episode ended after {env.step_count} steps")
             print(f"agents collected {env.collected_balls} objects")
             break
-
-
-test_collect_game("gym_multigrid:multigrid-collect-v0")
