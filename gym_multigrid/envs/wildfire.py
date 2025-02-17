@@ -3,9 +3,11 @@
 """
 
 from collections import OrderedDict
+from typing import Optional
 import random
 from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
+import numpy.typing as npt
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.core.world import WildfireWorld
 from gym_multigrid.core.agent import WildfireActions, Agent
@@ -29,28 +31,28 @@ class WildfireEnv(MultiGridEnv):
 
     def __init__(
         self,
-        alpha=0.05,
-        beta=0.99,
-        delta_beta=0,
-        size=17,
-        num_agents=2,
-        agent_start_positions=((1, 1), (15, 15)),
-        agent_colors=("red", "blue"),
-        agent_groups=None,
-        agent_view_size=10,
-        initial_fire_size=1,
-        max_steps=100,
-        partial_obs=False,
-        actions_set=WildfireActions,
-        render_mode="rgb_array",
-        render_selfish_region_boundaries=False,
-        cooperative_reward=False,
-        altruism_weight=0.2,
-        log_selfish_region_metrics=False,
-        selfish_region_xmin=None,
-        selfish_region_xmax=None,
-        selfish_region_ymin=None,
-        selfish_region_ymax=None,
+        alpha: float = 0.05,
+        beta: float = 0.99,
+        delta_beta: float = 0,
+        size: int = 17,
+        num_agents: int = 2,
+        agent_start_positions: tuple[tuple[int, int], ...] = ((1, 1), (15, 15)),
+        agent_colors: tuple[str, ...] = ("red", "blue"),
+        agent_groups: tuple[tuple[int, ...], ...] | None = None,
+        agent_view_size: int = 10,
+        initial_fire_size: int = 1,
+        max_steps: int = 100,
+        partial_obs: bool = False,
+        actions_set: WildfireActions = WildfireActions,
+        render_mode: str = "rgb_array",
+        render_selfish_region_boundaries: bool = False,
+        cooperative_reward: bool = False,
+        altruism_weight: float = 0.2,
+        log_selfish_region_metrics: bool = False,
+        selfish_region_xmin: list[int] | None = None,
+        selfish_region_xmax: list[int] | None = None,
+        selfish_region_ymin: list[int] | None = None,
+        selfish_region_ymax: list[int] | None = None,
     ):
         """Create a WildfireEnv environment
 
@@ -234,7 +236,7 @@ class WildfireEnv(MultiGridEnv):
 
         return observation_space
 
-    def _gen_grid(self, width, height, state=None):
+    def _gen_grid(self, width: int, height: int, state: npt.NDArray | None = None):
         """Generate the grid for the environment
 
         Parameters
@@ -381,7 +383,7 @@ class WildfireEnv(MultiGridEnv):
             self.place_agent(a, pos=agent_start_pos[i])
             self.helper_grid.get(*agent_start_pos[i]).agent_above = True
 
-    def _get_obs(self) -> list[np.typing.NDArray]:
+    def _get_obs(self) -> list[npt.NDArray]:
         """Get observation vectors of all agents in the environment.
 
         Returns
@@ -452,7 +454,7 @@ class WildfireEnv(MultiGridEnv):
             )
         return agent_obs
 
-    def get_state(self):
+    def get_state(self) -> npt.NDArray:
         """Get the state representation of the environment.
 
         Returns
@@ -493,7 +495,9 @@ class WildfireEnv(MultiGridEnv):
         )
         return s
 
-    def get_state_interpretation(self, state, print_interpretation=True):
+    def get_state_interpretation(
+        self, state: npt.NDArray, print_interpretation: bool = True
+    ) -> tuple[list[tuple[int, int]], float]:
         """Get human readable interpretation of the state of the environment
 
         Parameters
@@ -538,7 +542,12 @@ class WildfireEnv(MultiGridEnv):
             print("-------------------------------------------------------------")
         return trees_on_fire, time_step
 
-    def construct_state(self, trees_on_fire, agent_pos, time_step: int):
+    def construct_state(
+        self,
+        trees_on_fire: list[tuple[int, int]],
+        agent_pos: list[tuple[int, int]],
+        time_step: int,
+    ) -> npt.NDArray:
         """Construct the state representation vector of the environment for given positions of trees on fire and agents
 
         Parameters
@@ -594,7 +603,9 @@ class WildfireEnv(MultiGridEnv):
         )
         return state
 
-    def reset(self, seed: int | None = None, state=None):
+    def reset(
+        self, seed: Optional[int] = None, state: Optional[npt.NDArray] = None
+    ) -> tuple[OrderedDict[str, npt.NDArray], dict[str, int]]:
         """Reset the state of the environment
 
         Parameters
@@ -635,7 +646,7 @@ class WildfireEnv(MultiGridEnv):
         info = {"burnt trees": self.burnt_trees}
         return obs, info
 
-    def move_agent(self, i, next_pos):
+    def move_agent(self, i: int, next_pos: tuple[int, int]):
         """Move agent to a new position in the grid
 
         Parameters
@@ -658,7 +669,7 @@ class WildfireEnv(MultiGridEnv):
         next_tree.agent_above = True
         self.agents[i].pos = next_pos
 
-    def neighbors_on_fire(self, tree_pos) -> int:
+    def neighbors_on_fire(self, tree_pos: tuple[int, int]) -> int:
         """Get the number of neighboring trees on fire for a given tree.
            Neighbors are adjacent trees in the cardinal directions. A tree can have at most 4 neighbors
 
@@ -713,7 +724,11 @@ class WildfireEnv(MultiGridEnv):
             and j <= self.selfish_ymax[region_index]
         )
 
-    def step(self, actions):
+    def step(
+        self, actions: dict[str, int]
+    ) -> tuple[
+        OrderedDict[str, npt.NDArray], dict[str, int], bool, dict[str, dict[str, int]]
+    ]:
         """Take a step in the environment. Wildfire dynamics are propagated by one time step, and agents move according to their actions.
 
         Parameters
@@ -728,7 +743,9 @@ class WildfireEnv(MultiGridEnv):
         rewards : dict
             dictionary where each key is the agent index and the value is the reward given to that agent after the environment step.
         terminated : bool
-            True, if the episode is done, otherwise, False. Episode is done if maximum number of steps is reached or there are zero trees on fire.
+            True, if the episode is terminated, otherwise, False. Episode is terminated if there are zero trees on fire.
+        truncated : bool
+            True, if the episode is truncated, otherwise, False. Episode is done if maximum number of steps is reached.
         info : dict
             dictionary where each key is the agent index and the value is an info dictionary containing additional information about the environment. Here, each agent's info dictionary contains the same information, viz., the number of burnt trees.
         """
@@ -853,7 +870,9 @@ class WildfireEnv(MultiGridEnv):
 
         return next_obs, rewards, terminated, truncated, infos
 
-    def render(self, close=False, highlight=False, tile_size=TILE_PIXELS):
+    def render(
+        self, close: bool = False, highlight: bool = False, tile_size: int = TILE_PIXELS
+    ) -> npt.NDArray:
         """Render the whole-grid human view
 
         Parameters

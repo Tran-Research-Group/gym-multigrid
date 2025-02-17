@@ -41,7 +41,7 @@ def test_wildfire() -> None:
             actions = {
                 f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
             }
-            obs, reward, done, _ = env.step(actions)
+            obs, reward, terminated, truncated, _ = env.step(actions)
             frames.append(env.render())
             if terminated or truncated:
                 break

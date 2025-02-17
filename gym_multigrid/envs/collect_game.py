@@ -34,7 +34,7 @@ class CollectGameEnv(MultiGridEnv):
             Whether or not balls respawn after being collected.
         """
         self.size = kwargs["size"]
-        self.num_balls = np.sum(np.array(kwargs["num_balls"]))
+        self.num_balls = int(np.sum(np.array(kwargs["num_balls"])))
         self.collected_balls = 0
         self.balls_index = kwargs["balls_index"]
         self.balls_reward = kwargs["balls_reward"]
@@ -191,19 +191,19 @@ class CollectGameEnv(MultiGridEnv):
         truncated: bool = False
         self.step_count += 1
         for i in order:
-            if actions[i] == self.actions.north:
+            if actions[i] == self.actions.NORTH:
                 next_pos = self.agents[i].north_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.east:
+            elif actions[i] == self.actions.EAST:
                 next_pos = self.agents[i].east_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.south:
+            elif actions[i] == self.actions.SOUTH:
                 next_pos = self.agents[i].south_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.west:
+            elif actions[i] == self.actions.WEST:
                 next_pos = self.agents[i].west_pos()
                 next_cell = self.grid.get(*next_pos)
                 self.move_agent(rewards, i, next_cell, next_pos)
