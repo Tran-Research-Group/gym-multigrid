@@ -47,6 +47,7 @@ class ObservationConfig(TypedDict):
 class PredatorConfig(TypedDict):
     init_pos: tuple[int, int]
     policy_type: Literal["teammate", "ego"]
+    color: str
 
 
 class PreyType(TypedDict):
@@ -291,7 +292,7 @@ class Predator(Agent):
             world=world,
             index=index,
             actions=NavigationActions,
-            color="orange",
+            color=pred_config["color"],
             bg_color="white",
             type="predator",
             view_size=view_size,
@@ -312,9 +313,9 @@ DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
 }
 
 DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
-    {"init_pos": (6, 6), "policy_type": "ego"},
-    {"init_pos": (7, 7), "policy_type": "teammate"},
-    {"init_pos": (8, 8), "policy_type": "teammate"},
+    {"init_pos": (6, 6), "policy_type": "ego", "color": "red"},
+    {"init_pos": (7, 7), "policy_type": "teammate", "color": "orange"},
+    {"init_pos": (8, 8), "policy_type": "teammate", "color": "yellow"},
 ]
 
 DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
