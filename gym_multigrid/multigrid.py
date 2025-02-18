@@ -230,7 +230,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         self,
         *,
         seed: int | None = None,
-        options: dict | None = {"state": None},
+        options: dict | None = None,
     ) -> tuple[ObsType, dict]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
@@ -243,9 +243,12 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
         # if state is given in options, then use it to generate the grid with given state as the initial state
-        state = options["state"]
-        if state is not None:
-            self._gen_grid(self.width, self.height, state)
+        if options is not None:
+            state = options["state"]
+            if state is not None:
+                self._gen_grid(self.width, self.height, state)
+            else:
+                self._gen_grid(self.width, self.height)
         else:
             self._gen_grid(self.width, self.height)
 
