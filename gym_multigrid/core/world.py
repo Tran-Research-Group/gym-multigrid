@@ -1,6 +1,5 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
-
 from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import (
@@ -15,6 +14,8 @@ WorldT = TypeVar("WorldT", bound="World")
 
 @dataclass
 class World:
+    """This class defines the world within which grid is situated."""
+
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
@@ -84,6 +85,18 @@ CollectWorld = World(
         "wall": 1,
         "ball": 2,
         "agent": 3,
+    },
+)
+
+WildfireWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "tree": 1,
+        "agent": 2,
+        "wall": 3,
     },
 )
 

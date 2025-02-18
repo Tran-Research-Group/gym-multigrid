@@ -1,10 +1,11 @@
 from typing import TypeVar, Final
 import numpy as np
 from numpy.typing import NDArray
-
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.typing import Position
-from ..utils.rendering import *
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
+
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
 
@@ -21,6 +22,19 @@ class WorldObj:
         color: str = "grey",
         bg_color: str | None = None,
     ):
+        """Create a WorldObj object
+
+        Parameters
+        ----------
+        world : WorldT
+            the world in which the object exists
+        type : str, optional
+            type of the object, by default "base"
+        color : str, optional
+            color of the object, by default "grey"
+        bg_color : str | None, optional
+            background color of the tile containing object, by default None
+        """
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type
@@ -399,6 +413,34 @@ class Flag(WorldObj):
             self.world.COLORS[self.color],
             self.world.COLORS[self.bg_color] if self.bg_color else None,
         )
+
+
+class Tree(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        tree_state_idx: int = 0,
+        region: str = "common",
+    ):
+        super().__init__(world, "tree", STATE_IDX_TO_COLOR_WILDFIRE[tree_state_idx])
+        self.state = tree_state_idx
+        self.agent_above = False
+        self.region = region
+
+    def can_overlap(self):
+        return True
+
+    def encode(self, current_agent: bool = False):
+        return (
+            self.world.OBJECT_TO_IDX[self.type],
+            self.world.COLOR_TO_IDX[self.color],
+            self.state,
+        )
+
+    def render(self, img):
+        c = self.world.COLORS[self.color]
+
+        fill_coords(img, point_in_rect(0, 1, 0, 1), c)
 
 
 class AgentGoal(WorldObj):

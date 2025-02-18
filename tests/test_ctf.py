@@ -1,10 +1,13 @@
 import pytest
 import os
+import sys
 
 import numpy as np
+import matplotlib.pyplot as plt
 import imageio
 from stable_baselines3 import PPO
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.ctf import Ctf1v1Env, CtfMvNEnv
 from gym_multigrid.policy.ctf.heuristic import (
     FightPolicy,
@@ -15,7 +18,6 @@ from gym_multigrid.policy.ctf.heuristic import (
     RoombaPolicy,
 )
 from gym_multigrid.utils.map import load_text_map
-import matplotlib.pyplot as plt
 
 
 def test_ctf() -> None:
@@ -53,6 +55,7 @@ def test_ctf_pos_map() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave("tests/out/animations/ctf_pos_map.gif", frames, duration=0.5)
     assert terminated or truncated
 
@@ -73,6 +76,7 @@ def test_ctf_pos_map_flattened() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(
         "tests/out/animations/ctf_pos_map_flattened.gif", frames, duration=0.5
     )
@@ -111,6 +115,7 @@ def test_ctf_tensor(
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave("tests/out/animations/ctf_tensor.gif", frames, duration=0.5)
     assert terminated or truncated
 
@@ -170,6 +175,7 @@ def test_ctf_mvn_rgb() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave("tests/out/animations/ctf_mvn.gif", frames, duration=0.5)
 
     assert os.path.exists("tests/out/animations/ctf_mvn.gif")
@@ -200,6 +206,7 @@ def test_fight_policy() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
@@ -230,6 +237,7 @@ def test_capture_policy() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
@@ -260,6 +268,7 @@ def test_patrol_policy() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
@@ -290,6 +299,7 @@ def test_patrol_fight_policy() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
@@ -320,6 +330,7 @@ def test_roomba_policy() -> None:
         if terminated or truncated:
             break
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.5)
 
     assert os.path.exists(animation_path)
@@ -342,6 +353,7 @@ def test_mvn_ctf_render() -> None:
         obs, reward, terminated, truncated, info = env.step(action)
 
     img = env.render()
+    os.makedirs("tests/out/plots", exist_ok=True)
     plt.imsave(img_save_path, img, dpi=600)
 
     assert os.path.exists(img_save_path)

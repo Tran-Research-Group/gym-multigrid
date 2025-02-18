@@ -242,7 +242,15 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
-        self._gen_grid(self.width, self.height)
+        # if state is given in options, then use it to generate the grid with given state as the initial state
+        if options is not None:
+            state = options["state"]
+            if state is not None:
+                self._gen_grid(self.width, self.height, state)
+            else:
+                self._gen_grid(self.width, self.height)
+        else:
+            self._gen_grid(self.width, self.height)
 
         # Agent status should be reset inside self._gen_grid
         self._reset_agents()
