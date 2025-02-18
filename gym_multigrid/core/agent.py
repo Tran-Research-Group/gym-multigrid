@@ -9,9 +9,9 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
-from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
-from .object import WorldObj
-from .constants import DIR_TO_VEC
+from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
+from gym_multigrid.core.object import WorldObj
+from gym_multigrid.core.constants import DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 

@@ -1,11 +1,13 @@
 from typing import Literal
 import pytest
+import sys
+import os
 
 import numpy as np
 from numpy.typing import NDArray
-
 import imageio
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.labyrinth import GoalGroupConfig, LabyrinthEnv, RewardConfig
 
 
