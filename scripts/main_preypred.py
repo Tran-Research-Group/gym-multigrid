@@ -44,7 +44,7 @@ while True:
     ]
     obs, reward, terminated, truncated, _ = env.step(actions)
     print(f"Reward: {reward}")
-    pprint.pprint(obs)
+    # pprint.pprint(obs)
     frames.append(env.render())
     if terminated or truncated:
         break
