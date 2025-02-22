@@ -11,6 +11,8 @@ import gym_multigrid
 def test_collect_game(env_id) -> None:
     """Test collect_game()"""
     env = gym.make(env_id)
+    # Unwrap the TimeLimit wrapper to access the underlying environment
+    env = env.unwrapped
 
     obs, info = env.reset()
     while True:

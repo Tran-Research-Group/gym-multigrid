@@ -4,6 +4,23 @@ from gymnasium.envs.registration import register
 # Collect game with 2 agents and 3 object types
 # ----------------------------------------
 register(
+    id="multigrid-collect-v1",
+    entry_point="gym_multigrid.envs:CollectGameEvenDist",
+    max_episode_steps=100,
+    kwargs={
+        "size": 15,
+        "num_balls": 20,
+        "agents_index": [4, 5, 7, 8],  # green, purple
+        "balls_index": [0, 1, 2, 3],  # red, orange, yellow
+        "balls_reward": [1, 1, 1, 1],
+        "respawn": False,
+    },
+)
+
+
+# Collect game with 2 agents and 3 object types
+# ----------------------------------------
+register(
     id="multigrid-collect-v0",
     entry_point="gym_multigrid.envs:CollectGameEvenDist",
     max_episode_steps=100,

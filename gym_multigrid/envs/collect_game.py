@@ -45,13 +45,18 @@ class CollectGameEnv(MultiGridEnv):
         self.actions_set = CollectActions
         partial_obs: bool = False
         self.info = {}
+        # self.keys = [
+        #     "agent1ball1",
+        #     "agent1ball2",
+        #     "agent1ball3",
+        #     "agent2ball1",
+        #     "agent2ball2",
+        #     "agent2ball3",
+        # ]
         self.keys = [
-            "agent1ball1",
-            "agent1ball2",
-            "agent1ball3",
-            "agent2ball1",
-            "agent2ball2",
-            "agent2ball3",
+        f"agent{agent_index + 1}ball{ball_type + 1}"
+        for agent_index in range(len(self.agents_index))
+        for ball_type in range(self.num_ball_types)
         ]
 
         agents = []
@@ -68,7 +73,7 @@ class CollectGameEnv(MultiGridEnv):
             agents=agents,
             partial_obs=partial_obs,
             actions_set=self.actions_set,
-            render_mode="rgb_array",
+            render_mode="human",
         )
 
     def _gen_grid(self, width: int, height: int):
@@ -108,14 +113,15 @@ class CollectGameEnv(MultiGridEnv):
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.collected_balls = 0
-        self.info = {
-            "agent1ball1": 0,
-            "agent1ball2": 0,
-            "agent1ball3": 0,
-            "agent2ball1": 0,
-            "agent2ball2": 0,
-            "agent2ball3": 0,
-        }
+        # self.info = {
+        #     "agent1ball1": 0,
+        #     "agent1ball2": 0,
+        #     "agent1ball3": 0,
+        #     "agent2ball1": 0,
+        #     "agent2ball2": 0,
+        #     "agent2ball3": 0,
+        # }
+        self.info = {key: 0 for key in self.keys}
         super().reset(seed=seed)
         state = self.grid.encode()
         return state, self.info
@@ -232,7 +238,7 @@ class CollectGameEvenDist(CollectGameEnv):
     Collect game instance that has the same amount of balls
     for each type of ball present
     """
-
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}  # Add render_fps here
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_balls_per_type = self.num_balls // len(self.balls_index)
