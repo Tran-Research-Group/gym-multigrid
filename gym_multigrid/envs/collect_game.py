@@ -53,6 +53,7 @@ class CollectGameEnv(MultiGridEnv):
         #     "agent2ball2",
         #     "agent2ball3",
         # ]
+        # Updated keys to use variable number of agents and ball types
         self.keys = [
         f"agent{agent_index + 1}ball{ball_type + 1}"
         for agent_index in range(len(self.agents_index))
@@ -121,6 +122,7 @@ class CollectGameEnv(MultiGridEnv):
         #     "agent2ball2": 0,
         #     "agent2ball3": 0,
         # }
+        # Updated dictionary to use variable number of agents and ball types
         self.info = {key: 0 for key in self.keys}
         super().reset(seed=seed)
         state = self.grid.encode()

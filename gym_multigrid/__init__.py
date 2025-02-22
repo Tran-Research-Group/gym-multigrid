@@ -1,8 +1,8 @@
 from gymnasium.envs.registration import register
 
 
-# Collect game with 2 agents and 3 object types
-# ----------------------------------------
+# Collect game with 4 agents and 4 object types
+# ---------------------------------------------
 register(
     id="multigrid-collect-v1",
     entry_point="gym_multigrid.envs:CollectGameEvenDist",
@@ -10,12 +10,13 @@ register(
     kwargs={
         "size": 15,
         "num_balls": 20,
-        "agents_index": [4, 5, 7, 8],  # green, purple
-        "balls_index": [0, 1, 2, 3],  # red, orange, yellow
-        "balls_reward": [1, 1, 1, 1],
-        "respawn": False,
+        "agents_index": [4, 5, 7, 8],  # Agents: Blue (4), Purple (5), Brown (7), Cyan (8)
+        "balls_index": [0, 1, 2, 3],  # Objects: Red (0), Orange (1), Yellow (2), Green (3)
+        "balls_reward": [1, 1, 1, 1],  # Reward for collecting each object type
+        "respawn": False,  # Objects do not respawn after being collected
     },
 )
+
 
 
 # Collect game with 2 agents and 3 object types
