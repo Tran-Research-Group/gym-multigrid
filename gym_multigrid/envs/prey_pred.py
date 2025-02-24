@@ -47,6 +47,7 @@ class ObservationConfig(TypedDict):
 class PredatorConfig(TypedDict):
     init_pos: tuple[int, int]
     policy_type: Literal["teammate", "ego"]
+    target_preys: list[int]
     color: str
 
 
@@ -307,6 +308,10 @@ class Predator(Agent):
 
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
+
+    @property
+    def target_preys(self) -> list[int]:
+        return self.pred_config["target_preys"]
 
 
 DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
@@ -865,10 +870,27 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                                 self.grid
                             )
                             if prey_captured:
-                                prey.terminated = True
-                                prey.captured_by = pred_ids
-                                reward += prey.prey_type["capture_reward"]
-                                self.grid.set(*prey.pos, self.init_grid.get(*prey.pos))
+                                captured_by_designated_preds: bool = True
+
+                                for pred_id in pred_ids:
+                                    if (
+                                        self.agents[pred_id].target_preys[prey.index]
+                                        == 1
+                                    ):
+                                        continue
+                                    else:
+                                        captured_by_designated_preds = False
+                                        break
+
+                                if captured_by_designated_preds:
+                                    prey.terminated = True
+                                    prey.captured_by = pred_ids
+                                    reward += prey.prey_type["capture_reward"]
+                                    self.grid.set(
+                                        *prey.pos, self.init_grid.get(*prey.pos)
+                                    )
+                                else:
+                                    pass
                             else:
                                 continue
 
@@ -936,6 +958,10 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
     @property
     def prey_agents(self) -> list[Prey]:
         return self.agents[self.num_preds :]
+
+    @property
+    def pred_agents(self) -> list[Predator]:
+        return self.agents[: self.num_preds]
 
 
 class BasePolicy:
