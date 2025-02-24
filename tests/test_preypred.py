@@ -16,6 +16,22 @@ def test_preypred_init() -> None:
     assert env is not None
 
 
+def test_preypred_get_info() -> None:
+    env = gym.make("multigrid-preypred-v0")
+    obs, info = env.reset()
+
+    true_info = {
+        "captured_preys": [
+            {"prey_id": 0, "prey_type": "easy_prey", "captured_by": []},
+            {"prey_id": 1, "prey_type": "easy_prey", "captured_by": []},
+            {"prey_id": 2, "prey_type": "hard_prey", "captured_by": []},
+            {"prey_id": 3, "prey_type": "hard_prey", "captured_by": []},
+        ]
+    }
+
+    assert info == true_info
+
+
 def test_preypred_step() -> None:
     """Test PreyPredEnv step"""
     animation_path = "tests/out/animations/test_preypred_step.gif"
