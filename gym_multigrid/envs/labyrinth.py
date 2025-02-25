@@ -22,8 +22,8 @@ class TriggerConfig(TypedDict):
 
 
 class SubtaskConfig(TypedDict):
+    next_subtask: int | Literal["terminal"]
     goal_group_index: int
-    next_goal_group_index: int | Literal["terminal"]
     assigned_agent_goal: dict[int, tuple[int, int]]
     triggers: list[TriggerConfig]
 
@@ -217,18 +217,46 @@ ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)
 class Subtask:
     def __init__(
         self,
+        next_subtask: int | Literal["terminal"],
         goal_group_index: int,
-        next_goal_group_index: int | Literal["terminal"],
         assigned_agent_goal: dict[int, tuple[int, int]],
         triggers: list[TriggerConfig],
     ) -> None:
+        self.next_subtask: int | Literal["terminal"] = next_subtask
         self.goal_group_index: int = goal_group_index
-        self.next_goal_group_index: int | Literal["terminal"] = next_goal_group_index
         self.assigned_agent_goal: dict[int, tuple[int, int]] = assigned_agent_goal
-        self.triggers: list[TriggerConfig] = triggers
+        self.triggers: list[Trigger] = [Trigger(**trigger) for trigger in triggers]
 
-    def agents_on_goals(self, agents: list[Agent]) -> bool:
-        for agent_index, goal_pos in self.assigned_agent_goal.items():
+
+class Trigger:
+    def __init__(
+        self,
+        condition: str,
+        action: str,
+        obj_type: str,
+        obj_group: int,
+    ) -> None:
+        self.condition: str = condition
+        self.action: str = action
+        self.obj_type: str = obj_type
+        self.obj_group: int = obj_group
+
+        self.triggered: bool = False
+
+    def trigger_action(
+        self, obj_group_dict: dict[str, dict[int, ObjGroupT]], grid: Grid
+    ) -> None:
+        obj_group_dict[self.obj_type][self.obj_group].apply_obj_action(
+            self.action, grid
+        )
+
+        self.triggered = True
+
+    def is_condition_satisfied(self, agents: list[Agent], subtask: Subtask) -> bool:
+        return getattr(self, self.condition)(agents, subtask)
+
+    def agents_on_goals(self, agents: list[Agent], subtask: Subtask) -> bool:
+        for agent_index, goal_pos in subtask.assigned_agent_goal.items():
             if (
                 agents[agent_index].pos[0] != goal_pos[0]
                 or agents[agent_index].pos[1] != goal_pos[1]
@@ -238,12 +266,6 @@ class Subtask:
                 pass
 
         return True
-
-    def open(self, obj_group_dict: dict[str, dict[int, ObjGroupT]], grid: Grid) -> None:
-        for trigger in self.triggers:
-            obj_group_dict[trigger["obj_type"]][trigger["obj_group"]].apply_obj_action(
-                "open", grid
-            )
 
 
 class Detector:
@@ -291,7 +313,7 @@ class Detector:
 subtask_config: list[SubtaskConfig] = [
     {
         "goal_group_index": 0,
-        "next_goal_group_index": 2,
+        "next_subtask": 2,
         "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
         "triggers": [
             {
@@ -304,7 +326,7 @@ subtask_config: list[SubtaskConfig] = [
     },
     {
         "goal_group_index": 1,
-        "next_goal_group_index": 2,
+        "next_subtask": 2,
         "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
         "triggers": [
             {
@@ -317,7 +339,7 @@ subtask_config: list[SubtaskConfig] = [
     },
     {
         "goal_group_index": 2,
-        "next_goal_group_index": 3,
+        "next_subtask": 3,
         "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
         "triggers": [
             {
@@ -330,7 +352,7 @@ subtask_config: list[SubtaskConfig] = [
     },
     {
         "goal_group_index": 3,
-        "next_goal_group_index": "terminal",
+        "next_subtask": "terminal",
         "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
         "triggers": [],
     },
@@ -416,7 +438,7 @@ obj_group_config: list[ObjectGroupConfig] = [
     },
 ]
 
-detection_config: list[DetectorConfig] = [
+detector_config: list[DetectorConfig] = [
     {
         "obj_type": "zone",
         "group_index": 0,
@@ -603,12 +625,13 @@ class LabyrinthEnv(MultiGridEnv):
         init_pos: tuple[tuple[int, int], ...] = [(1, 3), (1, 4), (1, 5)],
         subtask_config: list[SubtaskConfig] = subtask_config,
         obj_group_config: list[ObjectGroupConfig] = obj_group_config,
-        detector_config: list[DetectorConfig] = detection_config,
+        detector_config: list[DetectorConfig] = detector_config,
         reward_config: RewardConfig = reward_config,
-        observation_option: Literal["final_goal", "intermediate_goal"] = "final_goal",
+        observation_option: Literal[
+            "final_goal", "intermediate_goal"
+        ] = "intermediate_goal",
         width: int = 10,
         height: int = 9,
-        max_steps: int = 100,
         actions_set: type[ActionsT] = NavigationActions,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         world: WorldT = LabyrinthWorld,
@@ -659,8 +682,6 @@ class LabyrinthEnv(MultiGridEnv):
             Width of the grid.
         height : int = 9
             Height of the grid.
-        max_steps : int = 100
-            Maximum number of steps in the environment.
         actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -692,22 +713,20 @@ class LabyrinthEnv(MultiGridEnv):
         self.final_goal: tuple[tuple[int, int], ...] = ()
         self.agent_goals: dict[int, list[tuple[int, int]]] = {}
 
-        self.subtasks: list[Subtask] = [
-            Subtask(**subtask) for subtask in self.subtask_config
-        ]
+        self.subtask_dict: dict[int, Subtask] = {
+            i: Subtask(**subtask_config[i]) for i in range(len(subtask_config))
+        }
 
-        for subtask in self.subtasks:
+        for subtask in self.subtask_dict.values():
             for agent_index, pos in subtask.assigned_agent_goal.items():
                 if agent_index in self.agent_goals:
                     self.agent_goals[agent_index].append(pos)
                 else:
                     self.agent_goals[agent_index] = [pos]
 
-            if subtask.next_goal_group_index == "terminal":
+            if subtask.next_subtask == "terminal":
                 self.final_goal = tuple(subtask.assigned_agent_goal.values())
                 self.final_goal_group_index = subtask.goal_group_index
-
-        self.init_goal_group_indices: list[int] = self._find_first_goal_groups()
 
         uncached_object_types: list[str] = ["agent"]
 
@@ -715,7 +734,6 @@ class LabyrinthEnv(MultiGridEnv):
             agents=agents,
             width=width,
             height=height,
-            max_steps=max_steps,
             actions_set=actions_set,
             world=world,
             render_mode=render_mode,
@@ -752,16 +770,16 @@ class LabyrinthEnv(MultiGridEnv):
 
         return observation_space
 
-    def _find_first_goal_groups(self) -> list[int]:
+    def _find_first_subtasks(self) -> list[int]:
         # 1. Construct the graph of the goal groups
         # Each tuple contains (goal_group_index, next_goal)
         nodes: list[tuple[int, int | None]] = []
         final_nodes: list[tuple[int, int | None]] = []
-        for subtask in self.subtasks:
-            if subtask.next_goal_group_index == "terminal":
+        for subtask_id, subtask in self.subtask_dict.items():
+            if subtask.next_subtask == "terminal":
                 final_nodes.append((subtask.goal_group_index, None))
             else:
-                nodes.append((subtask.goal_group_index, subtask.next_goal_group_index))
+                nodes.append((subtask_id, subtask.next_subtask))
 
         # 2. Find the first goal groups from the final goal groups
         while True:
@@ -791,7 +809,23 @@ class LabyrinthEnv(MultiGridEnv):
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         super().reset(seed=seed, options=options)
 
-        self.current_goal_group_indices: list[int] = self.init_goal_group_indices
+        self.current_subtasks: list[Subtask] = [
+            self.subtask_dict[subtask_id] for subtask_id in self._find_first_subtasks()
+        ]
+
+        self.rewarded_subtasks: list[Subtask]
+        if self.reward_config["reward_option"] == "final_goal":
+            self.rewarded_subtasks = [
+                subtask
+                for subtask in self.current_subtasks
+                if subtask.next_subtask == "terminal"
+            ]
+        elif self.reward_config["reward_option"] == "intermediate_goal":
+            self.rewarded_subtasks = self.current_subtasks
+        else:
+            raise ValueError(
+                f"Invalid reward option: {self.reward_config['reward_option']}"
+            )
 
         obs = self._get_obs()
         info: dict[str, Any] = self._get_info()
@@ -984,31 +1018,19 @@ class LabyrinthEnv(MultiGridEnv):
 
         return False
 
-    def _is_agent_on_assigned_goal(self, pos: Position, agent_index: int) -> int:
-        if isinstance(self.init_grid.get(*pos), AgentGoal):
-            cell: AgentGoal = self.init_grid.get(*pos)
-            if (
-                cell.goal_group in self.current_goal_group_indices
-                and cell.accepting_agent_idx == agent_index
-            ):
-                return cell.goal_group
+    def _is_agent_on_assigned_goal(
+        self, pos: tuple[int, int], agent_index: int, current_subtasks: list[Subtask]
+    ) -> int:
+        for subtask in current_subtasks:
+            if pos == subtask.assigned_agent_goal[agent_index]:
+                return subtask.goal_group_index
             else:
-                return -1
-        else:
-            return -1
+                pass
+
+        return -1
 
     def compute_reward(self, actions: NDArray[np.int_]) -> float:
-        reward: float = 0
-
-        # Change the targeted goals based on the reward option
-        if self.reward_config["reward_option"] == "final_goal":
-            targeted_goals: list[int] = [self.final_goal_group_index]
-        elif self.reward_config["reward_option"] == "intermediate_goal":
-            targeted_goals: list[int] = self.current_goal_group_indices
-        else:
-            raise ValueError(
-                f"Invalid reward option: {self.reward_config['reward_option']}"
-            )
+        reward: float = 0.0
 
         # 1. Movement penalty for each agent if an action is not "stay"
         reward += self.reward_config["movement_reward"] * np.sum(
@@ -1019,15 +1041,21 @@ class LabyrinthEnv(MultiGridEnv):
         agent_goal_statuses: list[int] = []
         for agent in self.agents:
             agent_goal_statuses.append(
-                self._is_agent_on_assigned_goal(agent.pos, agent.index)
+                self._is_agent_on_assigned_goal(
+                    agent.pos, agent.index, self.current_subtasks
+                )
             )
 
         num_goaled_agents: int = 0
-        for agent_goal_status in agent_goal_statuses:
-            if agent_goal_status in targeted_goals:
-                num_goaled_agents += 1
-            else:
-                pass
+        for agent in self.agents:
+            for subtask in self.rewarded_subtasks:
+                if (
+                    agent.index in subtask.assigned_agent_goal
+                    and agent.pos == subtask.assigned_agent_goal[agent.index]
+                ):
+                    num_goaled_agents += 1
+                else:
+                    pass
 
         reward += num_goaled_agents * self.reward_config["agent_on_goal_reward"]
 
@@ -1035,49 +1063,49 @@ class LabyrinthEnv(MultiGridEnv):
         for agent, action in zip(self.agents, actions):
             prev_pos: Position = self._get_previous_agent_pos(action, agent)
             prev_agent_goal: int = self._is_agent_on_assigned_goal(
-                prev_pos, agent.index
+                prev_pos, agent.index, self.rewarded_subtasks
             )
             curr_agent_goal: int = self._is_agent_on_assigned_goal(
-                agent.pos, agent.index
+                agent.pos, agent.index, self.rewarded_subtasks
             )
 
             # If the reward option is "final_goal", the penalty is given only if the agent was on the final goal.
-            if prev_agent_goal in targeted_goals and prev_agent_goal != curr_agent_goal:
+            if prev_agent_goal != curr_agent_goal:
                 reward += self.reward_config["agent_move_away_from_goal_reward"]
             else:
                 pass
 
         # 4. Reward for all agents if they are on their assigned goals on the same goal group and unlock the door
         # If the door is already unlocked, the reward is not given.
-        if (
-            np.all(np.array(agent_goal_statuses) == agent_goal_statuses[0])
-            and agent_goal_statuses[0] in self.current_goal_group_indices
-        ):
-            goal_group_index: int = agent_goal_statuses[0]
+        for subtask in self.current_subtasks:
+            all_conditions_satisfied: bool = True
+            for trigger in subtask.triggers:
+                if not trigger.is_condition_satisfied(self.agents, subtask):
+                    all_conditions_satisfied = False
+                    break
+                else:
+                    pass
 
-            if self.obj_group_dict["goal"][goal_group_index].is_door_locked(
-                self.obj_group_dict["door"]
-            ):
-                self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["door"], self.grid
-                )
-                self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["door"], self.init_grid
-                )
+            if all_conditions_satisfied:
+                for trigger in subtask.triggers:
+                    trigger.trigger_action(self.obj_group_dict, self.grid)
+                    trigger.trigger_action(self.obj_group_dict, self.init_grid)
 
-                self.current_goal_group_indices = [
-                    self.obj_group_dict["goal"][goal_group_index].next_goal
-                ]
+                if subtask in self.rewarded_subtasks:
+                    reward += self.reward_config["all_agents_on_goal_reward"]
+                else:
+                    pass
 
+                self.current_subtasks = [self.subtask_dict[subtask.next_subtask]]
+
+                if reward_config["reward_option"] == "intermediate_goal":
+                    self.rewarded_subtasks = self.current_subtasks
+                else:
+                    pass
+
+                break
             else:
                 pass
-
-            # The reward is given only if all the agents are on the target goal group.
-            reward += (
-                self.reward_config["all_agents_on_goal_reward"]
-                if goal_group_index in targeted_goals
-                else 0
-            )
 
         return reward
 
