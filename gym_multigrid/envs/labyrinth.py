@@ -801,6 +801,12 @@ class LabyrinthEnv(MultiGridEnv):
             i: Subtask(**subtask_config[i]) for i in range(len(subtask_config))
         }
 
+        self.terminal_subtasks: list[Subtask] = [
+            subtask
+            for subtask in self.subtask_dict.values()
+            if subtask.next_subtask == "terminal"
+        ]
+
         for subtask in self.subtask_dict.values():
             for agent_index, pos in subtask.assigned_agent_goal.items():
                 if agent_index in self.agent_goals:
@@ -1163,7 +1169,7 @@ class LabyrinthEnv(MultiGridEnv):
             )
 
             # If the reward option is "final_goal", the penalty is given only if the agent was on the final goal.
-            if prev_agent_goal != curr_agent_goal:
+            if prev_agent_goal != -1 and prev_agent_goal != curr_agent_goal:
                 reward += self.reward_config["agent_move_away_from_goal_reward"]
             else:
                 pass
@@ -1179,6 +1185,20 @@ class LabyrinthEnv(MultiGridEnv):
                 else:
                     pass
 
+            all_agents_on_goals: bool = True
+            for agent in self.agents:
+                if (
+                    agent.index in subtask.assigned_agent_goal
+                    and (agent.pos[0], agent.pos[1])
+                    == subtask.assigned_agent_goal[agent.index]
+                ):
+                    pass
+                else:
+                    all_agents_on_goals = False
+                    break
+
+            all_conditions_satisfied = all_conditions_satisfied and all_agents_on_goals
+
             if all_conditions_satisfied:
                 for trigger in subtask.triggers:
                     trigger.trigger_action(self.obj_group_dict, self.grid)
@@ -1189,7 +1209,8 @@ class LabyrinthEnv(MultiGridEnv):
                 else:
                     pass
 
-                self.current_subtasks = [self.subtask_dict[subtask.next_subtask]]
+                if subtask.next_subtask != "terminal":
+                    self.current_subtasks = [self.subtask_dict[subtask.next_subtask]]
 
                 if reward_config["reward_option"] == "intermediate_goal":
                     self.rewarded_subtasks = self.current_subtasks
