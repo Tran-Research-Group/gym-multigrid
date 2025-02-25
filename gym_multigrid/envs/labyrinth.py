@@ -467,6 +467,13 @@ class LabyrinthEnv(MultiGridEnv):
     # Labyrinth Environment
     Multi-agent labyrinth env with multiple goals and zones.
 
+    ### Example
+    ``` python
+    import gymnasium as gym
+
+    env = gym.make("multigrid-labyrinth-v0")
+    ```
+
     ## Observation
     The format of the observation is a dictionary of each agent's observation with the agent's index as the key.
     - The observation is the positions of the final goal and agents if the observation option is "final_goal".
