@@ -7,30 +7,40 @@ from gymnasium import spaces
 
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Block, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import SimpleDoor as Door
 from gym_multigrid.core.world import WorldT, LabyrinthWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
+
+
+class TriggerConfig(TypedDict):
+    action: str
+    obj_type: str
+    obj_group: int
 
 
 class GoalGroupConfig(TypedDict):
     group_index: int
     pos: tuple[tuple[int, int], ...]
     valid_agent_indices: tuple[int, ...]
-    called_actions: list[str]
-    action_obj_type: str
-    action_obj_group: int
+    triggers: list[TriggerConfig]
     next_goal: int | Literal["terminal"]
 
 
-class _ObjectGroupConfig(TypedDict):
+class ObjectGroupConfig(TypedDict):
     obj_type: str
     group_index: int
     pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
+    color: str
+    fill_mode: Literal["empty", "filled"] | None
 
 
-class ObjectGroupConfig(_ObjectGroupConfig, total=False):
-    group_args: dict[str, Any]
+class DetectionConfig(TypedDict):
+    obj_type: str
+    group_index: int
+    visual_detect_prob: float
+    radio_detect_prob: float
 
 
 class RewardConfig(TypedDict):
@@ -46,51 +56,65 @@ goal_group_config: list[GoalGroupConfig] = [
         "group_index": 0,
         "pos": ((4, 1), (4, 2), (4, 3)),
         "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 0,
+        "triggers": [
+            {
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 0,
+            }
+        ],
         "next_goal": 2,
     },
     {
         "group_index": 1,
         "pos": ((3, 5), (3, 6), (3, 7)),
         "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 1,
+        "triggers": [
+            {
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 1,
+            }
+        ],
         "next_goal": 2,
     },
     {
         "group_index": 2,
         "pos": ((6, 3), (6, 4), (6, 5)),
         "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 2,
+        "triggers": [
+            {
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 2,
+            }
+        ],
         "next_goal": 3,
     },
     {
         "group_index": 3,
         "pos": ((8, 3), (8, 4), (8, 5)),
         "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
+        "triggers": [],
         "next_goal": "terminal",
     },
 ]
 
 obj_group_config: list[ObjectGroupConfig] = [
     {
-        "obj_type": "block",
+        "obj_type": "door",
         "group_index": 0,
         "pos": ((5, 1), (5, 2), (5, 3)),
+        "color": "light_gray",
+        "fill_mode": None,
     },
     {
-        "obj_type": "block",
+        "obj_type": "door",
         "group_index": 1,
         "pos": ((4, 5), (4, 6), (4, 7)),
     },
     {
-        "obj_type": "block",
+        "obj_type": "door",
         "group_index": 2,
         "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
     },
@@ -125,6 +149,21 @@ obj_group_config: list[ObjectGroupConfig] = [
         "group_args": {
             "fill_mode": "filled",
         },
+    },
+]
+
+detection_config: list[DetectionConfig] = [
+    {
+        "obj_type": "zone",
+        "group_index": 0,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.0,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 1,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.06,
     },
 ]
 
@@ -262,7 +301,7 @@ class ObjectGroup(ABC):
         return pos_list
 
 
-class BlockGroup(ObjectGroup):
+class DoorGroup(ObjectGroup):
     def __init__(
         self,
         obj_type: str,
@@ -272,13 +311,13 @@ class BlockGroup(ObjectGroup):
         super().__init__(obj_type, group_index, pos)
         self.locked: bool = True
 
-    def _init_obj(self, world: WorldT) -> Block:
-        return Block(world)
+    def _init_obj(self, world: WorldT) -> Door:
+        return Door(world)
 
     def open(self, grid: Grid) -> None:
         for pos in self.pos:
-            block: Block = grid.get(*pos)
-            block.open()
+            door: Door = grid.get(*pos)
+            door.open()
 
         self.locked = False
 
@@ -292,17 +331,17 @@ class GoalGroup(ObjectGroup):
         group_index: int,
         pos: tuple[tuple[int, int], ...],
         valid_agent_indices: tuple[int, ...],
-        called_actions: list[str],
+        triggered_actions: list[str],
         next_goal: int | Literal["terminal"],
-        action_obj_type: Optional[str] = None,
-        action_obj_group: Optional[int] = None,
+        triggered_obj_type: Optional[str] = None,
+        triggered_obj_group: Optional[int] = None,
     ) -> None:
         obj_type: str = "goal"
         super().__init__(obj_type, group_index, pos)
         self.valid_agent_indices: tuple[int, ...] = valid_agent_indices
-        self.called_actions: list[str] = called_actions
-        self.action_obj_type: Optional[str] = action_obj_type
-        self.action_obj_group: Optional[int] = action_obj_group
+        self.triggered_actions: list[str] = triggered_actions
+        self.triggered_obj_type: Optional[str] = triggered_obj_type
+        self.triggered_obj_group: Optional[int] = triggered_obj_group
         self.next_goal: int | Literal["terminal"] = next_goal
 
     def _init_obj(self, world: WorldT, agent_index: int) -> AgentGoal:
@@ -326,14 +365,14 @@ class GoalGroup(ObjectGroup):
 
         return True
 
-    def open(self, block_group_dict: dict[int, BlockGroup], grid: Grid) -> None:
-        block_group_dict[self.action_obj_group].open(grid)
+    def open(self, door_group_dict: dict[int, DoorGroup], grid: Grid) -> None:
+        door_group_dict[self.triggered_obj_group].open(grid)
 
-    def is_block_locked(self, block_group_dict: dict[int, BlockGroup]) -> bool:
-        if self.action_obj_group is None:
+    def is_door_locked(self, door_group_dict: dict[int, DoorGroup]) -> bool:
+        if self.triggered_obj_group is None:
             return False
         else:
-            return block_group_dict[self.action_obj_group].is_locked()
+            return door_group_dict[self.triggered_obj_group].is_locked()
 
 
 class ZoneGroup(ObjectGroup):
@@ -390,7 +429,7 @@ class WallGroup(ObjectGroup):
 
 class ObjectGroupDict(TypedDict):
     goal: dict[int, GoalGroup]
-    block: dict[int, BlockGroup]
+    door: dict[int, DoorGroup]
     zone: dict[int, ZoneGroup]
     wall: dict[int, WallGroup]
 
@@ -455,7 +494,7 @@ class LabyrinthEnv(MultiGridEnv):
 
     ## Object Groups
     - Goal objects: The goal objects are placed on the grid.
-    - Block objects: The block objects are placed on the grid.
+    - Door objects: The door objects are placed on the grid.
     - Zone objects: The zone objects are placed on the grid.
 
     ### Example
@@ -465,53 +504,53 @@ class LabyrinthEnv(MultiGridEnv):
             "group_index": 0,
             "pos": ((4, 1), (4, 2), (4, 3)),
             "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 0,
+            "triggered_actions": ["open"],
+            "triggered_obj_type": "door",
+            "triggered_obj_group": 0,
             "next_goal": 2,
         },
         {
             "group_index": 1,
             "pos": ((3, 5), (3, 6), (3, 7)),
             "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 1,
+            "triggered_actions": ["open"],
+            "triggered_obj_type": "door",
+            "triggered_obj_group": 1,
             "next_goal": 2,
         },
         {
             "group_index": 2,
             "pos": ((6, 3), (6, 4), (6, 5)),
             "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 2,
+            "triggered_actions": ["open"],
+            "triggered_obj_type": "door",
+            "triggered_obj_group": 2,
             "next_goal": 3,
         },
         {
             "group_index": 3,
             "pos": ((8, 3), (8, 4), (8, 5)),
             "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": -1,
+            "triggered_actions": ["open"],
+            "triggered_obj_type": "door",
+            "triggered_obj_group": -1,
             "next_goal": "terminal",
         },
     ]
 
     obj_group_config: list[ObjectGroupConfig] = [
         {
-            "obj_type": "block",
+            "obj_type": "door",
             "group_index": 0,
             "pos": ((5, 1), (5, 2), (5, 3)),
         },
         {
-            "obj_type": "block",
+            "obj_type": "door",
             "group_index": 1,
             "pos": ((4, 5), (4, 6), (4, 7)),
         },
         {
-            "obj_type": "block",
+            "obj_type": "door",
             "group_index": 2,
             "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
         },
@@ -586,14 +625,14 @@ class LabyrinthEnv(MultiGridEnv):
             - "group_index": int # Group index
             - "pos": tuple[tuple[int, int], ...] # Positions of the goals
             - "valid_agent_indices": tuple[int, ...] # Indices of the agents that should be on the goal
-            - "called_actions": list[str] # Actions to call for the goal
-            - "action_obj_type": str # Type of the object to call the action
-            - "action_obj_group": int # Group index of the object to call the action
+            - "triggered_actions": list[str] # Actions to call for the goal
+            - "triggered_obj_type": str # Type of the object to call the action
+            - "triggered_obj_group": int # Group index of the object to call the action
             - "next_goal": int | Literal["terminal"] # Next goal group index or "terminal"
         obj_group_config : list[ObjectGroupConfig] = obj_group_config
             Configuration of the object groups.
             The following keys are required:
-            - "obj_type": "block" | "zone" # Object type
+            - "obj_type": "door" | "zone" # Object type
             - "group_index": int # Group index
             - "pos": tuple[tuple[int, int], ...] # Positions of the objects
             - "obj_args": dict[str, Any] # Arguments to initialize the object
@@ -770,16 +809,16 @@ class LabyrinthEnv(MultiGridEnv):
                 goal = AgentGoal(self.world, agent_index, group_index, color="green")
                 self.put_obj(goal, *pos)
 
-        # Place blocks
-        obj_group_dict["block"] = {}
+        # Place doors
+        obj_group_dict["door"] = {}
         obj_group_dict["zone"] = {}
         obj_group_dict["wall"] = {}
         for obj_group_config in self.obj_group_config:
             obj_type: str = obj_group_config["obj_type"]
             group_index: int = obj_group_config["group_index"]
 
-            if obj_type == "block":
-                obj_group_dict[obj_type][group_index] = BlockGroup(
+            if obj_type == "door":
+                obj_group_dict[obj_type][group_index] = DoorGroup(
                     obj_type, obj_group_config["group_index"], obj_group_config["pos"]
                 )
 
@@ -1046,14 +1085,14 @@ class LabyrinthEnv(MultiGridEnv):
         ):
             goal_group_index: int = agent_goal_statuses[0]
 
-            if self.obj_group_dict["goal"][goal_group_index].is_block_locked(
-                self.obj_group_dict["block"]
+            if self.obj_group_dict["goal"][goal_group_index].is_door_locked(
+                self.obj_group_dict["door"]
             ):
                 self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["block"], self.grid
+                    self.obj_group_dict["door"], self.grid
                 )
                 self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["block"], self.init_grid
+                    self.obj_group_dict["door"], self.init_grid
                 )
 
                 self.current_goal_group_indices = [

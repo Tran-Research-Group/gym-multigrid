@@ -464,12 +464,13 @@ class AgentGoal(WorldObj):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
 
 
-class Block(WorldObj):
+class SimpleDoor(WorldObj):
     def __init__(
         self,
         world: WorldT,
+        color: str = "light_grey",
     ):
-        super().__init__(world, "block", color="light_grey")
+        super().__init__(world, "door", color=color)
 
         self.locked: bool = True
 
