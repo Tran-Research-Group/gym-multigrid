@@ -51,158 +51,6 @@ class RewardConfig(TypedDict):
     all_agents_on_goal_reward: float
 
 
-subtask_config: list[SubtaskConfig] = [
-    {
-        "goal_group_index": 0,
-        "next_goal_group_index": 2,
-        "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
-        "triggers": [
-            {
-                "condition": "agents_on_goals",
-                "action": "open",
-                "obj_type": "door",
-                "obj_group": 0,
-            }
-        ],
-    },
-    {
-        "goal_group_index": 1,
-        "next_goal_group_index": 2,
-        "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
-        "triggers": [
-            {
-                "condition": "agents_on_goals",
-                "action": "open",
-                "obj_type": "door",
-                "obj_group": 1,
-            }
-        ],
-    },
-    {
-        "goal_group_index": 2,
-        "next_goal_group_index": 3,
-        "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
-        "triggers": [
-            {
-                "condition": "agents_on_goals",
-                "action": "open",
-                "obj_type": "door",
-                "obj_group": 2,
-            }
-        ],
-    },
-    {
-        "goal_group_index": 3,
-        "next_goal_group_index": "terminal",
-        "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
-        "triggers": [],
-    },
-]
-
-obj_group_config: list[ObjectGroupConfig] = [
-    {
-        "obj_type": "goal",
-        "group_index": 0,
-        "pos": ((4, 1), (4, 2), (4, 3)),
-        "color": "green",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "goal",
-        "group_index": 1,
-        "pos": ((3, 5), (3, 6), (3, 7)),
-        "color": "green",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "goal",
-        "group_index": 2,
-        "pos": ((6, 3), (6, 4), (6, 5)),
-        "color": "green",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "goal",
-        "group_index": 3,
-        "pos": ((8, 3), (8, 4), (8, 5)),
-        "color": "green",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "door",
-        "group_index": 0,
-        "pos": ((5, 1), (5, 2), (5, 3)),
-        "color": "light_gray",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "door",
-        "group_index": 1,
-        "pos": ((4, 5), (4, 6), (4, 7)),
-        "color": "light_gray",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "door",
-        "group_index": 2,
-        "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
-        "color": "light_gray",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "zone",
-        "group_index": 0,
-        "pos": ((2, 1), (2, 2), (2, 3)),
-        "color": "blue",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "zone",
-        "group_index": 1,
-        "pos": ((2, 5), (2, 6), (2, 7)),
-        "color": "red",
-        "fill_mode": None,
-    },
-    {
-        "obj_type": "wall",
-        "group_index": 0,
-        "pos": ((0, 0, 10, 9),),
-        "color": "grey",
-        "fill_mode": "empty",
-    },
-    {
-        "obj_type": "wall",
-        "group_index": 1,
-        "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
-        "color": "grey",
-        "fill_mode": "filled",
-    },
-]
-
-detection_config: list[DetectorConfig] = [
-    {
-        "obj_type": "zone",
-        "group_index": 0,
-        "visual_detect_prob": 0.005,
-        "radio_detect_prob": 0.0,
-    },
-    {
-        "obj_type": "zone",
-        "group_index": 1,
-        "visual_detect_prob": 0.005,
-        "radio_detect_prob": 0.06,
-    },
-]
-
-reward_config: RewardConfig = {
-    "reward_option": "intermediate_goal",
-    "movement_reward": -0.02,
-    "agent_on_goal_reward": 0.2,
-    "agent_move_away_from_goal_reward": -0.3,
-    "all_agents_on_goal_reward": 1.0,
-}
-
-
 class ObjectGroup(ABC):
     def __init__(
         self,
@@ -438,6 +286,158 @@ class Detector:
             return visual_detect or radio_detect
         else:
             return False
+
+
+subtask_config: list[SubtaskConfig] = [
+    {
+        "goal_group_index": 0,
+        "next_goal_group_index": 2,
+        "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 0,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 1,
+        "next_goal_group_index": 2,
+        "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 1,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 2,
+        "next_goal_group_index": 3,
+        "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 2,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 3,
+        "next_goal_group_index": "terminal",
+        "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
+        "triggers": [],
+    },
+]
+
+obj_group_config: list[ObjectGroupConfig] = [
+    {
+        "obj_type": "goal",
+        "group_index": 0,
+        "pos": ((4, 1), (4, 2), (4, 3)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 1,
+        "pos": ((3, 5), (3, 6), (3, 7)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 2,
+        "pos": ((6, 3), (6, 4), (6, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 3,
+        "pos": ((8, 3), (8, 4), (8, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 0,
+        "pos": ((5, 1), (5, 2), (5, 3)),
+        "color": "light_gray",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 1,
+        "pos": ((4, 5), (4, 6), (4, 7)),
+        "color": "light_gray",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 2,
+        "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
+        "color": "light_gray",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 0,
+        "pos": ((2, 1), (2, 2), (2, 3)),
+        "color": "blue",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 1,
+        "pos": ((2, 5), (2, 6), (2, 7)),
+        "color": "red",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "wall",
+        "group_index": 0,
+        "pos": ((0, 0, 10, 9),),
+        "color": "grey",
+        "fill_mode": "empty",
+    },
+    {
+        "obj_type": "wall",
+        "group_index": 1,
+        "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
+        "color": "grey",
+        "fill_mode": "filled",
+    },
+]
+
+detection_config: list[DetectorConfig] = [
+    {
+        "obj_type": "zone",
+        "group_index": 0,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.0,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 1,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.06,
+    },
+]
+
+reward_config: RewardConfig = {
+    "reward_option": "intermediate_goal",
+    "movement_reward": -0.02,
+    "agent_on_goal_reward": 0.2,
+    "agent_move_away_from_goal_reward": -0.3,
+    "all_agents_on_goal_reward": 1.0,
+}
 
 
 class LabyrinthEnv(MultiGridEnv):
