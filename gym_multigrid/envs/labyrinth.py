@@ -391,21 +391,21 @@ obj_group_config: list[ObjectGroupConfig] = [
         "obj_type": "door",
         "group_index": 0,
         "pos": ((5, 1), (5, 2), (5, 3)),
-        "color": "light_gray",
+        "color": "light_grey",
         "fill_mode": None,
     },
     {
         "obj_type": "door",
         "group_index": 1,
         "pos": ((4, 5), (4, 6), (4, 7)),
-        "color": "light_gray",
+        "color": "light_grey",
         "fill_mode": None,
     },
     {
         "obj_type": "door",
         "group_index": 2,
         "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
-        "color": "light_gray",
+        "color": "light_grey",
         "fill_mode": None,
     },
     {
@@ -489,7 +489,6 @@ class LabyrinthEnv(MultiGridEnv):
     })
     ```
 
-
     ## Actions
     - There are five actions: "stay", "up", "right", "down", and "left".
     - The action space is MultiDiscrete([5, 5, 5]) for three agents.
@@ -504,13 +503,6 @@ class LabyrinthEnv(MultiGridEnv):
 
     ### Example
     ``` python
-    class RewardConfig(TypedDict):
-        reward_option: Literal["final_goal", "intermediate_goal"]
-        movement_reward: float
-        agent_on_goal_reward: float
-        agent_move_away_from_goal_reward: float
-        all_agents_on_goal_reward: float
-
     reward_config: RewardConfig = {
         "reward_option": "final_goal",
         "movement_reward": -0.02,
@@ -519,102 +511,188 @@ class LabyrinthEnv(MultiGridEnv):
         "all_agents_on_goal_reward": 1.0,
     }
     ```
+    ## Subtasks
+    - The subtasks are defined in the `subtask_config` parameter.
+    - Each subtask has the following
+        - `next_subtask`: Next subtask index or "terminal". If a subtask is a terminal subtask, the episode ends.
+        - `goal_group_index`: Goal group index.
+        - `assigned_agent_goal`: Assigned agent goal positions as a dictionary with the agent index as the key and the assigned goal position as the value.
+        - `triggers`: Triggers to open the door.
 
-    ## Object Groups
-    - Goal objects: The goal objects are placed on the grid.
-    - Door objects: The door objects are placed on the grid.
-    - Zone objects: The zone objects are placed on the grid.
+    ### Trigger
+    - The trigger has the following
+        - `condition`: Condition to trigger the action.
+        - `action`: Action to call for the object.
+        - `obj_type`: Type of the object to call the action.
+        - `obj_group`: Group index of the object to call the action.
 
     ### Example
     ``` python
-    goal_group_config: list[GoalGroupConfig] = [
+    subtask_config: list[SubtaskConfig] = [
         {
-            "group_index": 0,
-            "pos": ((4, 1), (4, 2), (4, 3)),
-            "valid_agent_indices": (0, 1, 2),
-            "triggered_actions": ["open"],
-            "triggered_obj_type": "door",
-            "triggered_obj_group": 0,
-            "next_goal": 2,
+            "goal_group_index": 0,
+            "next_subtask": 2,
+            "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 0,
+                }
+            ],
         },
         {
-            "group_index": 1,
-            "pos": ((3, 5), (3, 6), (3, 7)),
-            "valid_agent_indices": (0, 1, 2),
-            "triggered_actions": ["open"],
-            "triggered_obj_type": "door",
-            "triggered_obj_group": 1,
-            "next_goal": 2,
+            "goal_group_index": 1,
+            "next_subtask": 2,
+            "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 1,
+                }
+            ],
         },
         {
-            "group_index": 2,
-            "pos": ((6, 3), (6, 4), (6, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "triggered_actions": ["open"],
-            "triggered_obj_type": "door",
-            "triggered_obj_group": 2,
-            "next_goal": 3,
+            "goal_group_index": 2,
+            "next_subtask": 3,
+            "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 2,
+                }
+            ],
         },
         {
-            "group_index": 3,
-            "pos": ((8, 3), (8, 4), (8, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "triggered_actions": ["open"],
-            "triggered_obj_type": "door",
-            "triggered_obj_group": -1,
-            "next_goal": "terminal",
+            "goal_group_index": 3,
+            "next_subtask": "terminal",
+            "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
+            "triggers": [],
         },
     ]
+    ```
 
+    ## Object Groups
+    - The object groups are defined in the `obj_group_config` parameter.
+    - Each object group has the following
+        - `obj_type`: Type of the object.
+        - `group_index`: Group index of the object.
+        - `pos`: Positions of the objects.
+        - `color`: Color of the objects.
+        - `fill_mode`: Fill mode of the object.
+
+    ### Example
+    ``` python
     obj_group_config: list[ObjectGroupConfig] = [
+        {
+            "obj_type": "goal",
+            "group_index": 0,
+            "pos": ((4, 1), (4, 2), (4, 3)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 1,
+            "pos": ((3, 5), (3, 6), (3, 7)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 2,
+            "pos": ((6, 3), (6, 4), (6, 5)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 3,
+            "pos": ((8, 3), (8, 4), (8, 5)),
+            "color": "green",
+            "fill_mode": None,
+        },
         {
             "obj_type": "door",
             "group_index": 0,
             "pos": ((5, 1), (5, 2), (5, 3)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
             "obj_type": "door",
             "group_index": 1,
             "pos": ((4, 5), (4, 6), (4, 7)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
             "obj_type": "door",
             "group_index": 2,
             "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
             "obj_type": "zone",
             "group_index": 0,
             "pos": ((2, 1), (2, 2), (2, 3)),
-            "group_args": {"color": "blue", "visual_detect_prob": 0.005},
+            "color": "blue",
+            "fill_mode": None,
         },
         {
             "obj_type": "zone",
             "group_index": 1,
             "pos": ((2, 5), (2, 6), (2, 7)),
-            "group_args": {
-                "color": "red",
-                "visual_detect_prob": 0.005,
-                "radio_detect_prob": 0.06,
-            },
+            "color": "red",
+            "fill_mode": None,
         },
         {
             "obj_type": "wall",
             "group_index": 0,
             "pos": ((0, 0, 10, 9),),
-            "group_args": {
-                "fill_mode": "empty",
-            },
+            "color": "grey",
+            "fill_mode": "empty",
         },
         {
             "obj_type": "wall",
             "group_index": 1,
             "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
-            "group_args": {
-                "fill_mode": "filled",
-            },
+            "color": "grey",
+            "fill_mode": "filled",
         },
-        ]
+    ]
+    ```
+
+    ## Detectors
+    - The detectors are defined in the `detector_config` parameter.
+    - Each detector has the following
+        - `obj_type`: Type of the object where the detector is placed.
+        - `group_index`: Group index of the object where the detector is placed.
+        - `visual_detect_prob`: Probability of the visual detection.
+        - `radio_detect_prob`: Probability of the radio detection.
+
+    ### Example
+    ``` python
+    detector_config: list[DetectorConfig] = [
+        {
+            "obj_type": "zone",
+            "group_index": 0,
+            "visual_detect_prob": 0.005,
+            "radio_detect_prob": 0.0,
+        },
+        {
+            "obj_type": "zone",
+            "group_index": 1,
+            "visual_detect_prob": 0.005,
+            "radio_detect_prob": 0.06,
+        },
+    ]
     ```
     """
 
@@ -636,6 +714,12 @@ class LabyrinthEnv(MultiGridEnv):
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         world: WorldT = LabyrinthWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "door": Door,
+            "zone": Zone,
+            "wall": Wall,
+        },
     ) -> None:
         """
         Constructor for the LabyrinthEnv class.
@@ -704,7 +788,7 @@ class LabyrinthEnv(MultiGridEnv):
         )
         self.init_pos: tuple[tuple[int, int], ...] = init_pos
 
-        agent_view_size: int = 7
+        agent_view_size: int = None
         agents: list[Agent] = [
             Agent(world, i, agent_view_size, actions_set, agent_dir_to_vec)
             for i in range(num_agents)
@@ -743,6 +827,7 @@ class LabyrinthEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
+        self.object_options: dict[str, WorldObjT] = object_options
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -842,7 +927,14 @@ class LabyrinthEnv(MultiGridEnv):
             obj_type: str = obj_group_config["obj_type"]
             group_index: int = obj_group_config["group_index"]
 
-            obj_group_dict[obj_type][group_index] = ObjectGroup(**obj_group_config)
+            if obj_type not in obj_group_dict:
+                obj_group_dict[obj_type] = {}
+            else:
+                pass
+
+            obj_group_dict[obj_type][group_index] = ObjectGroup(
+                object_options=self.object_options, **obj_group_config
+            )
             obj_group_dict[obj_type][group_index].put_objects(self.grid, self.world)
 
         self.obj_group_dict = obj_group_dict
@@ -888,7 +980,7 @@ class LabyrinthEnv(MultiGridEnv):
         terminated: bool = (
             self._agents_detected() | self._agents_reached_terminal_goal()
         )
-        truncated: bool = self.step_count >= self.max_steps
+        truncated: bool = False
         info: dict[str, Any] = self._get_info()
 
         return obs, reward, terminated, truncated, info
@@ -1019,9 +1111,9 @@ class LabyrinthEnv(MultiGridEnv):
         return False
 
     def _is_agent_on_assigned_goal(
-        self, pos: tuple[int, int], agent_index: int, current_subtasks: list[Subtask]
+        self, pos: tuple[int, int], agent_index: int, considered_subtasks: list[Subtask]
     ) -> int:
-        for subtask in current_subtasks:
+        for subtask in considered_subtasks:
             if pos == subtask.assigned_agent_goal[agent_index]:
                 return subtask.goal_group_index
             else:
@@ -1042,7 +1134,7 @@ class LabyrinthEnv(MultiGridEnv):
         for agent in self.agents:
             agent_goal_statuses.append(
                 self._is_agent_on_assigned_goal(
-                    agent.pos, agent.index, self.current_subtasks
+                    (agent.pos[0], agent.pos[1]), agent.index, self.current_subtasks
                 )
             )
 
@@ -1051,7 +1143,8 @@ class LabyrinthEnv(MultiGridEnv):
             for subtask in self.rewarded_subtasks:
                 if (
                     agent.index in subtask.assigned_agent_goal
-                    and agent.pos == subtask.assigned_agent_goal[agent.index]
+                    and (agent.pos[0], agent.pos[1])
+                    == subtask.assigned_agent_goal[agent.index]
                 ):
                     num_goaled_agents += 1
                 else:
@@ -1063,10 +1156,10 @@ class LabyrinthEnv(MultiGridEnv):
         for agent, action in zip(self.agents, actions):
             prev_pos: Position = self._get_previous_agent_pos(action, agent)
             prev_agent_goal: int = self._is_agent_on_assigned_goal(
-                prev_pos, agent.index, self.rewarded_subtasks
+                (prev_pos[0], prev_pos[1]), agent.index, self.rewarded_subtasks
             )
             curr_agent_goal: int = self._is_agent_on_assigned_goal(
-                agent.pos, agent.index, self.rewarded_subtasks
+                (agent.pos[0], agent.pos[1]), agent.index, self.rewarded_subtasks
             )
 
             # If the reward option is "final_goal", the penalty is given only if the agent was on the final goal.
