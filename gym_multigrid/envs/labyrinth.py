@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Literal, TypedDict, Optional
+from typing import Any, Literal, TypeVar, TypedDict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -15,17 +15,17 @@ from gym_multigrid.typing import Position
 
 
 class TriggerConfig(TypedDict):
+    condition: str
     action: str
     obj_type: str
     obj_group: int
 
 
-class GoalGroupConfig(TypedDict):
-    group_index: int
-    pos: tuple[tuple[int, int], ...]
-    valid_agent_indices: tuple[int, ...]
+class SubtaskConfig(TypedDict):
+    goal_group_index: int
+    next_goal_group_index: int | Literal["terminal"]
+    assigned_agent_goal: dict[int, tuple[int, int]]
     triggers: list[TriggerConfig]
-    next_goal: int | Literal["terminal"]
 
 
 class ObjectGroupConfig(TypedDict):
@@ -36,7 +36,7 @@ class ObjectGroupConfig(TypedDict):
     fill_mode: Literal["empty", "filled"] | None
 
 
-class DetectionConfig(TypedDict):
+class DetectorConfig(TypedDict):
     obj_type: str
     group_index: int
     visual_detect_prob: float
@@ -51,56 +51,83 @@ class RewardConfig(TypedDict):
     all_agents_on_goal_reward: float
 
 
-goal_group_config: list[GoalGroupConfig] = [
+subtask_config: list[SubtaskConfig] = [
     {
-        "group_index": 0,
-        "pos": ((4, 1), (4, 2), (4, 3)),
-        "valid_agent_indices": (0, 1, 2),
+        "goal_group_index": 0,
+        "next_goal_group_index": 2,
+        "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
         "triggers": [
             {
+                "condition": "agents_on_goals",
                 "action": "open",
                 "obj_type": "door",
                 "obj_group": 0,
             }
         ],
-        "next_goal": 2,
     },
     {
-        "group_index": 1,
-        "pos": ((3, 5), (3, 6), (3, 7)),
-        "valid_agent_indices": (0, 1, 2),
+        "goal_group_index": 1,
+        "next_goal_group_index": 2,
+        "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
         "triggers": [
             {
+                "condition": "agents_on_goals",
                 "action": "open",
                 "obj_type": "door",
                 "obj_group": 1,
             }
         ],
-        "next_goal": 2,
     },
     {
-        "group_index": 2,
-        "pos": ((6, 3), (6, 4), (6, 5)),
-        "valid_agent_indices": (0, 1, 2),
+        "goal_group_index": 2,
+        "next_goal_group_index": 3,
+        "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
         "triggers": [
             {
+                "condition": "agents_on_goals",
                 "action": "open",
                 "obj_type": "door",
                 "obj_group": 2,
             }
         ],
-        "next_goal": 3,
     },
     {
-        "group_index": 3,
-        "pos": ((8, 3), (8, 4), (8, 5)),
-        "valid_agent_indices": (0, 1, 2),
+        "goal_group_index": 3,
+        "next_goal_group_index": "terminal",
+        "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
         "triggers": [],
-        "next_goal": "terminal",
     },
 ]
 
 obj_group_config: list[ObjectGroupConfig] = [
+    {
+        "obj_type": "goal",
+        "group_index": 0,
+        "pos": ((4, 1), (4, 2), (4, 3)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 1,
+        "pos": ((3, 5), (3, 6), (3, 7)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 2,
+        "pos": ((6, 3), (6, 4), (6, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 3,
+        "pos": ((8, 3), (8, 4), (8, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
     {
         "obj_type": "door",
         "group_index": 0,
@@ -112,47 +139,47 @@ obj_group_config: list[ObjectGroupConfig] = [
         "obj_type": "door",
         "group_index": 1,
         "pos": ((4, 5), (4, 6), (4, 7)),
+        "color": "light_gray",
+        "fill_mode": None,
     },
     {
         "obj_type": "door",
         "group_index": 2,
         "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
+        "color": "light_gray",
+        "fill_mode": None,
     },
     {
         "obj_type": "zone",
         "group_index": 0,
         "pos": ((2, 1), (2, 2), (2, 3)),
-        "group_args": {"color": "blue", "visual_detect_prob": 0.005},
+        "color": "blue",
+        "fill_mode": None,
     },
     {
         "obj_type": "zone",
         "group_index": 1,
         "pos": ((2, 5), (2, 6), (2, 7)),
-        "group_args": {
-            "color": "red",
-            "visual_detect_prob": 0.005,
-            "radio_detect_prob": 0.06,
-        },
+        "color": "red",
+        "fill_mode": None,
     },
     {
         "obj_type": "wall",
         "group_index": 0,
         "pos": ((0, 0, 10, 9),),
-        "group_args": {
-            "fill_mode": "empty",
-        },
+        "color": "grey",
+        "fill_mode": "empty",
     },
     {
         "obj_type": "wall",
         "group_index": 1,
         "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
-        "group_args": {
-            "fill_mode": "filled",
-        },
+        "color": "grey",
+        "fill_mode": "filled",
     },
 ]
 
-detection_config: list[DetectionConfig] = [
+detection_config: list[DetectorConfig] = [
     {
         "obj_type": "zone",
         "group_index": 0,
@@ -182,7 +209,14 @@ class ObjectGroup(ABC):
         obj_type: str,
         group_index: int,
         pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
+        color: str,
         fill_mode: Literal["empty", "filled"] = "filled",
+        object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "door": Door,
+            "zone": Zone,
+            "wall": Wall,
+        },
     ) -> None:
         """
         Initializes the object group.
@@ -205,6 +239,8 @@ class ObjectGroup(ABC):
         """
         self.obj_type: str = obj_type
         self.group_index: int = group_index
+        self.color: str = color
+        self.object_options: dict[str, WorldObjT] = object_options
 
         pos_list: list[tuple[int, int]] = []
         for p in pos:
@@ -237,12 +273,13 @@ class ObjectGroup(ABC):
             obj: WorldObjT = self._init_obj(world)
             self._put_obj(grid, pos, obj)
 
-    @abstractmethod
     def _init_obj(self, world: WorldT) -> WorldObjT:
         """
         Defines the initialization of the object.
         """
-        ...
+        return self.object_options[self.obj_type](
+            world, type=self.obj_type, color=self.color
+        )
 
     def _put_obj(self, grid: Grid, pos: tuple[int, int], obj: WorldObjT) -> None:
         """
@@ -261,6 +298,31 @@ class ObjectGroup(ABC):
         obj.init_pos = pos
         obj.pos = pos
         grid.set(*pos, obj)
+
+    def apply_obj_action(
+        self, action: str, grid: Grid, args: dict[str, Any] = {}
+    ) -> Any:
+        """
+        Applies the action to each object in the group.
+
+        Parameters
+        ----------
+        action : str
+            Action to apply.
+        args : dict[str, Any] = {}
+            Arguments for the action.
+
+        Returns
+        -------
+        outputs : list[Any]
+            Outputs of the action for each object in the group.
+        """
+        outputs: list[Any] = []
+        for pos in self.pos:
+            obj: WorldObjT = grid.get(*pos)
+            outputs.append(getattr(obj, action)(**args))
+
+        return outputs
 
     def call_action(self, action: str, args: dict[str, Any] = {}) -> Any:
         return getattr(self, action)(**args)
@@ -301,63 +363,27 @@ class ObjectGroup(ABC):
         return pos_list
 
 
-class DoorGroup(ObjectGroup):
+ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)
+
+
+class Subtask:
     def __init__(
         self,
-        obj_type: str,
-        group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
+        goal_group_index: int,
+        next_goal_group_index: int | Literal["terminal"],
+        assigned_agent_goal: dict[int, tuple[int, int]],
+        triggers: list[TriggerConfig],
     ) -> None:
-        super().__init__(obj_type, group_index, pos)
-        self.locked: bool = True
-
-    def _init_obj(self, world: WorldT) -> Door:
-        return Door(world)
-
-    def open(self, grid: Grid) -> None:
-        for pos in self.pos:
-            door: Door = grid.get(*pos)
-            door.open()
-
-        self.locked = False
-
-    def is_locked(self) -> bool:
-        return self.locked
-
-
-class GoalGroup(ObjectGroup):
-    def __init__(
-        self,
-        group_index: int,
-        pos: tuple[tuple[int, int], ...],
-        valid_agent_indices: tuple[int, ...],
-        triggered_actions: list[str],
-        next_goal: int | Literal["terminal"],
-        triggered_obj_type: Optional[str] = None,
-        triggered_obj_group: Optional[int] = None,
-    ) -> None:
-        obj_type: str = "goal"
-        super().__init__(obj_type, group_index, pos)
-        self.valid_agent_indices: tuple[int, ...] = valid_agent_indices
-        self.triggered_actions: list[str] = triggered_actions
-        self.triggered_obj_type: Optional[str] = triggered_obj_type
-        self.triggered_obj_group: Optional[int] = triggered_obj_group
-        self.next_goal: int | Literal["terminal"] = next_goal
-
-    def _init_obj(self, world: WorldT, agent_index: int) -> AgentGoal:
-        return AgentGoal(world, agent_index, self.group_index, color="green")
-
-    def put_objects(self, grid: Grid, world: WorldT) -> None:
-        assert len(self.pos) == len(self.valid_agent_indices)
-        for pos, agent_index in zip(self.pos, self.valid_agent_indices):
-            obj: AgentGoal = self._init_obj(world, agent_index)
-            self._put_obj(grid, pos, obj)
+        self.goal_group_index: int = goal_group_index
+        self.next_goal_group_index: int | Literal["terminal"] = next_goal_group_index
+        self.assigned_agent_goal: dict[int, tuple[int, int]] = assigned_agent_goal
+        self.triggers: list[TriggerConfig] = triggers
 
     def agents_on_goals(self, agents: list[Agent]) -> bool:
-        for pos, agent_index in zip(self.pos, self.valid_agent_indices):
+        for agent_index, goal_pos in self.assigned_agent_goal.items():
             if (
-                agents[agent_index].pos[0] != pos[0]
-                or agents[agent_index].pos[1] != pos[1]
+                agents[agent_index].pos[0] != goal_pos[0]
+                or agents[agent_index].pos[1] != goal_pos[1]
             ):
                 return False
             else:
@@ -365,73 +391,53 @@ class GoalGroup(ObjectGroup):
 
         return True
 
-    def open(self, door_group_dict: dict[int, DoorGroup], grid: Grid) -> None:
-        door_group_dict[self.triggered_obj_group].open(grid)
-
-    def is_door_locked(self, door_group_dict: dict[int, DoorGroup]) -> bool:
-        if self.triggered_obj_group is None:
-            return False
-        else:
-            return door_group_dict[self.triggered_obj_group].is_locked()
+    def open(self, obj_group_dict: dict[str, dict[int, ObjGroupT]], grid: Grid) -> None:
+        for trigger in self.triggers:
+            obj_group_dict[trigger["obj_type"]][trigger["obj_group"]].apply_obj_action(
+                "open", grid
+            )
 
 
-class ZoneGroup(ObjectGroup):
+class Detector:
     def __init__(
         self,
         obj_type: str,
         group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
-        color: str,
-        visual_detect_prob: float = 0.0,
-        radio_detect_prob: float = 0.0,
+        visual_detect_prob: float,
+        radio_detect_prob: float,
     ) -> None:
-        super().__init__(obj_type, group_index, pos)
-        self.color: str = color
+        self.obj_type: str = obj_type
+        self.group_index: int = group_index
         self.visual_detect_prob: float = visual_detect_prob
         self.radio_detect_prob: float = radio_detect_prob
 
-    def _init_obj(self, world: WorldT) -> Zone:
-        return Zone(world, self.color, f"{self.color}_zone")
-
     def detect_agents(
-        self, agents: list[Agent], random_generator: np.random.Generator
+        self,
+        agents: list[Agent],
+        obj_group_dict: dict[str, dict[int, ObjGroupT]],
+        random_generator: np.random.Generator,
     ) -> bool:
+        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_index]
         for agent in agents:
-            if self.detect_agent(agent, random_generator):
+            if self.detect_agent(agent, obj_group, random_generator):
                 return True
             else:
                 pass
 
         return False
 
-    def detect_agent(self, agent: Agent, random_generator: np.random.Generator) -> bool:
-        if (agent.pos[0], agent.pos[1]) in self.pos:
+    def detect_agent(
+        self,
+        agent: list[Agent],
+        obj_group: ObjGroupT,
+        random_generator: np.random.Generator,
+    ) -> bool:
+        if (agent.pos[0], agent.pos[1]) in obj_group.pos:
             visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
             radio_detect: bool = random_generator.uniform() < self.radio_detect_prob
             return visual_detect or radio_detect
         else:
             return False
-
-
-class WallGroup(ObjectGroup):
-    def __init__(
-        self,
-        obj_type: str,
-        group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
-        fill_mode: Literal["empty", "filled"] = "filled",
-    ) -> None:
-        super().__init__(obj_type, group_index, pos, fill_mode)
-
-    def _init_obj(self, world: WorldT) -> Wall:
-        return Wall(world)
-
-
-class ObjectGroupDict(TypedDict):
-    goal: dict[int, GoalGroup]
-    door: dict[int, DoorGroup]
-    zone: dict[int, ZoneGroup]
-    wall: dict[int, WallGroup]
 
 
 class LabyrinthEnv(MultiGridEnv):
@@ -595,8 +601,9 @@ class LabyrinthEnv(MultiGridEnv):
         num_agents: int = 3,
         p_intended_action: float = 0.95,
         init_pos: tuple[tuple[int, int], ...] = [(1, 3), (1, 4), (1, 5)],
-        goal_group_config: list[GoalGroupConfig] = goal_group_config,
+        subtask_config: list[SubtaskConfig] = subtask_config,
         obj_group_config: list[ObjectGroupConfig] = obj_group_config,
+        detector_config: list[DetectorConfig] = detection_config,
         reward_config: RewardConfig = reward_config,
         observation_option: Literal["final_goal", "intermediate_goal"] = "final_goal",
         width: int = 10,
@@ -667,8 +674,9 @@ class LabyrinthEnv(MultiGridEnv):
         """
         self.num_agents: int = num_agents
         self.p_intended_action: float = p_intended_action
-        self.goal_group_config: list[GoalGroupConfig] = goal_group_config
+        self.subtask_config: list[SubtaskConfig] = subtask_config
         self.obj_group_config: list[ObjectGroupConfig] = obj_group_config
+        self.detector_config: list[DetectorConfig] = detector_config
         self.reward_config: RewardConfig = reward_config
         self.observation_option: Literal["final_goal", "intermediate_goal"] = (
             observation_option
@@ -682,22 +690,22 @@ class LabyrinthEnv(MultiGridEnv):
         ]
 
         self.final_goal: tuple[tuple[int, int], ...] = ()
-        self.goals: list[tuple[tuple[int, int], ...]] = []
         self.agent_goals: dict[int, list[tuple[int, int]]] = {}
 
-        for goal_config in self.goal_group_config:
-            self.goals.append(goal_config["pos"])
-            for agent_index, pos in zip(
-                goal_config["valid_agent_indices"], goal_config["pos"]
-            ):
+        self.subtasks: list[Subtask] = [
+            Subtask(**subtask) for subtask in self.subtask_config
+        ]
+
+        for subtask in self.subtasks:
+            for agent_index, pos in subtask.assigned_agent_goal.items():
                 if agent_index in self.agent_goals:
                     self.agent_goals[agent_index].append(pos)
                 else:
                     self.agent_goals[agent_index] = [pos]
 
-            if goal_config["next_goal"] == "terminal":
-                self.final_goal = goal_config["pos"]
-                self.final_goal_group_index = goal_config["group_index"]
+            if subtask.next_goal_group_index == "terminal":
+                self.final_goal = tuple(subtask.assigned_agent_goal.values())
+                self.final_goal_group_index = subtask.goal_group_index
 
         self.init_goal_group_indices: list[int] = self._find_first_goal_groups()
 
@@ -745,17 +753,15 @@ class LabyrinthEnv(MultiGridEnv):
         return observation_space
 
     def _find_first_goal_groups(self) -> list[int]:
-        goal_group_config: list[GoalGroupConfig] = self.goal_group_config
-
         # 1. Construct the graph of the goal groups
         # Each tuple contains (goal_group_index, next_goal)
         nodes: list[tuple[int, int | None]] = []
         final_nodes: list[tuple[int, int | None]] = []
-        for goal_group in goal_group_config:
-            if goal_group["next_goal"] == "terminal":
-                final_nodes.append((goal_group["group_index"], None))
+        for subtask in self.subtasks:
+            if subtask.next_goal_group_index == "terminal":
+                final_nodes.append((subtask.goal_group_index, None))
             else:
-                nodes.append((goal_group["group_index"], goal_group["next_goal"]))
+                nodes.append((subtask.goal_group_index, subtask.next_goal_group_index))
 
         # 2. Find the first goal groups from the final goal groups
         while True:
@@ -795,64 +801,28 @@ class LabyrinthEnv(MultiGridEnv):
     def _gen_grid(self, width, height) -> None:
         self.grid = Grid(width, height, self.world)
 
-        obj_group_dict: ObjectGroupDict = {}
+        obj_group_dict: dict[str, dict[int, ObjGroupT]] = {}
 
-        # Place the goal objects
-        obj_group_dict["goal"] = {}
-        for goal_config in self.goal_group_config:
-            group_index: int = goal_config["group_index"]
-            positions: tuple[tuple[int, int], ...] = goal_config["pos"]
-
-            obj_group_dict["goal"][group_index] = GoalGroup(**goal_config)
-
-            for pos, agent_index in zip(positions, goal_config["valid_agent_indices"]):
-                goal = AgentGoal(self.world, agent_index, group_index, color="green")
-                self.put_obj(goal, *pos)
-
-        # Place doors
-        obj_group_dict["door"] = {}
-        obj_group_dict["zone"] = {}
-        obj_group_dict["wall"] = {}
+        # Place objects
         for obj_group_config in self.obj_group_config:
             obj_type: str = obj_group_config["obj_type"]
             group_index: int = obj_group_config["group_index"]
 
-            if obj_type == "door":
-                obj_group_dict[obj_type][group_index] = DoorGroup(
-                    obj_type, obj_group_config["group_index"], obj_group_config["pos"]
-                )
-
-            elif obj_type == "zone":
-                args: dict[str, Any] = obj_group_config["group_args"]
-                obj_group_dict[obj_type][group_index] = ZoneGroup(
-                    obj_type,
-                    obj_group_config["group_index"],
-                    obj_group_config["pos"],
-                    **args,
-                )
-
-            elif obj_type == "wall":
-                args: dict[str, Any] = obj_group_config["group_args"]
-                obj_group_dict[obj_type][group_index] = WallGroup(
-                    obj_type,
-                    obj_group_config["group_index"],
-                    obj_group_config["pos"],
-                    **args,
-                )
-
-            else:
-                raise ValueError(f"Invalid object type: {obj_type}")
-
+            obj_group_dict[obj_type][group_index] = ObjectGroup(**obj_group_config)
             obj_group_dict[obj_type][group_index].put_objects(self.grid, self.world)
 
         self.obj_group_dict = obj_group_dict
-
         self.init_grid: Grid = self.grid.copy()
 
         # Place the agents
         assert len(self.agents) == len(self.init_pos)
         for agent, pos in zip(self.agents, self.init_pos):
             self.place_agent(agent, pos)
+
+        # Initialize detectors
+        self.detectors: list[Detector] = [
+            Detector(**detector_config) for detector_config in self.detector_config
+        ]
 
     def _get_obs(self) -> NDArray[np.int_]:
         obs: dict[str, Any] = {}
@@ -1121,13 +1091,14 @@ class LabyrinthEnv(MultiGridEnv):
         return previous_pos
 
     def _agents_detected(self) -> bool:
-        for zone in self.obj_group_dict["zone"].values():
-            if zone.detect_agents(self.agents, self.np_random):
-                return True
+        detected: bool = False
+        for detector in self.detectors:
+            if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
+                detected = True
             else:
                 pass
 
-        return False
+        return detected
 
     def _agents_reached_terminal_goal(self) -> bool:
         for agent in self.agents:
