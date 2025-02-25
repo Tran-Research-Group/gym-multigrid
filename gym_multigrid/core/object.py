@@ -215,8 +215,8 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world: WorldT, color: str = "grey"):
-        super().__init__(world, "wall", color)
+    def __init__(self, world: WorldT, type: str = "wall", color: str = "grey"):
+        super().__init__(world, type, color)
 
     def see_behind(self):
         return False
