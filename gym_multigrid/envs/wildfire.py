@@ -606,7 +606,7 @@ class WildfireEnv(MultiGridEnv):
         return state
 
     def reset(
-        self, seed: int | None = None, options: dict[str, npt.NDArray] = {"state": None}
+        self, seed: int | None = None, options: dict[str, npt.NDArray] | None = None
     ) -> tuple[OrderedDict[str, npt.NDArray], dict[str, int]]:
         """Reset the state of the environment
 
@@ -615,7 +615,7 @@ class WildfireEnv(MultiGridEnv):
         seed : int, optional
             seed for random number generator, by default None
         options : dict, optional
-            dictionary containing additional options for resetting the environment, by default {"state": None}. The state option specifies the initial state of the environment upon reset. If none, initial state is chosen uniformly at random from initial state distribution.
+            dictionary containing additional option for resetting the environment to a specified initial state. By default None. The dictionary key must be "state" and value must be a numpy array representing the state. If options = none, initial state is chosen uniformly at random from initial state distribution.
 
         Returns
         -------
@@ -634,12 +634,12 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
 
         # parse options
-        state = options["state"]
-
-        # reset the grid
-        if state is not None:
+        if options is not None:
+            state = options["state"]
+            # reset the grid with the specified state
             super().reset(seed=seed, options={"state": state})
         else:
+            # reset the grid with a random state
             super().reset(seed=seed)
 
         # get agent observations
