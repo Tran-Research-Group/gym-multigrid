@@ -733,24 +733,28 @@ class LabyrinthEnv(MultiGridEnv):
             Should be in the range [0, 1].
         init_pos : tuple[tuple[int, int],...] = [(1, 3), (1, 4), (1, 5)]
             Initial positions of the agents.
-        goal_group_config : list[GoalGroupConfig] = goal_group_config
-            Configuration of the goal groups.
+        subtask_config : list[SubtaskConfig] = subtask_config
+            Configuration of the subtasks.
             The following keys are required:
-            - "group_index": int # Group index
-            - "pos": tuple[tuple[int, int], ...] # Positions of the goals
-            - "valid_agent_indices": tuple[int, ...] # Indices of the agents that should be on the goal
-            - "triggered_actions": list[str] # Actions to call for the goal
-            - "triggered_obj_type": str # Type of the object to call the action
-            - "triggered_obj_group": int # Group index of the object to call the action
-            - "next_goal": int | Literal["terminal"] # Next goal group index or "terminal"
+            - "next_subtask": int | "terminal" # Next subtask index or "terminal"
+            - "goal_group_index": int # Goal group index
+            - "assigned_agent_goal": dict[int, tuple[int, int]] # Assigned agent goal positions
+            - "triggers": list[TriggerConfig] # Triggers to open the door
         obj_group_config : list[ObjectGroupConfig] = obj_group_config
             Configuration of the object groups.
             The following keys are required:
             - "obj_type": "door" | "zone" # Object type
             - "group_index": int # Group index
             - "pos": tuple[tuple[int, int], ...] # Positions of the objects
-            - "obj_args": dict[str, Any] # Arguments to initialize the object
-            - "group_args": dict[str, Any] # Arguments to initialize the group and object
+            - "color": str # Color of the objects
+            - "fill_mode": "empty" | "filled" | None # Fill mode of the object
+        detector_config : list[DetectorConfig] = detector_config
+            Configuration of the detectors.
+            The following keys are required:
+            - "obj_type": "zone" # Object type
+            - "group_index": int
+            - "visual_detect_prob": float
+            - "radio_detect_prob": float
         reward_config : RewardConfig = reward_config
             Configuration of the rewards.
             The following keys are required:
@@ -776,6 +780,8 @@ class LabyrinthEnv(MultiGridEnv):
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
+        object_options : dict[str, WorldObjT] = {"goal": AgentGoal, "door": Door, "zone": Zone, "wall": Wall}
+            Options for the objects that can be placed in the environment.
         """
         self.num_agents: int = num_agents
         self.p_intended_action: float = p_intended_action
