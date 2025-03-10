@@ -17,6 +17,7 @@ from gym_multigrid.multigrid import (
     ObservationMode,
     PartialObsConfig,
     RenderingConfig,
+    T_cov,
 )
 from gym_multigrid.typing import Position
 
@@ -73,7 +74,7 @@ class ResetOptions(TypedDict):
     layout_config: LayoutConfig
 
 
-class TensorObservationMode(ObservationMode):
+class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
     @staticmethod
     def observation_space(env: MultiGridEnv) -> spaces.Box:
         return spaces.Box(
@@ -84,7 +85,7 @@ class TensorObservationMode(ObservationMode):
         )
 
     @staticmethod
-    def create_observation(env: MultiGridEnv) -> Observation:
+    def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
         observation: NDArray[np.int64] = np.zeros((2, env.height, env.width))
         observation[0, :, :] = env.layout.static_obs
         for agent in env.agents:
@@ -94,6 +95,8 @@ class TensorObservationMode(ObservationMode):
                 ]
             else:
                 pass
+
+        return observation
 
 
 DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
@@ -150,6 +153,7 @@ class MazeEnv(MultiGridEnv):
         world: Final[World] = MazeWorld
         action_set: ActionsT = MazeActions
 
+        self.layout_config_dict: LayoutConfig = layout_config
         self.layout = Layout(**layout_config)
 
         self.observation_mode: ObservationMode = self.metadata["observation_modes"][
@@ -236,8 +240,9 @@ class MazeEnv(MultiGridEnv):
         self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[Observation, dict[str, float]]:
 
-        if options is not None:
-            self.layout = Layout(**options["layout_config"])
+        if "layout_config" in options:
+            self.layout_config_dict.update(options["layout_config"])
+            self.layout = Layout(**self.layout_config_dict)
 
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
@@ -252,7 +257,7 @@ class MazeEnv(MultiGridEnv):
 
         return obs, info
 
-    def _get_obs(self) -> Observation:
+    def _get_obs(self) -> T_cov:
         return self.observation_mode.create_observation(self)
 
     def _get_info(self) -> dict[str, float]:
