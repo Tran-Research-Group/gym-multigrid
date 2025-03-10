@@ -309,7 +309,10 @@ class Agent(WorldObj):
         assert self.pos is not None
         grid.set(*self.pos, self)
 
-        self.bg_color = init_grid.get(*self.pos).color if init_grid else bg_color
+        self.bg_color = bg_color
+
+        if init_grid is not None and init_grid.get(*self.pos) is not None:
+            self.bg_color = init_grid.get(*self.pos).bg_color if init_grid else bg_color
 
     @property
     def dir_vec(self):

@@ -148,7 +148,7 @@ class MazeEnv(MultiGridEnv):
         """
 
         world: Final[World] = MazeWorld
-        action_set: ActionsT = (MazeActions,)
+        action_set: ActionsT = MazeActions
 
         self.layout = Layout(**layout_config)
 
@@ -160,7 +160,7 @@ class MazeEnv(MultiGridEnv):
 
         agents: list[AgentT] = [
             Agent(
-                self.world,
+                world,
                 index=i,
                 color="blue",
                 view_size=None,
@@ -210,7 +210,7 @@ class MazeEnv(MultiGridEnv):
 
         for flag_idx, (i, j) in enumerate(self.layout.flag_positions):
             self.put_obj(
-                Flag(self.world, index=flag_idx, color="red", bg_color="white"), i, j
+                Flag(self.world, index=flag_idx, color="red", bg_color=None), i, j
             )
 
         self.init_grid: Grid = self.grid.copy()
@@ -264,7 +264,7 @@ class MazeEnv(MultiGridEnv):
 
         assert agent.pos is not None
 
-        action_set: type[MazeActions] = cast(type[MazeActions], self.actions_set)
+        action_set: type[MazeActions] = cast(type[MazeActions], self.actions)
         match action:
             case action_set.STAY:
                 next_pos = agent.pos
@@ -324,7 +324,6 @@ class MazeEnv(MultiGridEnv):
     def step(
         self, action: int | list[int]
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-        self.step_count += 1
 
         actions: list[int] = np.array([action]).flatten().tolist()
 
@@ -333,7 +332,7 @@ class MazeEnv(MultiGridEnv):
         assert self.agents[0].pos is not None
 
         terminated: bool = False
-        truncated: bool = True
+        truncated: bool = False
 
         flag_reward: float = self.reward.flag_reward
         wall_penalty: float = flag_reward * self.reward.wall_penalty_ratio
