@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Literal, TypedDict, Optional
+from typing import Any, Literal, TypeVar, TypedDict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -7,30 +7,40 @@ from gymnasium import spaces
 
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Block, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import SimpleDoor as Door
 from gym_multigrid.core.world import WorldT, LabyrinthWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 
 
-class GoalGroupConfig(TypedDict):
-    group_index: int
-    pos: tuple[tuple[int, int], ...]
-    valid_agent_indices: tuple[int, ...]
-    called_actions: list[str]
-    action_obj_type: str
-    action_obj_group: int
-    next_goal: int | Literal["terminal"]
+class TriggerConfig(TypedDict):
+    condition: str
+    action: str
+    obj_type: str
+    obj_group: int
 
 
-class _ObjectGroupConfig(TypedDict):
+class SubtaskConfig(TypedDict):
+    next_subtask: int | Literal["terminal"]
+    goal_group_index: int
+    assigned_agent_goal: dict[int, tuple[int, int]]
+    triggers: list[TriggerConfig]
+
+
+class ObjectGroupConfig(TypedDict):
     obj_type: str
     group_index: int
     pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
+    color: str
+    fill_mode: Literal["empty", "filled"] | None
 
 
-class ObjectGroupConfig(_ObjectGroupConfig, total=False):
-    group_args: dict[str, Any]
+class DetectorConfig(TypedDict):
+    obj_type: str
+    group_index: int
+    visual_detect_prob: float
+    radio_detect_prob: float
 
 
 class RewardConfig(TypedDict):
@@ -41,109 +51,20 @@ class RewardConfig(TypedDict):
     all_agents_on_goal_reward: float
 
 
-goal_group_config: list[GoalGroupConfig] = [
-    {
-        "group_index": 0,
-        "pos": ((4, 1), (4, 2), (4, 3)),
-        "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 0,
-        "next_goal": 2,
-    },
-    {
-        "group_index": 1,
-        "pos": ((3, 5), (3, 6), (3, 7)),
-        "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 1,
-        "next_goal": 2,
-    },
-    {
-        "group_index": 2,
-        "pos": ((6, 3), (6, 4), (6, 5)),
-        "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "action_obj_type": "block",
-        "action_obj_group": 2,
-        "next_goal": 3,
-    },
-    {
-        "group_index": 3,
-        "pos": ((8, 3), (8, 4), (8, 5)),
-        "valid_agent_indices": (0, 1, 2),
-        "called_actions": ["open"],
-        "next_goal": "terminal",
-    },
-]
-
-obj_group_config: list[ObjectGroupConfig] = [
-    {
-        "obj_type": "block",
-        "group_index": 0,
-        "pos": ((5, 1), (5, 2), (5, 3)),
-    },
-    {
-        "obj_type": "block",
-        "group_index": 1,
-        "pos": ((4, 5), (4, 6), (4, 7)),
-    },
-    {
-        "obj_type": "block",
-        "group_index": 2,
-        "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
-    },
-    {
-        "obj_type": "zone",
-        "group_index": 0,
-        "pos": ((2, 1), (2, 2), (2, 3)),
-        "group_args": {"color": "blue", "visual_detect_prob": 0.005},
-    },
-    {
-        "obj_type": "zone",
-        "group_index": 1,
-        "pos": ((2, 5), (2, 6), (2, 7)),
-        "group_args": {
-            "color": "red",
-            "visual_detect_prob": 0.005,
-            "radio_detect_prob": 0.06,
-        },
-    },
-    {
-        "obj_type": "wall",
-        "group_index": 0,
-        "pos": ((0, 0, 10, 9),),
-        "group_args": {
-            "fill_mode": "empty",
-        },
-    },
-    {
-        "obj_type": "wall",
-        "group_index": 1,
-        "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
-        "group_args": {
-            "fill_mode": "filled",
-        },
-    },
-]
-
-reward_config: RewardConfig = {
-    "reward_option": "intermediate_goal",
-    "movement_reward": -0.02,
-    "agent_on_goal_reward": 0.2,
-    "agent_move_away_from_goal_reward": -0.3,
-    "all_agents_on_goal_reward": 1.0,
-}
-
-
 class ObjectGroup(ABC):
     def __init__(
         self,
         obj_type: str,
         group_index: int,
         pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
+        color: str,
         fill_mode: Literal["empty", "filled"] = "filled",
+        object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "door": Door,
+            "zone": Zone,
+            "wall": Wall,
+        },
     ) -> None:
         """
         Initializes the object group.
@@ -166,6 +87,8 @@ class ObjectGroup(ABC):
         """
         self.obj_type: str = obj_type
         self.group_index: int = group_index
+        self.color: str = color
+        self.object_options: dict[str, WorldObjT] = object_options
 
         pos_list: list[tuple[int, int]] = []
         for p in pos:
@@ -198,12 +121,13 @@ class ObjectGroup(ABC):
             obj: WorldObjT = self._init_obj(world)
             self._put_obj(grid, pos, obj)
 
-    @abstractmethod
     def _init_obj(self, world: WorldT) -> WorldObjT:
         """
         Defines the initialization of the object.
         """
-        ...
+        return self.object_options[self.obj_type](
+            world, type=self.obj_type, color=self.color
+        )
 
     def _put_obj(self, grid: Grid, pos: tuple[int, int], obj: WorldObjT) -> None:
         """
@@ -222,6 +146,31 @@ class ObjectGroup(ABC):
         obj.init_pos = pos
         obj.pos = pos
         grid.set(*pos, obj)
+
+    def apply_obj_action(
+        self, action: str, grid: Grid, args: dict[str, Any] = {}
+    ) -> Any:
+        """
+        Applies the action to each object in the group.
+
+        Parameters
+        ----------
+        action : str
+            Action to apply.
+        args : dict[str, Any] = {}
+            Arguments for the action.
+
+        Returns
+        -------
+        outputs : list[Any]
+            Outputs of the action for each object in the group.
+        """
+        outputs: list[Any] = []
+        for pos in self.pos:
+            obj: WorldObjT = grid.get(*pos)
+            outputs.append(getattr(obj, action)(**args))
+
+        return outputs
 
     def call_action(self, action: str, args: dict[str, Any] = {}) -> Any:
         return getattr(self, action)(**args)
@@ -262,63 +211,55 @@ class ObjectGroup(ABC):
         return pos_list
 
 
-class BlockGroup(ObjectGroup):
+ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)
+
+
+class Subtask:
     def __init__(
         self,
+        next_subtask: int | Literal["terminal"],
+        goal_group_index: int,
+        assigned_agent_goal: dict[int, tuple[int, int]],
+        triggers: list[TriggerConfig],
+    ) -> None:
+        self.next_subtask: int | Literal["terminal"] = next_subtask
+        self.goal_group_index: int = goal_group_index
+        self.assigned_agent_goal: dict[int, tuple[int, int]] = assigned_agent_goal
+        self.triggers: list[Trigger] = [Trigger(**trigger) for trigger in triggers]
+
+
+class Trigger:
+    def __init__(
+        self,
+        condition: str,
+        action: str,
         obj_type: str,
-        group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
+        obj_group: int,
     ) -> None:
-        super().__init__(obj_type, group_index, pos)
-        self.locked: bool = True
+        self.condition: str = condition
+        self.action: str = action
+        self.obj_type: str = obj_type
+        self.obj_group: int = obj_group
 
-    def _init_obj(self, world: WorldT) -> Block:
-        return Block(world)
+        self.triggered: bool = False
 
-    def open(self, grid: Grid) -> None:
-        for pos in self.pos:
-            block: Block = grid.get(*pos)
-            block.open()
-
-        self.locked = False
-
-    def is_locked(self) -> bool:
-        return self.locked
-
-
-class GoalGroup(ObjectGroup):
-    def __init__(
-        self,
-        group_index: int,
-        pos: tuple[tuple[int, int], ...],
-        valid_agent_indices: tuple[int, ...],
-        called_actions: list[str],
-        next_goal: int | Literal["terminal"],
-        action_obj_type: Optional[str] = None,
-        action_obj_group: Optional[int] = None,
+    def trigger_action(
+        self, obj_group_dict: dict[str, dict[int, ObjGroupT]], grid: Grid
     ) -> None:
-        obj_type: str = "goal"
-        super().__init__(obj_type, group_index, pos)
-        self.valid_agent_indices: tuple[int, ...] = valid_agent_indices
-        self.called_actions: list[str] = called_actions
-        self.action_obj_type: Optional[str] = action_obj_type
-        self.action_obj_group: Optional[int] = action_obj_group
-        self.next_goal: int | Literal["terminal"] = next_goal
+        obj_group_dict[self.obj_type][self.obj_group].apply_obj_action(
+            self.action, grid
+        )
 
-    def _init_obj(self, world: WorldT, agent_index: int) -> AgentGoal:
-        return AgentGoal(world, agent_index, self.group_index, color="green")
+        self.triggered = True
 
-    def put_objects(self, grid: Grid, world: WorldT) -> None:
-        assert len(self.pos) == len(self.valid_agent_indices)
-        for pos, agent_index in zip(self.pos, self.valid_agent_indices):
-            obj: AgentGoal = self._init_obj(world, agent_index)
-            self._put_obj(grid, pos, obj)
+    def is_condition_satisfied(self, agents: list[Agent], subtask: Subtask) -> bool:
+        return getattr(self, self.condition)(agents, subtask)
 
-    def agents_on_goals(self, agents: list[Agent]) -> bool:
-        for pos, agent_index in zip(self.pos, self.valid_agent_indices):
+    def agents_on_goals(self, agents: list[Agent], subtask: Subtask) -> bool:
+        for agent_index, goal_pos in subtask.assigned_agent_goal.items():
             if (
-                agents[agent_index].pos[0] != pos[0]
-                or agents[agent_index].pos[1] != pos[1]
+                agents[agent_index].pos[0] != goal_pos[0]
+                or agents[agent_index].pos[1] != goal_pos[1]
             ):
                 return False
             else:
@@ -326,47 +267,42 @@ class GoalGroup(ObjectGroup):
 
         return True
 
-    def open(self, block_group_dict: dict[int, BlockGroup], grid: Grid) -> None:
-        block_group_dict[self.action_obj_group].open(grid)
 
-    def is_block_locked(self, block_group_dict: dict[int, BlockGroup]) -> bool:
-        if self.action_obj_group is None:
-            return False
-        else:
-            return block_group_dict[self.action_obj_group].is_locked()
-
-
-class ZoneGroup(ObjectGroup):
+class Detector:
     def __init__(
         self,
         obj_type: str,
         group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
-        color: str,
-        visual_detect_prob: float = 0.0,
-        radio_detect_prob: float = 0.0,
+        visual_detect_prob: float,
+        radio_detect_prob: float,
     ) -> None:
-        super().__init__(obj_type, group_index, pos)
-        self.color: str = color
+        self.obj_type: str = obj_type
+        self.group_index: int = group_index
         self.visual_detect_prob: float = visual_detect_prob
         self.radio_detect_prob: float = radio_detect_prob
 
-    def _init_obj(self, world: WorldT) -> Zone:
-        return Zone(world, self.color, f"{self.color}_zone")
-
     def detect_agents(
-        self, agents: list[Agent], random_generator: np.random.Generator
+        self,
+        agents: list[Agent],
+        obj_group_dict: dict[str, dict[int, ObjGroupT]],
+        random_generator: np.random.Generator,
     ) -> bool:
+        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_index]
         for agent in agents:
-            if self.detect_agent(agent, random_generator):
+            if self.detect_agent(agent, obj_group, random_generator):
                 return True
             else:
                 pass
 
         return False
 
-    def detect_agent(self, agent: Agent, random_generator: np.random.Generator) -> bool:
-        if (agent.pos[0], agent.pos[1]) in self.pos:
+    def detect_agent(
+        self,
+        agent: list[Agent],
+        obj_group: ObjGroupT,
+        random_generator: np.random.Generator,
+    ) -> bool:
+        if (agent.pos[0], agent.pos[1]) in obj_group.pos:
             visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
             radio_detect: bool = random_generator.uniform() < self.radio_detect_prob
             return visual_detect or radio_detect
@@ -374,31 +310,169 @@ class ZoneGroup(ObjectGroup):
             return False
 
 
-class WallGroup(ObjectGroup):
-    def __init__(
-        self,
-        obj_type: str,
-        group_index: int,
-        pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
-        fill_mode: Literal["empty", "filled"] = "filled",
-    ) -> None:
-        super().__init__(obj_type, group_index, pos, fill_mode)
+subtask_config: list[SubtaskConfig] = [
+    {
+        "goal_group_index": 0,
+        "next_subtask": 2,
+        "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 0,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 1,
+        "next_subtask": 2,
+        "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 1,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 2,
+        "next_subtask": 3,
+        "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
+        "triggers": [
+            {
+                "condition": "agents_on_goals",
+                "action": "open",
+                "obj_type": "door",
+                "obj_group": 2,
+            }
+        ],
+    },
+    {
+        "goal_group_index": 3,
+        "next_subtask": "terminal",
+        "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
+        "triggers": [],
+    },
+]
 
-    def _init_obj(self, world: WorldT) -> Wall:
-        return Wall(world)
+obj_group_config: list[ObjectGroupConfig] = [
+    {
+        "obj_type": "goal",
+        "group_index": 0,
+        "pos": ((4, 1), (4, 2), (4, 3)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 1,
+        "pos": ((3, 5), (3, 6), (3, 7)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 2,
+        "pos": ((6, 3), (6, 4), (6, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "goal",
+        "group_index": 3,
+        "pos": ((8, 3), (8, 4), (8, 5)),
+        "color": "green",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 0,
+        "pos": ((5, 1), (5, 2), (5, 3)),
+        "color": "light_grey",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 1,
+        "pos": ((4, 5), (4, 6), (4, 7)),
+        "color": "light_grey",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "door",
+        "group_index": 2,
+        "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
+        "color": "light_grey",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 0,
+        "pos": ((2, 1), (2, 2), (2, 3)),
+        "color": "blue",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 1,
+        "pos": ((2, 5), (2, 6), (2, 7)),
+        "color": "red",
+        "fill_mode": None,
+    },
+    {
+        "obj_type": "wall",
+        "group_index": 0,
+        "pos": ((0, 0, 10, 9),),
+        "color": "grey",
+        "fill_mode": "empty",
+    },
+    {
+        "obj_type": "wall",
+        "group_index": 1,
+        "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
+        "color": "grey",
+        "fill_mode": "filled",
+    },
+]
 
+detector_config: list[DetectorConfig] = [
+    {
+        "obj_type": "zone",
+        "group_index": 0,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.0,
+    },
+    {
+        "obj_type": "zone",
+        "group_index": 1,
+        "visual_detect_prob": 0.005,
+        "radio_detect_prob": 0.06,
+    },
+]
 
-class ObjectGroupDict(TypedDict):
-    goal: dict[int, GoalGroup]
-    block: dict[int, BlockGroup]
-    zone: dict[int, ZoneGroup]
-    wall: dict[int, WallGroup]
+reward_config: RewardConfig = {
+    "reward_option": "intermediate_goal",
+    "movement_reward": -0.02,
+    "agent_on_goal_reward": 0.2,
+    "agent_move_away_from_goal_reward": -0.3,
+    "all_agents_on_goal_reward": 1.0,
+}
 
 
 class LabyrinthEnv(MultiGridEnv):
     """
     # Labyrinth Environment
     Multi-agent labyrinth env with multiple goals and zones.
+
+    ### Example
+    ``` python
+    import gymnasium as gym
+
+    env = gym.make("multigrid-labyrinth-v0")
+    ```
 
     ## Observation
     The format of the observation is a dictionary of each agent's observation with the agent's index as the key.
@@ -422,7 +496,6 @@ class LabyrinthEnv(MultiGridEnv):
     })
     ```
 
-
     ## Actions
     - There are five actions: "stay", "up", "right", "down", and "left".
     - The action space is MultiDiscrete([5, 5, 5]) for three agents.
@@ -437,13 +510,6 @@ class LabyrinthEnv(MultiGridEnv):
 
     ### Example
     ``` python
-    class RewardConfig(TypedDict):
-        reward_option: Literal["final_goal", "intermediate_goal"]
-        movement_reward: float
-        agent_on_goal_reward: float
-        agent_move_away_from_goal_reward: float
-        all_agents_on_goal_reward: float
-
     reward_config: RewardConfig = {
         "reward_option": "final_goal",
         "movement_reward": -0.02,
@@ -452,102 +518,188 @@ class LabyrinthEnv(MultiGridEnv):
         "all_agents_on_goal_reward": 1.0,
     }
     ```
+    ## Subtasks
+    - The subtasks are defined in the `subtask_config` parameter.
+    - Each subtask has the following
+        - `next_subtask`: Next subtask index or "terminal". If a subtask is a terminal subtask, the episode ends.
+        - `goal_group_index`: Goal group index.
+        - `assigned_agent_goal`: Assigned agent goal positions as a dictionary with the agent index as the key and the assigned goal position as the value.
+        - `triggers`: Triggers to open the door.
 
-    ## Object Groups
-    - Goal objects: The goal objects are placed on the grid.
-    - Block objects: The block objects are placed on the grid.
-    - Zone objects: The zone objects are placed on the grid.
+    ### Trigger
+    - The trigger has the following
+        - `condition`: Condition to trigger the action.
+        - `action`: Action to call for the object.
+        - `obj_type`: Type of the object to call the action.
+        - `obj_group`: Group index of the object to call the action.
 
     ### Example
     ``` python
-    goal_group_config: list[GoalGroupConfig] = [
+    subtask_config: list[SubtaskConfig] = [
         {
-            "group_index": 0,
-            "pos": ((4, 1), (4, 2), (4, 3)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 0,
-            "next_goal": 2,
+            "goal_group_index": 0,
+            "next_subtask": 2,
+            "assigned_agent_goal": {0: (4, 1), 1: (4, 2), 2: (4, 3)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 0,
+                }
+            ],
         },
         {
-            "group_index": 1,
-            "pos": ((3, 5), (3, 6), (3, 7)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 1,
-            "next_goal": 2,
+            "goal_group_index": 1,
+            "next_subtask": 2,
+            "assigned_agent_goal": {0: (3, 5), 1: (3, 6), 2: (3, 7)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 1,
+                }
+            ],
         },
         {
-            "group_index": 2,
-            "pos": ((6, 3), (6, 4), (6, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 2,
-            "next_goal": 3,
+            "goal_group_index": 2,
+            "next_subtask": 3,
+            "assigned_agent_goal": {0: (6, 3), 1: (6, 4), 2: (6, 5)},
+            "triggers": [
+                {
+                    "condition": "agents_on_goals",
+                    "action": "open",
+                    "obj_type": "door",
+                    "obj_group": 2,
+                }
+            ],
         },
         {
-            "group_index": 3,
-            "pos": ((8, 3), (8, 4), (8, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": -1,
-            "next_goal": "terminal",
+            "goal_group_index": 3,
+            "next_subtask": "terminal",
+            "assigned_agent_goal": {0: (8, 3), 1: (8, 4), 2: (8, 5)},
+            "triggers": [],
         },
     ]
+    ```
 
+    ## Object Groups
+    - The object groups are defined in the `obj_group_config` parameter.
+    - Each object group has the following
+        - `obj_type`: Type of the object.
+        - `group_index`: Group index of the object.
+        - `pos`: Positions of the objects.
+        - `color`: Color of the objects.
+        - `fill_mode`: Fill mode of the object.
+
+    ### Example
+    ``` python
     obj_group_config: list[ObjectGroupConfig] = [
         {
-            "obj_type": "block",
+            "obj_type": "goal",
+            "group_index": 0,
+            "pos": ((4, 1), (4, 2), (4, 3)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 1,
+            "pos": ((3, 5), (3, 6), (3, 7)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 2,
+            "pos": ((6, 3), (6, 4), (6, 5)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "goal",
+            "group_index": 3,
+            "pos": ((8, 3), (8, 4), (8, 5)),
+            "color": "green",
+            "fill_mode": None,
+        },
+        {
+            "obj_type": "door",
             "group_index": 0,
             "pos": ((5, 1), (5, 2), (5, 3)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
-            "obj_type": "block",
+            "obj_type": "door",
             "group_index": 1,
             "pos": ((4, 5), (4, 6), (4, 7)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
-            "obj_type": "block",
+            "obj_type": "door",
             "group_index": 2,
             "pos": ((7, 2), (7, 3), (7, 4), (7, 5), (7, 6)),
+            "color": "light_grey",
+            "fill_mode": None,
         },
         {
             "obj_type": "zone",
             "group_index": 0,
             "pos": ((2, 1), (2, 2), (2, 3)),
-            "group_args": {"color": "blue", "visual_detect_prob": 0.005},
+            "color": "blue",
+            "fill_mode": None,
         },
         {
             "obj_type": "zone",
             "group_index": 1,
             "pos": ((2, 5), (2, 6), (2, 7)),
-            "group_args": {
-                "color": "red",
-                "visual_detect_prob": 0.005,
-                "radio_detect_prob": 0.06,
-            },
+            "color": "red",
+            "fill_mode": None,
         },
         {
             "obj_type": "wall",
             "group_index": 0,
             "pos": ((0, 0, 10, 9),),
-            "group_args": {
-                "fill_mode": "empty",
-            },
+            "color": "grey",
+            "fill_mode": "empty",
         },
         {
             "obj_type": "wall",
             "group_index": 1,
             "pos": ((7, 1, 2, 1), (7, 7, 2, 1), (3, 4, 2, 1)),
-            "group_args": {
-                "fill_mode": "filled",
-            },
+            "color": "grey",
+            "fill_mode": "filled",
         },
-        ]
+    ]
+    ```
+
+    ## Detectors
+    - The detectors are defined in the `detector_config` parameter.
+    - Each detector has the following
+        - `obj_type`: Type of the object where the detector is placed.
+        - `group_index`: Group index of the object where the detector is placed.
+        - `visual_detect_prob`: Probability of the visual detection.
+        - `radio_detect_prob`: Probability of the radio detection.
+
+    ### Example
+    ``` python
+    detector_config: list[DetectorConfig] = [
+        {
+            "obj_type": "zone",
+            "group_index": 0,
+            "visual_detect_prob": 0.005,
+            "radio_detect_prob": 0.0,
+        },
+        {
+            "obj_type": "zone",
+            "group_index": 1,
+            "visual_detect_prob": 0.005,
+            "radio_detect_prob": 0.06,
+        },
+    ]
     ```
     """
 
@@ -556,17 +708,25 @@ class LabyrinthEnv(MultiGridEnv):
         num_agents: int = 3,
         p_intended_action: float = 0.95,
         init_pos: tuple[tuple[int, int], ...] = [(1, 3), (1, 4), (1, 5)],
-        goal_group_config: list[GoalGroupConfig] = goal_group_config,
+        subtask_config: list[SubtaskConfig] = subtask_config,
         obj_group_config: list[ObjectGroupConfig] = obj_group_config,
+        detector_config: list[DetectorConfig] = detector_config,
         reward_config: RewardConfig = reward_config,
-        observation_option: Literal["final_goal", "intermediate_goal"] = "final_goal",
+        observation_option: Literal[
+            "final_goal", "intermediate_goal"
+        ] = "intermediate_goal",
         width: int = 10,
         height: int = 9,
-        max_steps: int = 100,
         actions_set: type[ActionsT] = NavigationActions,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         world: WorldT = LabyrinthWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
+        object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "door": Door,
+            "zone": Zone,
+            "wall": Wall,
+        },
     ) -> None:
         """
         Constructor for the LabyrinthEnv class.
@@ -580,24 +740,28 @@ class LabyrinthEnv(MultiGridEnv):
             Should be in the range [0, 1].
         init_pos : tuple[tuple[int, int],...] = [(1, 3), (1, 4), (1, 5)]
             Initial positions of the agents.
-        goal_group_config : list[GoalGroupConfig] = goal_group_config
-            Configuration of the goal groups.
+        subtask_config : list[SubtaskConfig] = subtask_config
+            Configuration of the subtasks.
             The following keys are required:
-            - "group_index": int # Group index
-            - "pos": tuple[tuple[int, int], ...] # Positions of the goals
-            - "valid_agent_indices": tuple[int, ...] # Indices of the agents that should be on the goal
-            - "called_actions": list[str] # Actions to call for the goal
-            - "action_obj_type": str # Type of the object to call the action
-            - "action_obj_group": int # Group index of the object to call the action
-            - "next_goal": int | Literal["terminal"] # Next goal group index or "terminal"
+            - "next_subtask": int | "terminal" # Next subtask index or "terminal"
+            - "goal_group_index": int # Goal group index
+            - "assigned_agent_goal": dict[int, tuple[int, int]] # Assigned agent goal positions
+            - "triggers": list[TriggerConfig] # Triggers to open the door
         obj_group_config : list[ObjectGroupConfig] = obj_group_config
             Configuration of the object groups.
             The following keys are required:
-            - "obj_type": "block" | "zone" # Object type
+            - "obj_type": "door" | "zone" # Object type
             - "group_index": int # Group index
             - "pos": tuple[tuple[int, int], ...] # Positions of the objects
-            - "obj_args": dict[str, Any] # Arguments to initialize the object
-            - "group_args": dict[str, Any] # Arguments to initialize the group and object
+            - "color": str # Color of the objects
+            - "fill_mode": "empty" | "filled" | None # Fill mode of the object
+        detector_config : list[DetectorConfig] = detector_config
+            Configuration of the detectors.
+            The following keys are required:
+            - "obj_type": "zone" # Object type
+            - "group_index": int
+            - "visual_detect_prob": float
+            - "radio_detect_prob": float
         reward_config : RewardConfig = reward_config
             Configuration of the rewards.
             The following keys are required:
@@ -613,8 +777,6 @@ class LabyrinthEnv(MultiGridEnv):
             Width of the grid.
         height : int = 9
             Height of the grid.
-        max_steps : int = 100
-            Maximum number of steps in the environment.
         actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -625,42 +787,49 @@ class LabyrinthEnv(MultiGridEnv):
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
+        object_options : dict[str, WorldObjT] = {"goal": AgentGoal, "door": Door, "zone": Zone, "wall": Wall}
+            Options for the objects that can be placed in the environment.
         """
         self.num_agents: int = num_agents
         self.p_intended_action: float = p_intended_action
-        self.goal_group_config: list[GoalGroupConfig] = goal_group_config
+        self.subtask_config: list[SubtaskConfig] = subtask_config
         self.obj_group_config: list[ObjectGroupConfig] = obj_group_config
+        self.detector_config: list[DetectorConfig] = detector_config
         self.reward_config: RewardConfig = reward_config
         self.observation_option: Literal["final_goal", "intermediate_goal"] = (
             observation_option
         )
         self.init_pos: tuple[tuple[int, int], ...] = init_pos
 
-        agent_view_size: int = 7
+        agent_view_size: int = None
         agents: list[Agent] = [
             Agent(world, i, agent_view_size, actions_set, agent_dir_to_vec)
             for i in range(num_agents)
         ]
 
         self.final_goal: tuple[tuple[int, int], ...] = ()
-        self.goals: list[tuple[tuple[int, int], ...]] = []
         self.agent_goals: dict[int, list[tuple[int, int]]] = {}
 
-        for goal_config in self.goal_group_config:
-            self.goals.append(goal_config["pos"])
-            for agent_index, pos in zip(
-                goal_config["valid_agent_indices"], goal_config["pos"]
-            ):
+        self.subtask_dict: dict[int, Subtask] = {
+            i: Subtask(**subtask_config[i]) for i in range(len(subtask_config))
+        }
+
+        self.terminal_subtasks: list[Subtask] = [
+            subtask
+            for subtask in self.subtask_dict.values()
+            if subtask.next_subtask == "terminal"
+        ]
+
+        for subtask in self.subtask_dict.values():
+            for agent_index, pos in subtask.assigned_agent_goal.items():
                 if agent_index in self.agent_goals:
                     self.agent_goals[agent_index].append(pos)
                 else:
                     self.agent_goals[agent_index] = [pos]
 
-            if goal_config["next_goal"] == "terminal":
-                self.final_goal = goal_config["pos"]
-                self.final_goal_group_index = goal_config["group_index"]
-
-        self.init_goal_group_indices: list[int] = self._find_first_goal_groups()
+            if subtask.next_subtask == "terminal":
+                self.final_goal = tuple(subtask.assigned_agent_goal.values())
+                self.final_goal_group_index = subtask.goal_group_index
 
         uncached_object_types: list[str] = ["agent"]
 
@@ -668,7 +837,6 @@ class LabyrinthEnv(MultiGridEnv):
             agents=agents,
             width=width,
             height=height,
-            max_steps=max_steps,
             actions_set=actions_set,
             world=world,
             render_mode=render_mode,
@@ -678,6 +846,7 @@ class LabyrinthEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
+        self.object_options: dict[str, WorldObjT] = object_options
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -705,18 +874,16 @@ class LabyrinthEnv(MultiGridEnv):
 
         return observation_space
 
-    def _find_first_goal_groups(self) -> list[int]:
-        goal_group_config: list[GoalGroupConfig] = self.goal_group_config
-
+    def _find_first_subtasks(self) -> list[int]:
         # 1. Construct the graph of the goal groups
         # Each tuple contains (goal_group_index, next_goal)
         nodes: list[tuple[int, int | None]] = []
         final_nodes: list[tuple[int, int | None]] = []
-        for goal_group in goal_group_config:
-            if goal_group["next_goal"] == "terminal":
-                final_nodes.append((goal_group["group_index"], None))
+        for subtask_id, subtask in self.subtask_dict.items():
+            if subtask.next_subtask == "terminal":
+                final_nodes.append((subtask.goal_group_index, None))
             else:
-                nodes.append((goal_group["group_index"], goal_group["next_goal"]))
+                nodes.append((subtask_id, subtask.next_subtask))
 
         # 2. Find the first goal groups from the final goal groups
         while True:
@@ -746,7 +913,23 @@ class LabyrinthEnv(MultiGridEnv):
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         super().reset(seed=seed, options=options)
 
-        self.current_goal_group_indices: list[int] = self.init_goal_group_indices
+        self.current_subtasks: list[Subtask] = [
+            self.subtask_dict[subtask_id] for subtask_id in self._find_first_subtasks()
+        ]
+
+        self.rewarded_subtasks: list[Subtask]
+        if self.reward_config["reward_option"] == "final_goal":
+            self.rewarded_subtasks = [
+                subtask
+                for subtask in self.current_subtasks
+                if subtask.next_subtask == "terminal"
+            ]
+        elif self.reward_config["reward_option"] == "intermediate_goal":
+            self.rewarded_subtasks = self.current_subtasks
+        else:
+            raise ValueError(
+                f"Invalid reward option: {self.reward_config['reward_option']}"
+            )
 
         obs = self._get_obs()
         info: dict[str, Any] = self._get_info()
@@ -756,64 +939,35 @@ class LabyrinthEnv(MultiGridEnv):
     def _gen_grid(self, width, height) -> None:
         self.grid = Grid(width, height, self.world)
 
-        obj_group_dict: ObjectGroupDict = {}
+        obj_group_dict: dict[str, dict[int, ObjGroupT]] = {}
 
-        # Place the goal objects
-        obj_group_dict["goal"] = {}
-        for goal_config in self.goal_group_config:
-            group_index: int = goal_config["group_index"]
-            positions: tuple[tuple[int, int], ...] = goal_config["pos"]
-
-            obj_group_dict["goal"][group_index] = GoalGroup(**goal_config)
-
-            for pos, agent_index in zip(positions, goal_config["valid_agent_indices"]):
-                goal = AgentGoal(self.world, agent_index, group_index, color="green")
-                self.put_obj(goal, *pos)
-
-        # Place blocks
-        obj_group_dict["block"] = {}
-        obj_group_dict["zone"] = {}
-        obj_group_dict["wall"] = {}
+        # Place objects
         for obj_group_config in self.obj_group_config:
             obj_type: str = obj_group_config["obj_type"]
             group_index: int = obj_group_config["group_index"]
 
-            if obj_type == "block":
-                obj_group_dict[obj_type][group_index] = BlockGroup(
-                    obj_type, obj_group_config["group_index"], obj_group_config["pos"]
-                )
-
-            elif obj_type == "zone":
-                args: dict[str, Any] = obj_group_config["group_args"]
-                obj_group_dict[obj_type][group_index] = ZoneGroup(
-                    obj_type,
-                    obj_group_config["group_index"],
-                    obj_group_config["pos"],
-                    **args,
-                )
-
-            elif obj_type == "wall":
-                args: dict[str, Any] = obj_group_config["group_args"]
-                obj_group_dict[obj_type][group_index] = WallGroup(
-                    obj_type,
-                    obj_group_config["group_index"],
-                    obj_group_config["pos"],
-                    **args,
-                )
-
+            if obj_type not in obj_group_dict:
+                obj_group_dict[obj_type] = {}
             else:
-                raise ValueError(f"Invalid object type: {obj_type}")
+                pass
 
+            obj_group_dict[obj_type][group_index] = ObjectGroup(
+                object_options=self.object_options, **obj_group_config
+            )
             obj_group_dict[obj_type][group_index].put_objects(self.grid, self.world)
 
         self.obj_group_dict = obj_group_dict
-
         self.init_grid: Grid = self.grid.copy()
 
         # Place the agents
         assert len(self.agents) == len(self.init_pos)
         for agent, pos in zip(self.agents, self.init_pos):
             self.place_agent(agent, pos)
+
+        # Initialize detectors
+        self.detectors: list[Detector] = [
+            Detector(**detector_config) for detector_config in self.detector_config
+        ]
 
     def _get_obs(self) -> NDArray[np.int_]:
         obs: dict[str, Any] = {}
@@ -845,7 +999,7 @@ class LabyrinthEnv(MultiGridEnv):
         terminated: bool = (
             self._agents_detected() | self._agents_reached_terminal_goal()
         )
-        truncated: bool = self.step_count >= self.max_steps
+        truncated: bool = False
         info: dict[str, Any] = self._get_info()
 
         return obs, reward, terminated, truncated, info
@@ -975,31 +1129,19 @@ class LabyrinthEnv(MultiGridEnv):
 
         return False
 
-    def _is_agent_on_assigned_goal(self, pos: Position, agent_index: int) -> int:
-        if isinstance(self.init_grid.get(*pos), AgentGoal):
-            cell: AgentGoal = self.init_grid.get(*pos)
-            if (
-                cell.goal_group in self.current_goal_group_indices
-                and cell.accepting_agent_idx == agent_index
-            ):
-                return cell.goal_group
+    def _is_agent_on_assigned_goal(
+        self, pos: tuple[int, int], agent_index: int, considered_subtasks: list[Subtask]
+    ) -> int:
+        for subtask in considered_subtasks:
+            if pos == subtask.assigned_agent_goal[agent_index]:
+                return subtask.goal_group_index
             else:
-                return -1
-        else:
-            return -1
+                pass
+
+        return -1
 
     def compute_reward(self, actions: NDArray[np.int_]) -> float:
-        reward: float = 0
-
-        # Change the targeted goals based on the reward option
-        if self.reward_config["reward_option"] == "final_goal":
-            targeted_goals: list[int] = [self.final_goal_group_index]
-        elif self.reward_config["reward_option"] == "intermediate_goal":
-            targeted_goals: list[int] = self.current_goal_group_indices
-        else:
-            raise ValueError(
-                f"Invalid reward option: {self.reward_config['reward_option']}"
-            )
+        reward: float = 0.0
 
         # 1. Movement penalty for each agent if an action is not "stay"
         reward += self.reward_config["movement_reward"] * np.sum(
@@ -1010,15 +1152,22 @@ class LabyrinthEnv(MultiGridEnv):
         agent_goal_statuses: list[int] = []
         for agent in self.agents:
             agent_goal_statuses.append(
-                self._is_agent_on_assigned_goal(agent.pos, agent.index)
+                self._is_agent_on_assigned_goal(
+                    (agent.pos[0], agent.pos[1]), agent.index, self.current_subtasks
+                )
             )
 
         num_goaled_agents: int = 0
-        for agent_goal_status in agent_goal_statuses:
-            if agent_goal_status in targeted_goals:
-                num_goaled_agents += 1
-            else:
-                pass
+        for agent in self.agents:
+            for subtask in self.rewarded_subtasks:
+                if (
+                    agent.index in subtask.assigned_agent_goal
+                    and (agent.pos[0], agent.pos[1])
+                    == subtask.assigned_agent_goal[agent.index]
+                ):
+                    num_goaled_agents += 1
+                else:
+                    pass
 
         reward += num_goaled_agents * self.reward_config["agent_on_goal_reward"]
 
@@ -1026,49 +1175,64 @@ class LabyrinthEnv(MultiGridEnv):
         for agent, action in zip(self.agents, actions):
             prev_pos: Position = self._get_previous_agent_pos(action, agent)
             prev_agent_goal: int = self._is_agent_on_assigned_goal(
-                prev_pos, agent.index
+                (prev_pos[0], prev_pos[1]), agent.index, self.rewarded_subtasks
             )
             curr_agent_goal: int = self._is_agent_on_assigned_goal(
-                agent.pos, agent.index
+                (agent.pos[0], agent.pos[1]), agent.index, self.rewarded_subtasks
             )
 
             # If the reward option is "final_goal", the penalty is given only if the agent was on the final goal.
-            if prev_agent_goal in targeted_goals and prev_agent_goal != curr_agent_goal:
+            if prev_agent_goal != -1 and prev_agent_goal != curr_agent_goal:
                 reward += self.reward_config["agent_move_away_from_goal_reward"]
             else:
                 pass
 
         # 4. Reward for all agents if they are on their assigned goals on the same goal group and unlock the door
         # If the door is already unlocked, the reward is not given.
-        if (
-            np.all(np.array(agent_goal_statuses) == agent_goal_statuses[0])
-            and agent_goal_statuses[0] in self.current_goal_group_indices
-        ):
-            goal_group_index: int = agent_goal_statuses[0]
+        for subtask in self.current_subtasks:
+            all_conditions_satisfied: bool = True
+            for trigger in subtask.triggers:
+                if not trigger.is_condition_satisfied(self.agents, subtask):
+                    all_conditions_satisfied = False
+                    break
+                else:
+                    pass
 
-            if self.obj_group_dict["goal"][goal_group_index].is_block_locked(
-                self.obj_group_dict["block"]
-            ):
-                self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["block"], self.grid
-                )
-                self.obj_group_dict["goal"][goal_group_index].open(
-                    self.obj_group_dict["block"], self.init_grid
-                )
+            all_agents_on_goals: bool = True
+            for agent in self.agents:
+                if (
+                    agent.index in subtask.assigned_agent_goal
+                    and (agent.pos[0], agent.pos[1])
+                    == subtask.assigned_agent_goal[agent.index]
+                ):
+                    pass
+                else:
+                    all_agents_on_goals = False
+                    break
 
-                self.current_goal_group_indices = [
-                    self.obj_group_dict["goal"][goal_group_index].next_goal
-                ]
+            all_conditions_satisfied = all_conditions_satisfied and all_agents_on_goals
 
+            if all_conditions_satisfied:
+                for trigger in subtask.triggers:
+                    trigger.trigger_action(self.obj_group_dict, self.grid)
+                    trigger.trigger_action(self.obj_group_dict, self.init_grid)
+
+                if subtask in self.rewarded_subtasks:
+                    reward += self.reward_config["all_agents_on_goal_reward"]
+                else:
+                    pass
+
+                if subtask.next_subtask != "terminal":
+                    self.current_subtasks = [self.subtask_dict[subtask.next_subtask]]
+
+                if reward_config["reward_option"] == "intermediate_goal":
+                    self.rewarded_subtasks = self.current_subtasks
+                else:
+                    pass
+
+                break
             else:
                 pass
-
-            # The reward is given only if all the agents are on the target goal group.
-            reward += (
-                self.reward_config["all_agents_on_goal_reward"]
-                if goal_group_index in targeted_goals
-                else 0
-            )
 
         return reward
 
@@ -1082,13 +1246,14 @@ class LabyrinthEnv(MultiGridEnv):
         return previous_pos
 
     def _agents_detected(self) -> bool:
-        for zone in self.obj_group_dict["zone"].values():
-            if zone.detect_agents(self.agents, self.np_random):
-                return True
+        detected: bool = False
+        for detector in self.detectors:
+            if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
+                detected = True
             else:
                 pass
 
-        return False
+        return detected
 
     def _agents_reached_terminal_goal(self) -> bool:
         for agent in self.agents:

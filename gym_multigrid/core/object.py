@@ -215,8 +215,8 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world: WorldT, color: str = "grey"):
-        super().__init__(world, "wall", color)
+    def __init__(self, world: WorldT, type: str = "wall", color: str = "grey"):
+        super().__init__(world, type, color)
 
     def see_behind(self):
         return False
@@ -447,15 +447,11 @@ class AgentGoal(WorldObj):
     def __init__(
         self,
         world: WorldT,
-        accepting_agent_idx: int,
-        goal_group: int,
         type: str = "goal",
-        color: str = "yellow",
+        color: str = "green",
         bg_color: str | None = None,
     ):
         super().__init__(world, type, color, bg_color)
-        self.accepting_agent_idx: int = accepting_agent_idx
-        self.goal_group: int = goal_group
 
     def can_overlap(self):
         return True
@@ -464,14 +460,19 @@ class AgentGoal(WorldObj):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
 
 
-class Block(WorldObj):
+class SimpleDoor(WorldObj):
     def __init__(
         self,
         world: WorldT,
+        color: str = "light_grey",
+        type: str = "door",
     ):
-        super().__init__(world, "block", color="light_grey")
+        super().__init__(world, type=type, color=color)
 
         self.locked: bool = True
+
+    def is_open(self) -> bool:
+        return self.locked
 
     def can_overlap(self) -> bool:
         return not self.locked
@@ -479,6 +480,10 @@ class Block(WorldObj):
     def open(self) -> None:
         self.locked = False
         self.color = "grey"
+
+    def close(self) -> None:
+        self.locked = True
+        self.color = self.init_color
 
     def see_behind(self) -> bool:
         return False

@@ -136,7 +136,7 @@ LabyrinthWorld = World(
         "empty": 1,
         "wall": 2,
         "agent": 3,
-        "block": 4,
+        "door": 4,
         "goal": 5,
         "button": 6,
         "box": 7,

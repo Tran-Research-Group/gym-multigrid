@@ -6,16 +6,17 @@ import os
 import numpy as np
 from numpy.typing import NDArray
 import imageio
+import gymnasium as gym
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from gym_multigrid.envs.labyrinth import GoalGroupConfig, LabyrinthEnv, RewardConfig
+from gym_multigrid.envs.labyrinth import LabyrinthEnv, RewardConfig
 
 
 def test_labyrinth() -> None:
 
     animation_path: str = "tests/out/animations/labyrinth.gif"
 
-    env = LabyrinthEnv()
+    env = gym.make("multigrid-labyrinth-v0")
 
     obs, _ = env.reset()
     frames = [env.render()]
@@ -50,57 +51,17 @@ def test_observation_space(
         assert obs[key].shape == expected_shape
 
 
-def test_check_door_0() -> None:
+@pytest.mark.parametrize(
+    "init_pos, door_id",
+    [
+        (((3, 1), (3, 2), (3, 3)), 0),
+        (((2, 5), (2, 6), (2, 7)), 1),
+        (((5, 3), (5, 4), (5, 5)), 2),
+    ],
+)
+def test_check_doors(init_pos: tuple[tuple[int, int], ...], door_id: int) -> None:
 
-    animation_path: str = "tests/out/animations/labyrinth_door_0.gif"
-
-    init_pos: tuple[tuple[int, int], ...] = ((3, 1), (3, 2), (3, 3))
-
-    env = LabyrinthEnv(init_pos=init_pos)
-    action = [env.actions.right, env.actions.right, env.actions.right]
-    obs, _ = env.reset()
-    frames = [env.render()]
-
-    for i in range(3):
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        print(f"reward: {reward}")
-        print(f"terminated: {terminated}")
-        print(f"truncated: {truncated}")
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, loop=10)
-
-
-def test_check_door_1() -> None:
-
-    animation_path: str = "tests/out/animations/labyrinth_door_1.gif"
-
-    init_pos: tuple[tuple[int, int], ...] = ((2, 5), (2, 6), (2, 7))
-
-    env = LabyrinthEnv(init_pos=init_pos)
-    action = [env.actions.right, env.actions.right, env.actions.right]
-    obs, _ = env.reset()
-    frames = [env.render()]
-
-    for i in range(3):
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        print(f"reward: {reward}")
-        print(f"terminated: {terminated}")
-        print(f"truncated: {truncated}")
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, loop=10)
-
-
-def test_check_door_2() -> None:
-
-    animation_path: str = "tests/out/animations/labyrinth_door_2.gif"
-
-    init_pos: tuple[tuple[int, int], ...] = ((5, 3), (5, 4), (5, 5))
+    animation_path: str = f"tests/out/animations/labyrinth_door_{door_id}.gif"
 
     env = LabyrinthEnv(init_pos=init_pos)
     action = [env.actions.right, env.actions.right, env.actions.right]
@@ -121,48 +82,10 @@ def test_check_door_2() -> None:
 
 def test_find_first_goal_groups() -> None:
 
-    goal_group_config: list[GoalGroupConfig] = [
-        {
-            "group_index": 0,
-            "pos": ((4, 1), (4, 2), (4, 3)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 0,
-            "next_goal": 2,
-        },
-        {
-            "group_index": 1,
-            "pos": ((3, 5), (3, 6), (3, 7)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 1,
-            "next_goal": 2,
-        },
-        {
-            "group_index": 2,
-            "pos": ((6, 3), (6, 4), (6, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": 2,
-            "next_goal": 3,
-        },
-        {
-            "group_index": 3,
-            "pos": ((8, 3), (8, 4), (8, 5)),
-            "valid_agent_indices": (0, 1, 2),
-            "called_actions": ["open"],
-            "action_obj_type": "block",
-            "action_obj_group": -1,
-            "next_goal": "terminal",
-        },
-    ]
-    env = LabyrinthEnv(goal_group_config=goal_group_config)
-    first_goal_groups: list[int] = env._find_first_goal_groups()
+    env = LabyrinthEnv()
+    subtask_ids: list[int] = env._find_first_subtasks()
 
-    assert first_goal_groups == [0, 1]
+    assert subtask_ids == [0, 1]
 
 
 def test_compute_reward_final_goal_agent_on_goal():
@@ -185,7 +108,8 @@ def test_compute_reward_final_goal_agent_on_goal():
     action = [env.actions.right, env.actions.right, env.actions.right]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [env.final_goal_group_index]
+    env.current_subtasks = [env.subtask_dict[3]]
+    env.rewarded_subtasks = [env.subtask_dict[3]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -233,7 +157,8 @@ def test_compute_reward_intermediate_goal_agent_on_goal_2_right():
     action = [env.actions.right, env.actions.right, env.actions.right]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [2]
+    env.current_subtasks = [env.subtask_dict[2]]
+    env.rewarded_subtasks = [env.subtask_dict[2]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -283,7 +208,8 @@ def test_compute_reward_intermediate_goal_agent_on_goal_2_stay():
         [env.actions.stay, env.actions.stay, env.actions.stay],
     ]
     obs, _ = env.reset()
-    env.current_goal_group_indices = [2]
+    env.current_subtasks = [env.subtask_dict[2]]
+    env.rewarded_subtasks = [env.subtask_dict[2]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -331,7 +257,8 @@ def test_compute_reward_intermediate_goal_agent_on_goal_3():
     action = [env.actions.right, env.actions.right, env.actions.right]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [env.final_goal_group_index]
+    env.current_subtasks = [env.subtask_dict[3]]
+    env.rewarded_subtasks = [env.subtask_dict[3]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -379,7 +306,8 @@ def test_compute_reward_intermediate_goal_move_away() -> None:
     action = [env.actions.left, env.actions.left, env.actions.stay]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [0]
+    env.current_subtasks = [env.subtask_dict[0]]
+    env.rewarded_subtasks = [env.subtask_dict[0]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -467,7 +395,8 @@ def test_compute_rewards_intermediate_goal_agent_on_goal_0() -> None:
     action = [env.actions.right, env.actions.right, env.actions.stay]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [0]
+    env.current_subtasks = [env.subtask_dict[0]]
+    env.rewarded_subtasks = [env.subtask_dict[0]]
     rewards: list[int] = []
     frames = [env.render()]
 
@@ -512,7 +441,8 @@ def test_compute_rewards_final_goal_agent_on_goal_0() -> None:
     action = [env.actions.right, env.actions.right, env.actions.stay]
 
     obs, _ = env.reset()
-    env.current_goal_group_indices = [0]
+    env.current_subtasks = [env.subtask_dict[0]]
+    env.rewarded_subtasks = [env.subtask_dict[0]]
     rewards: list[int] = []
     frames = [env.render()]
 
