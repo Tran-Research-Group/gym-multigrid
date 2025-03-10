@@ -1,23 +1,24 @@
 from dataclasses import dataclass
-from typing import Final, Literal, TypedDict, TypeAlias
+from typing import Final, Literal, TypedDict, TypeAlias, cast
 
-from gymnasium import spaces
+from gymnasium import Space, spaces
 import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import ActionsT, Agent, AgentT, MazeActions
+from gym_multigrid.core.constants import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import MazeWorld, World
 from gym_multigrid.multigrid import (
     DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
     GridConfig,
     MultiGridEnv,
+    ObservationMode,
     PartialObsConfig,
     RenderingConfig,
 )
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.map import distance_area_point, load_text_map
 
 
 class ObservationDict(TypedDict):
@@ -44,6 +45,15 @@ class Layout:
     flag_positions: list[tuple[int, int]]
     init_agent_positions: list[tuple[int, int]]
     wall_positions: list[tuple[int, int]]
+    world: Final[World] = MazeWorld
+
+    def __post_init__(self):
+        self.static_obs: NDArray = np.zeros((self.height, self.width))
+        for i, j in self.wall_positions:
+            self.static_obs[i, j] = self.world.OBJECT_TO_IDX["wall"]
+
+        for i, j in self.flag_positions:
+            self.static_obs[i, j] = self.world.OBJECT_TO_IDX["flag"]
 
 
 class RewardConfig(TypedDict):
@@ -63,20 +73,36 @@ class ResetOptions(TypedDict):
     layout_config: LayoutConfig
 
 
-class ObservationOptionConfig(TypedDict):
-    mode: Literal["tensor"]
-
-
-@dataclass
-class ObservationOption:
-    mode: Literal["tensor"]
-
-
-class ObservationFactory:
+class TensorObservationMode(ObservationMode):
     @staticmethod
-    def observation_space(): ...
+    def observation_space(env: MultiGridEnv) -> spaces.Box:
+        return spaces.Box(
+            low=0,
+            high=len(MazeWorld.OBJECT_TO_IDX) - 1,
+            shape=(2, env.height, env.width),
+            dtype=np.int64,
+        )
+
     @staticmethod
-    def create_observation() -> Observation: ...
+    def create_observation(env: MultiGridEnv) -> Observation:
+        observation: NDArray[np.int64] = np.zeros((2, env.height, env.width))
+        observation[0, :, :] = env.layout.static_obs
+        for agent in env.agents:
+            if agent.pos is not None:
+                observation[1, agent.pos[0], agent.pos[1]] = MazeWorld.OBJECT_TO_IDX[
+                    "agent"
+                ]
+            else:
+                pass
+
+
+DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
+    "width": 10,
+    "height": 10,
+    "flag_positions": [(9, 9)],
+    "init_agent_positions": [(5, 5)],
+    "wall_positions": [],
+}
 
 
 class MazeEnv(MultiGridEnv):
@@ -84,17 +110,20 @@ class MazeEnv(MultiGridEnv):
     Environment with a single agent and multiple flags
     """
 
+    # Update metadata of the parent class
+    metadata = MultiGridEnv.metadata.copy()
+    metadata["observation_modes"] = {"tensor": TensorObservationMode}
+
     def __init__(
         self,
-        layout_config: LayoutConfig,
         num_agents: int = 1,
+        layout_config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
         reward_config: RewardConfig = {
             "flag_reward": 1.0,
             "wall_penalty_ratio": 0.0,
             "step_penalty_ratio": 0.01,
         },
-        observation_option: ObservationOptionConfig = {"mode": "tensor"},
-        action_set: ActionsT = MazeActions,
+        observation_mode: Literal["tensor"] = "tensor",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         """
@@ -119,10 +148,13 @@ class MazeEnv(MultiGridEnv):
         """
 
         world: Final[World] = MazeWorld
+        action_set: ActionsT = (MazeActions,)
 
         self.layout = Layout(**layout_config)
 
-        self.observation_option = ObservationOption(**observation_option)
+        self.observation_mode: ObservationMode = self.metadata["observation_modes"][
+            observation_mode
+        ]
 
         self.reward = Reward(**reward_config)
 
@@ -133,6 +165,7 @@ class MazeEnv(MultiGridEnv):
                 color="blue",
                 view_size=None,
                 actions=action_set,
+                dir_to_vec=NAV_DIR_TO_VEC,
                 type="agent",
             )
             for i in range(num_agents)
@@ -159,22 +192,8 @@ class MazeEnv(MultiGridEnv):
             **partial_obs_config,
         )
 
-    def _set_observation_space(self) -> spaces.Dict | spaces.Box:
-        match self.observation_option.mode:
-            case "tensor":
-                observation_space = spaces.Box(
-                    low=0,
-                    high=len(self.world.OBJECT_TO_IDX) - 1,
-                    shape=(2, self.height, self.width),
-                    dtype=np.int64,
-                )
-
-            case _:
-                raise ValueError(
-                    f"Invalid observation option: {self.observation_option.mode}"
-                )
-
-        return observation_space
+    def _set_observation_space(self) -> Space:
+        return self.observation_mode.observation_space(self)
 
     def _gen_grid(self, width: int, height: int) -> None:
         self.grid = Grid(width, height, self.world)
@@ -234,45 +253,9 @@ class MazeEnv(MultiGridEnv):
         return obs, info
 
     def _get_obs(self) -> Observation:
-        for a in self.agents:
-            assert a.pos is not None
-
-        observation: Observation
-
-        match self.observation_option:
-            case "positional":
-                observation = {
-                    "agent": np.array(self.agents[0].pos),
-                    "flag": np.array(self.flag).flatten(),
-                    "wall": np.array(self.wall).flatten(),
-                }
-            case "map":
-                observation = self._encode_map()
-
-            case _:
-                raise ValueError(
-                    f"Invalid observation option: {self.observation_option}"
-                )
-
-        return observation
-
-    def _encode_map(self) -> NDArray:
-        encoded_map: NDArray = np.zeros((self.width, self.height))
-
-        for i, j in self.layout.wall_positions:
-            encoded_map[i, j] = self.world.OBJECT_TO_IDX["wall"]
-        for i, j in self.layout.flag_positions:
-            encoded_map[i, j] = self.world.OBJECT_TO_IDX["flag"]
-
-        assert self.agents[0].pos is not None
-        encoded_map[self.agents[0].pos[0], self.agents[0].pos[1]] = (
-            self.world.OBJECT_TO_IDX["agent"]
-        )
-
-        return encoded_map
+        return self.observation_mode.create_observation(self)
 
     def _get_info(self) -> dict[str, float]:
-
         info = {}
         return info
 
@@ -281,17 +264,18 @@ class MazeEnv(MultiGridEnv):
 
         assert agent.pos is not None
 
+        action_set: type[MazeActions] = cast(type[MazeActions], self.actions_set)
         match action:
-            case self.actions_set.stay:
+            case action_set.STAY:
                 next_pos = agent.pos
-            case self.actions_set.left:
-                next_pos = agent.pos + np.array([0, -1])
-            case self.actions_set.down:
-                next_pos = agent.pos + np.array([-1, 0])
-            case self.actions_set.right:
-                next_pos = agent.pos + np.array([0, 1])
-            case self.actions_set.up:
-                next_pos = agent.pos + np.array([1, 0])
+            case action_set.LEFT:
+                next_pos = agent.west_pos()
+            case action_set.DOWN:
+                next_pos = agent.south_pos()
+            case action_set.RIGHT:
+                next_pos = agent.east_pos()
+            case action_set.UP:
+                next_pos = agent.north_pos()
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
@@ -305,12 +289,14 @@ class MazeEnv(MultiGridEnv):
         else:
             next_cell: WorldObjT | None = self.grid.get(*next_pos)
 
-            bg_color: str = "white"
-
             if next_cell is None:
-                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+                agent.move(next_pos, self.grid, self.init_grid)
             elif next_cell.can_overlap():
-                agent.move(next_pos, self.grid, self.init_grid, bg_color=bg_color)
+                agent.move(
+                    next_pos,
+                    self.grid,
+                    self.init_grid,
+                )
             else:
                 pass
 
@@ -322,14 +308,8 @@ class MazeEnv(MultiGridEnv):
             self._move_agent(actions[i], self.agents[i])
 
     def _is_agent_on_obj(
-        self, agent_loc: tuple[int, int] | None, obj: list[tuple[int, int]]
+        self, agent_loc: tuple[int, int], obj: list[tuple[int, int]]
     ) -> bool:
-        if agent_loc is None:
-            assert self.agents[0].pos is not None
-            agent_loc = self.agents[0].pos
-        else:
-            pass
-
         on_obj: bool = False
 
         for obj_loc in obj:
