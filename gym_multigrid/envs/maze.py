@@ -1,41 +1,100 @@
+from dataclasses import dataclass
 from typing import Final, Literal, TypedDict, TypeAlias
 
 from gymnasium import spaces
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, AgentT, MazeActions
+from gym_multigrid.core.agent import ActionsT, Agent, AgentT, MazeActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
 from gym_multigrid.core.world import MazeWorld, World
-from gym_multigrid.multigrid import MultiGridEnv
+from gym_multigrid.multigrid import (
+    DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
+    GridConfig,
+    MultiGridEnv,
+    PartialObsConfig,
+    RenderingConfig,
+)
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, load_text_map
 
 
 class ObservationDict(TypedDict):
     agent: NDArray
-    background: NDArray
     flag: NDArray
-    obstacle: NDArray
+    wall: NDArray
 
 
 Observation: TypeAlias = ObservationDict | NDArray
 
 
-class MazeSingleAgentEnv(MultiGridEnv):
+class LayoutConfig(TypedDict):
+    width: int
+    height: int
+    flag_positions: list[tuple[int, int]]
+    init_agent_positions: list[tuple[int, int] | None]
+    wall_positions: list[tuple[int, int]]
+
+
+@dataclass
+class Layout:
+    width: int
+    height: int
+    flag_positions: list[tuple[int, int]]
+    init_agent_positions: list[tuple[int, int]]
+    wall_positions: list[tuple[int, int]]
+
+
+class RewardConfig(TypedDict):
+    flag_reward: float
+    wall_penalty_ratio: float
+    step_penalty_ratio: float
+
+
+@dataclass
+class Reward:
+    flag_reward: float
+    wall_penalty_ratio: float
+    step_penalty_ratio: float
+
+
+class ResetOptions(TypedDict):
+    layout_config: LayoutConfig
+
+
+class ObservationOptionConfig(TypedDict):
+    mode: Literal["tensor"]
+
+
+@dataclass
+class ObservationOption:
+    mode: Literal["tensor"]
+
+
+class ObservationFactory:
+    @staticmethod
+    def observation_space(): ...
+    @staticmethod
+    def create_observation() -> Observation: ...
+
+
+class MazeEnv(MultiGridEnv):
     """
     Environment with a single agent and multiple flags
     """
 
     def __init__(
         self,
-        map_path: str,
-        max_steps: int = 100,
-        flag_reward: float = 1.0,
-        obstacle_penalty_ratio: float = 0.0,
-        step_penalty_ratio: float = 0.01,
-        observation_option: Literal["positional", "map"] = "map",
+        layout_config: LayoutConfig,
+        num_agents: int = 1,
+        reward_config: RewardConfig = {
+            "flag_reward": 1.0,
+            "wall_penalty_ratio": 0.0,
+            "step_penalty_ratio": 0.01,
+        },
+        observation_option: ObservationOptionConfig = {"mode": "tensor"},
+        action_set: ActionsT = MazeActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         """
@@ -49,8 +108,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
             Maximum number of steps that the agent can take.
         flag_reward : float = 1.0
             Reward given to the agent for reaching a flag.
-        obstacle_penalty_ratio : float = 0.0
-            Penalty given to the agent for hitting an obstacle.
+        wall_penalty_ratio : float = 0.0
+            Penalty given to the agent for hitting a wall.
         step_penalty_ratio : float = 0.01
             Penalty given to the agent for each step taken.
         observation_option : Literal["positional", "map"] = "map"
@@ -58,159 +117,115 @@ class MazeSingleAgentEnv(MultiGridEnv):
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode.
         """
-        agent_view_size: Final[int] = 100
 
-        self.world: Final[World] = MazeWorld
-        self.actions_set = MazeActions
+        world: Final[World] = MazeWorld
 
-        self._map_path: Final[str] = map_path
-        self._field_map: Final[NDArray] = load_text_map(map_path)
+        self.layout = Layout(**layout_config)
 
-        height: int
-        width: int
-        height, width = self._field_map.shape
+        self.observation_option = ObservationOption(**observation_option)
 
-        self.background: Final[list[Position]] = list(
-            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["background"]))
-        )
-        self.obstacle: Final[list[Position]] = list(
-            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["obstacle"]))
-        )
-        self.flag: Final[list[Position]] = list(
-            zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["flag"]))
-        )
+        self.reward = Reward(**reward_config)
 
-        self.observation_option: Final[Literal["positional", "map"]] = (
-            observation_option
-        )
+        agents: list[AgentT] = [
+            Agent(
+                self.world,
+                index=i,
+                color="blue",
+                view_size=None,
+                actions=action_set,
+                type="agent",
+            )
+            for i in range(num_agents)
+        ]
 
-        self._flag_reward: Final[float] = flag_reward
-        self._obstacle_penalty_ratio: Final[float] = obstacle_penalty_ratio
-        self._step_penalty_ratio: Final[float] = step_penalty_ratio
+        grid_config: GridConfig = {
+            "height": self.layout.height,
+            "width": self.layout.width,
+            "actions_set": action_set,
+            "world": world,
+        }
 
-        blue_agent = Agent(
-            self.world,
-            index=0,
-            color="blue",
-            bg_color="white",
-            view_size=agent_view_size,
-            actions=self.actions_set,
-            type="agent",
-        )
+        rendering_config: RenderingConfig = {
+            "render_mode": render_mode,
+            "uncached_object_types": ["agent"],
+        }
 
-        agents: list[AgentT] = [blue_agent]
+        partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
 
         super().__init__(
-            width=width,
-            height=height,
-            max_steps=max_steps,
-            see_through_walls=True,
             agents=agents,
-            partial_obs=False,
-            agent_view_size=agent_view_size,
-            actions_set=self.actions_set,
-            world=self.world,
-            render_mode=render_mode,
+            **grid_config,
+            **rendering_config,
+            **partial_obs_config,
         )
 
     def _set_observation_space(self) -> spaces.Dict | spaces.Box:
-        match self.observation_option:
-            case "positional":
-                observation_space = spaces.Dict(
-                    {
-                        "agent": spaces.Box(
-                            low=np.array([-1, -1]),
-                            high=np.array(self._field_map.shape) - 1,
-                            dtype=np.int64,
-                        ),
-                        "background": spaces.Box(
-                            low=np.array(
-                                [[0, 0] for _ in range(len(self.background))]
-                            ).flatten(),
-                            high=np.array(
-                                [
-                                    self._field_map.shape
-                                    for _ in range(len(self.background))
-                                ]
-                            ).flatten()
-                            - 1,
-                            dtype=np.int64,
-                        ),
-                        "flag": spaces.Box(
-                            low=np.array(
-                                [[0, 0] for _ in range(len(self.flag))]
-                            ).flatten(),
-                            high=np.array(
-                                [self._field_map.shape for _ in range(len(self.flag))]
-                            ).flatten()
-                            - 1,
-                            dtype=np.int64,
-                        ),
-                        "obstacle": spaces.Box(
-                            low=np.array(
-                                [[0, 0] for _ in range(len(self.obstacle))]
-                            ).flatten(),
-                            high=np.array(
-                                [
-                                    self._field_map.shape
-                                    for _ in range(len(self.obstacle))
-                                ]
-                            ).flatten()
-                            - 1,
-                            dtype=np.int64,
-                        ),
-                    }
-                )
-
-            case "map":
+        match self.observation_option.mode:
+            case "tensor":
                 observation_space = spaces.Box(
                     low=0,
                     high=len(self.world.OBJECT_TO_IDX) - 1,
-                    shape=self._field_map.shape,
+                    shape=(2, self.height, self.width),
                     dtype=np.int64,
                 )
 
             case _:
                 raise ValueError(
-                    f"Invalid observation option: {self.observation_option}"
+                    f"Invalid observation option: {self.observation_option.mode}"
                 )
 
         return observation_space
 
-    def _gen_grid(self, width, height):
+    def _gen_grid(self, width: int, height: int) -> None:
         self.grid = Grid(width, height, self.world)
 
-        for i, j in self.background:
-            self.put_obj(Floor(self.world, color="white", type="background"), i, j)
-
-        for i, j in self.obstacle:
+        for i, j in self.layout.wall_positions:
             self.put_obj(
                 Obstacle(
-                    self.world, penalty=self._obstacle_penalty_ratio * self._flag_reward
+                    self.world,
+                    penalty=self.reward.wall_penalty_ratio * self.reward.flag_reward,
                 ),
                 i,
                 j,
             )
 
-        for flag_idx, (i, j) in enumerate(self.flag):
+        for flag_idx, (i, j) in enumerate(self.layout.flag_positions):
             self.put_obj(
                 Flag(self.world, index=flag_idx, color="red", bg_color="white"), i, j
             )
 
         self.init_grid: Grid = self.grid.copy()
 
-        self.place_agent(
-            self.agents[0],
-            pos=self.background[np.random.randint(0, len(self.background))],
-        )
+        agents_init_pos: list[tuple[int, int] | None] = self.layout.init_agent_positions
+        match len(agents_init_pos):
+            case 0:
+                agents_init_pos = [None] * len(self.agents)
+            case 1:
+                agents_init_pos = agents_init_pos * len(self.agents)
+            case len(self.agents):
+                pass
+            case _:
+                raise ValueError(
+                    f"Number of agents {len(self.agents)} and number of initial agent positions {len(agents_init_pos)} do not match: {len(self.agents)} != {len(agents_init_pos)}"
+                )
 
-    def reset(self, seed=None) -> tuple[Observation, dict[str, float]]:
-        super().reset(seed=seed)
+        for agent, init_pos in zip(self.agents, agents_init_pos):
+            agent.reset()
+            self.place_agent(agent, pos=init_pos)
 
-        agent: Agent = self.agents[0]
+    def reset(
+        self, seed: int | None = None, options: ResetOptions | None = None
+    ) -> tuple[Observation, dict[str, float]]:
 
-        assert agent.pos is not None
-        self.agent_traj: list[Position] = [agent.pos]
+        if options is not None:
+            self.layout = Layout(**options["layout_config"])
+
+        self._reset_gym(seed=seed)
+        self._gen_grid(self.width, self.height)
+
+        self.agent_traj: list[list[tuple[int, int]]] = [
+            agent.pos for agent in self.agents
+        ]
         self.rewards: list[float] = []
 
         obs: Observation = self._get_obs()
@@ -228,9 +243,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
             case "positional":
                 observation = {
                     "agent": np.array(self.agents[0].pos),
-                    "background": np.array(self.background).flatten(),
                     "flag": np.array(self.flag).flatten(),
-                    "obstacle": np.array(self.obstacle).flatten(),
+                    "wall": np.array(self.wall).flatten(),
                 }
             case "map":
                 observation = self._encode_map()
@@ -245,11 +259,9 @@ class MazeSingleAgentEnv(MultiGridEnv):
     def _encode_map(self) -> NDArray:
         encoded_map: NDArray = np.zeros((self.width, self.height))
 
-        for i, j in self.background:
-            encoded_map[i, j] = self.world.OBJECT_TO_IDX["background"]
-        for i, j in self.obstacle:
-            encoded_map[i, j] = self.world.OBJECT_TO_IDX["obstacle"]
-        for i, j in self.flag:
+        for i, j in self.layout.wall_positions:
+            encoded_map[i, j] = self.world.OBJECT_TO_IDX["wall"]
+        for i, j in self.layout.flag_positions:
             encoded_map[i, j] = self.world.OBJECT_TO_IDX["flag"]
 
         assert self.agents[0].pos is not None
@@ -260,12 +272,8 @@ class MazeSingleAgentEnv(MultiGridEnv):
         return encoded_map
 
     def _get_info(self) -> dict[str, float]:
-        assert self.agents[0].pos is not None
 
-        info = {
-            "d_a_f": distance_area_point(self.agents[0].pos, self.flag),
-            "d_a_ob": distance_area_point(self.agents[0].pos, self.obstacle),
-        }
+        info = {}
         return info
 
     def _move_agent(self, action: int, agent: AgentT) -> None:
@@ -308,9 +316,14 @@ class MazeSingleAgentEnv(MultiGridEnv):
 
     def _move_agents(self, actions: list[int]) -> None:
         # Move agent
-        self._move_agent(actions[0], self.agents[0])
+        order: list[int] = np.random.permutation(len(self.agents)).tolist()
 
-    def _is_agent_on_obj(self, agent_loc: Position | None, obj: list[Position]) -> bool:
+        for i in order:
+            self._move_agent(actions[i], self.agents[i])
+
+    def _is_agent_on_obj(
+        self, agent_loc: tuple[int, int] | None, obj: list[tuple[int, int]]
+    ) -> bool:
         if agent_loc is None:
             assert self.agents[0].pos is not None
             agent_loc = self.agents[0].pos
@@ -329,46 +342,48 @@ class MazeSingleAgentEnv(MultiGridEnv):
         return on_obj
 
     def step(
-        self, action: int
+        self, action: int | list[int]
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
         self.step_count += 1
 
-        actions: list[int] = [action]
+        actions: list[int] = np.array([action]).flatten().tolist()
 
         self._move_agents(actions)
 
         assert self.agents[0].pos is not None
 
-        agent_loc: Position = self.agents[0].pos
-
         terminated: bool = False
-        truncated: bool = self.step_count >= self.max_steps
+        truncated: bool = True
 
-        flag_reward: float = self._flag_reward
-        obstacle_penalty: float = flag_reward * self._obstacle_penalty_ratio
-        step_penalty: float = flag_reward * self._step_penalty_ratio
+        flag_reward: float = self.reward.flag_reward
+        wall_penalty: float = flag_reward * self.reward.wall_penalty_ratio
+        step_penalty: float = flag_reward * self.reward.step_penalty_ratio
         reward: float = 0.0
 
-        if self._is_agent_on_obj(agent_loc, self.flag):
-            reward += flag_reward
-            terminated = True
-        else:
-            pass
-
-        if obstacle_penalty != 0:
-            if self._is_agent_on_obj(agent_loc, self.obstacle):
-                reward -= obstacle_penalty
-                terminated = True
-
+        all_agents_on_flag: bool = True
+        for agent in self.agents:
+            if not self._is_agent_on_obj(agent.pos, self.layout.flag_positions):
+                all_agents_on_flag = False
             else:
-                pass
+                reward += flag_reward
 
+        agent_on_wall: bool = False
+
+        if wall_penalty != 0:
+            for agent in self.agents:
+                if self._is_agent_on_obj(agent.pos, self.layout.wall_positions):
+                    agent_on_wall = True
+                    reward -= wall_penalty
+                else:
+                    pass
         else:
             pass
+
+        terminated: bool = all_agents_on_flag or agent_on_wall
 
         reward -= step_penalty
 
-        self.agent_traj.append(agent_loc)
+        self.agent_traj.append([agent.pos for agent in self.agents])
         self.rewards.append(reward)
 
         observation: Observation = self._get_obs()
