@@ -11,7 +11,7 @@ from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from gym_multigrid.core.object import WorldObj
-from gym_multigrid.core.constants import DIR_TO_VEC
+from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
@@ -82,11 +82,11 @@ class FRActions(enum.IntEnum):
 
 
 class MazeActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
+    STAY = 0
+    LEFT = 1
+    DOWN = 2
+    RIGHT = 3
+    UP = 4
 
 
 class NavigationActions(enum.IntEnum):
@@ -95,20 +95,6 @@ class NavigationActions(enum.IntEnum):
     down = 2
     right = 3
     up = 4
-
-
-NAV_DIR_TO_VEC: list[NDArray[np.int_]] = [
-    # Stay
-    np.array((0, 0)),
-    # Left
-    np.array((-1, 0)),
-    # Down
-    np.array((0, 1)),
-    # Right
-    np.array((1, 0)),
-    # Up
-    np.array((0, -1)),
-]
 
 
 AgentT = TypeVar("AgentT", bound="Agent")
@@ -295,11 +281,11 @@ class Agent(WorldObj):
             the position to move the agent to
         grid : Grid
             the grid to move the agent in
-        init_grid : Grid | None, optional
+        init_grid : Grid | None = None
             the initial grid before agent is moved, by default None
-        dummy_move : bool, optional
+        dummy_move : bool = False
             whether the move is a dummy move, by default False
-        bg_color : str | None, optional
+        bg_color : str | None = None
             the background color of the tile containing agent, by default None
         """
         if self.pos is not None:
@@ -323,7 +309,7 @@ class Agent(WorldObj):
         assert self.pos is not None
         grid.set(*self.pos, self)
 
-        self.bg_color = bg_color
+        self.bg_color = init_grid.get(*self.pos).color if init_grid else bg_color
 
     @property
     def dir_vec(self):
