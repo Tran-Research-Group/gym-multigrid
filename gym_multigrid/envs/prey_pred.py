@@ -47,6 +47,7 @@ class ObservationConfig(TypedDict):
 class PredatorConfig(TypedDict):
     init_pos: tuple[int, int]
     policy_type: Literal["teammate", "ego"]
+    target_preys: list[int]
     color: str
 
 
@@ -155,6 +156,8 @@ class Prey(Agent):
         else:
             self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
 
+        self.captured_by: list[int] = []
+
     def act(self, observation: NDArray, options: dict[str, Any]) -> int:
         return self.policy.act(observation, options)
 
@@ -226,7 +229,7 @@ class Prey(Agent):
 
         return fixable
 
-    def check_capture_condition(self, grid: Grid) -> bool:
+    def check_capture_condition(self, grid: Grid) -> tuple[bool, list[int]]:
         """
         Check if the prey is in a capturable condition.
 
@@ -243,16 +246,20 @@ class Prey(Agent):
         num_required_preds_capture: int = self.prey_type["num_required_preds_capture"]
         num_neighbor_preds: int = 0
 
+        pred_ids: list[int] = []
+
         for neighbor_pos in self.neighbor_pos:
             cell: None | WorldObjT = grid.get(*neighbor_pos)
             if cell is not None and cell.type == "predator":
                 num_neighbor_preds += 1
+                pred_ids.append(cell.index)
             else:
                 pass
 
         capturable: bool = num_neighbor_preds >= num_required_preds_capture
+        pred_ids = pred_ids if capturable else []
 
-        return capturable
+        return capturable, pred_ids
 
     def pos_in_neighbor(self, pos: tuple[int, int]) -> bool:
         """
@@ -301,6 +308,10 @@ class Predator(Agent):
 
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
+
+    @property
+    def target_preys(self) -> list[int]:
+        return self.pred_config["target_preys"]
 
 
 DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
@@ -677,8 +688,22 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
 
         return obs
 
-    def _get_info(self):
-        return super()._get_info()
+    def _get_info(self) -> dict[str, Any]:
+        output_dict: dict[str, Any] = {}
+
+        # Get captured prey info
+        captured_preys: list[dict[str, Any]] = [
+            {
+                "prey_id": prey.index,
+                "prey_type": prey.type,
+                "captured_by": prey.captured_by,
+            }
+            for prey in self.prey_agents
+        ]
+
+        output_dict["captured_preys"] = captured_preys
+
+        return output_dict
 
     def _gen_grid(self, width: int, height: int) -> None:
         """
@@ -826,14 +851,6 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                         dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(
                             agent.pos
                         )
-                        # dir_vec = (
-                        #     next_pos[0] - agent.pos[0],
-                        #     next_pos[1] - agent.pos[1],
-                        # )
-                        # for dir, vec in enumerate(agent.dir_to_vec):
-                        #     if vec[0] == dir_vec[0] and vec[1] == dir_vec[1]:
-                        #         agent.dir = dir
-                        #         break
                         agent.dir = agent.vec2dir(dir_vec)
                     agent.pos = next_pos
 
@@ -847,13 +864,33 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                         if prey.terminated:
                             continue
                         else:
-                            prey_captured: bool = prey.check_capture_condition(
+                            prey_captured: bool
+                            pred_ids: list[int]
+                            prey_captured, pred_ids = prey.check_capture_condition(
                                 self.grid
                             )
                             if prey_captured:
-                                prey.terminated = True
-                                reward += prey.prey_type["capture_reward"]
-                                self.grid.set(*prey.pos, self.init_grid.get(*prey.pos))
+                                captured_by_designated_preds: bool = True
+
+                                for pred_id in pred_ids:
+                                    if (
+                                        self.agents[pred_id].target_preys[prey.index]
+                                        == 1
+                                    ):
+                                        continue
+                                    else:
+                                        captured_by_designated_preds = False
+                                        break
+
+                                if captured_by_designated_preds:
+                                    prey.terminated = True
+                                    prey.captured_by = pred_ids
+                                    reward += prey.prey_type["capture_reward"]
+                                    self.grid.set(
+                                        *prey.pos, self.init_grid.get(*prey.pos)
+                                    )
+                                else:
+                                    pass
                             else:
                                 continue
 
@@ -921,6 +958,10 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
     @property
     def prey_agents(self) -> list[Prey]:
         return self.agents[self.num_preds :]
+
+    @property
+    def pred_agents(self) -> list[Predator]:
+        return self.agents[: self.num_preds]
 
 
 class BasePolicy:
