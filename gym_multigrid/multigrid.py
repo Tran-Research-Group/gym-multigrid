@@ -1,11 +1,13 @@
+from abc import ABC, abstractmethod
 import math
 import warnings
-from typing import Any, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
+from typing import Generic, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
 
 import numpy as np
 from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium import spaces
+from gymnasium.spaces.space import Space, T_cov
 from gymnasium.core import ObsType, ActType
 
 from gym_multigrid.core.grid import Grid
@@ -18,6 +20,44 @@ from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
+
+
+class ObservationMode(Generic[T_cov], ABC):
+    @abstractmethod
+    @staticmethod
+    def observation_space(env: gym.Env[ObsType, ActType]) -> Space[T_cov]: ...
+
+    """
+    Define the observation space of the environment.
+
+    Parameters
+    ----------
+    env : gym.Env[ObsType, ActType]
+        The environment
+
+    Returns
+    -------
+    observation_space: gym.Space
+        The observation space of the environment
+    """
+
+    @abstractmethod
+    @staticmethod
+    def create_observation(env: gym.Env[ObsType, ActType]) -> T_cov: ...
+
+    """
+    Create an observation from the environment.
+
+    Parameters
+    ----------
+    env : gym.Env[ObsType, ActType]
+        The environment
+
+    Returns
+    -------
+    observation: T_cov
+        The observation
+    """
 
 
 class GridConfig(TypedDict, total=False):
@@ -55,7 +95,11 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
     2D grid world game environment
     """
 
-    metadata = {"render_modes": ["human", "rgb_array"], "video.frames_per_second": 10}
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "video.frames_per_second": 10,
+        "observation_modes": {},  # type: dict[str, ObservationMode]
+    }
 
     def __init__(
         self,
