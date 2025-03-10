@@ -23,8 +23,8 @@ MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
 class ObservationMode(Generic[T_cov], ABC):
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def observation_space(env: gym.Env[ObsType, ActType]) -> Space[T_cov]: ...
 
     """
@@ -41,8 +41,8 @@ class ObservationMode(Generic[T_cov], ABC):
         The observation space of the environment
     """
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def create_observation(env: gym.Env[ObsType, ActType]) -> T_cov: ...
 
     """
