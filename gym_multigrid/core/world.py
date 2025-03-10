@@ -123,7 +123,7 @@ MazeWorld = World(
         "background": 0,
         "agent": 1,
         "flag": 2,
-        "obstacle": 3,
+        "wall": 3,
     },
 )
 
