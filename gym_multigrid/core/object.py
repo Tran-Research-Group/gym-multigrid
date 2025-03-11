@@ -363,6 +363,85 @@ class Ball(WorldObj):
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
 
+class Building(WorldObj):
+    """
+    Represents a building that can be constructed or burned down.
+    """
+
+    def __init__(self, world, burn_rate: int, build_speed: int, firefight_speed: int, fast_burning: bool = False):
+        super().__init__(world, type="building", color="gray")
+        
+        self.burn_rate = burn_rate  # How fast the building burns if on fire
+        self.build_speed = build_speed  # How fast the building is constructed
+        self.firefight_speed = firefight_speed  # How fast firefighters put out fires
+        self.fast_burning = fast_burning  # If True, burns 4x faster
+
+        self.building_state = 50  # Starts at 50 (partially built)
+        self.fire_rate = 0  # No fire initially
+
+    def step(self):
+        """Update building state per timestep"""
+        if self.fire_rate > 0 and self.building_state > 0:
+            # Fire decreases building state
+            burn_speed = self.fire_rate * (4 if self.fast_burning else 1)
+            self.building_state -= burn_speed
+
+            # If building state reaches 0, it's burned down
+            if self.building_state <= 0:
+                self.building_state = 0
+                return "burned_down"  # Trigger game penalty
+
+        return None
+
+    def build(self, builder_speed: int):
+        """Increase construction progress, only if not burning."""
+        if self.fire_rate == 0:  # Can only build if fire is out
+            self.building_state += builder_speed
+            if self.building_state >= 100:
+                self.building_state = 100
+                return "completed"  # Reward agents for finishing construction
+        return None
+
+    def burn(self):
+        """Start fire if not already burning."""
+        if self.fire_rate == 0 and self.building_state > 0:
+            self.fire_rate = self.burn_rate  # Fire starts at the burn rate
+
+    def fight_fire(self):
+        """Firefighters reduce fire. If fire_rate reaches 0, fire is extinguished."""
+        self.fire_rate = max(0, self.fire_rate - self.firefight_speed)
+
+    def encode(self, current_agent: bool = False) -> tuple[int, ...]:
+        """Encode the building state for observation."""
+        return (
+            self.world.OBJECT_TO_IDX[self.type],  # Object Type (Building)
+            self.world.COLOR_TO_IDX[self.color],  # Color (Gray)
+            int(self.building_state),  # Building state (0-100)
+            int(self.fire_rate),  # Current fire intensity
+        )
+    
+    def render(self, img):
+        """
+        Render the building in the environment.
+        - Darker color for more construction progress.
+        - Red overlay if the building is on fire.
+        """
+
+        # Get base color (gray) and modify brightness based on construction progress
+        base_color = np.array(self.world.COLORS[self.color])
+        brightness_factor = self.building_state / 100  # Scale from 0 (dark) to 1 (full brightness)
+        building_color = (base_color * brightness_factor).astype(int)
+
+        # Draw the main building as a rectangle (since buildings aren’t round like balls)
+        fill_coords(img, point_in_rect(0.2, 0.8, 0.2, 0.8), tuple(building_color))
+
+        # If the building is on fire, overlay a red glow
+        if self.fire_rate > 0:
+            fire_intensity = min(1, self.fire_rate / 50)  # Scale fire effect
+            fire_color = np.array([255, 0, 0]) * fire_intensity
+            fill_coords(img, point_in_circle(0.5, 0.5, 0.4), tuple(fire_color))
+
+
 
 class Box(WorldObj):
     def __init__(self, world: WorldT, color: str, contains=None):
