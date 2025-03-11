@@ -88,6 +88,29 @@ CollectWorld = World(
     },
 )
 
+SaveTheCityWorld = World(
+    encode_dim=4,  # (Object Type, Color Index, Construction Progress, Fire Progress)
+    normalize_obs=1,  # Normalize observations
+    COLORS={  # Define colors used in the environment
+        "red": [255, 0, 0],  # Fire
+        "gray": [128, 128, 128],  # Buildings
+        "blue": [0, 0, 255],  # Firefighter
+        "green": [0, 255, 0],  # Builder
+        "yellow": [255, 255, 0],  # Generalist
+    },
+    OBJECT_TO_IDX={  # Define objects in the environment
+        "unseen": 0,  # Not visible in agent's observation
+        "empty": 1,  # Empty cell
+        "wall": 2,  # Boundary walls
+        "fire": 3,  # Fire spreading on buildings
+        "fast_burning_building": 4,  # Burns quickly
+        "slow_burning_building": 5,  # Burns slowly
+        "firefighter": 6,  # Firefighter agent
+        "builder": 7,  # Builder agent
+        "generalist": 8,  # Generalist agent
+    },
+)
+
 WildfireWorld = World(
     encode_dim=3,
     normalize_obs=1,
