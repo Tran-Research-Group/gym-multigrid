@@ -240,9 +240,12 @@ class MazeEnv(MultiGridEnv):
         self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[Observation, dict[str, float]]:
 
-        if "layout_config" in options:
-            self.layout_config_dict.update(options["layout_config"])
-            self.layout = Layout(**self.layout_config_dict)
+        if options is not None:
+            if "layout_config" in options:
+                self.layout_config_dict.update(options["layout_config"])
+                self.layout = Layout(**self.layout_config_dict)
+        else:
+            pass
 
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
