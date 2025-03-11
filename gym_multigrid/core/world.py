@@ -7,6 +7,7 @@ from gym_multigrid.core.constants import (
     CTF_COLORS,
     MAZE_COLORS,
     LABYRINTH_COLORS,
+    ACCESSIBLE_COLORS,
 )
 
 WorldT = TypeVar("WorldT", bound="World")
@@ -118,12 +119,12 @@ CtfWorld = World(
 MazeWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=MAZE_COLORS,
+    COLORS=ACCESSIBLE_COLORS,
     OBJECT_TO_IDX={
         "background": 0,
         "agent": 1,
         "flag": 2,
-        "obstacle": 3,
+        "wall": 3,
     },
 )
 

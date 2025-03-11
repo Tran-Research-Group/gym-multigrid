@@ -462,4 +462,6 @@ def test_compute_rewards_final_goal_agent_on_goal_0() -> None:
         loop=10,
     )
 
-    assert rewards == [reward_config["movement_reward"] * 2]
+    assert rewards == [
+        reward_config["agent_on_goal_reward"] * 2 + reward_config["movement_reward"] * 2
+    ]
