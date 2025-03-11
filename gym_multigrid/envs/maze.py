@@ -110,7 +110,74 @@ DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
 
 class MazeEnv(MultiGridEnv):
     """
-    Environment with a single agent and multiple flags
+    Multi-agent grid world environment with a maze layout to navigate through to reach the flags.
+
+    Observation
+    -----------
+    The observation is a 2D grid with two channels:
+    - The first channel represents the static objects in the environment (e.g., walls and flags).
+    - The second channel represents the agent's position.
+    - Encoding of the objects:
+        - 0: background
+        - 1: agent
+        - 2: flag
+        - 3: wall
+    - The default observation shape is (2, 10, 10).
+
+    Actions
+    -------
+    - 5 discrete actions (STAY, UP, RIGHT, DOWN, LEFT)
+    - All agents' actions have to be supplied as a list of integers in `step()` method.
+
+    Rewards
+    -------
+    - +1 for reaching the flag
+    - -0.01 * 1 for each step
+    - 0 * 1 for hitting the wall
+    - These values can be configured using the `reward_config` parameter in the constructor.
+
+    Termination
+    -----------
+    - The episode terminates when all agents reach the flag or a agent hits the wall.
+
+    Rendering
+    ---------
+    - The environment can be rendered in two modes: human and rgb_array.
+    - In rgb_array mode, the environment is rendered as a 3D numpy array with RGB values.
+
+    Note
+    ----
+    - The layout can be updated every time the environment is reset using the `reset()` method's `options` parameter.
+        - `options={"layout_config": layout_config}`
+
+    Example
+    -------
+    ```python
+        import gymnasium as gym
+        import gym_multigrid
+
+        env = gym.make(
+            "multigrid-maze-v0",
+            max_episode_steps=100,
+            kwargs={
+                "num_agents": 1,
+                "layout_config": {
+                    "width": 10,
+                    "height": 10,
+                    "flag_positions": [(9, 9)],
+                    "init_agent_positions": [(5, 5)],
+                    "wall_positions": [],
+                },
+                "reward_config": {
+                    "flag_reward": 1.0,
+                    "wall_penalty_ratio": 0.0,
+                    "step_penalty_ratio": 0.01,
+                },
+                "observation_mode": "tensor",
+                "render_mode": "rgb_array",
+            },
+        )
+    ```
     """
 
     # Update metadata of the parent class
@@ -134,20 +201,55 @@ class MazeEnv(MultiGridEnv):
 
         Parameters
         ----------
-        map_path : str
-            Path to the map file.
-        max_steps : int = 100
-            Maximum number of steps that the agent can take.
-        flag_reward : float = 1.0
-            Reward given to the agent for reaching a flag.
-        wall_penalty_ratio : float = 0.0
-            Penalty given to the agent for hitting a wall.
-        step_penalty_ratio : float = 0.01
-            Penalty given to the agent for each step taken.
-        observation_option : Literal["positional", "map"] = "map"
-            Observation option. If "positional", the observation is the flattened positions of the objects. If "map", the observation is the same with the map.
+        num_agents : int
+            Number of agents in the environment
+        layout_config : LayoutConfig = DEFAULT_LAYOUT_CONFIG
+            Configuration of the layout of the environment.
+            The default layout is a 10x10 grid with a flag at the bottom right corner
+            and an agent at the center.
+            This configuration can be updated using `reset()` method's `options` parameter as
+            `options={"layout_config": layout_config}`.
+        reward_config : RewardConfig = {
+            "flag_reward": 1.0,
+            "wall_penalty_ratio": 0.0,
+            "step_penalty_ratio": 0.01,
+        }
+            Configuration of the reward function.
+            The default reward function gives a reward of 1.0 for reaching the flag,
+            no penalty for hitting the wall, and a penalty of 0.01 * 1.0 for each step.
+        observation_mode : Literal["tensor"] = "tensor"
+            Observation mode of the environment. The default observation mode is "tensor".
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
-            Render mode.
+            Render mode of the environment. The default render mode is "rgb_array".
+
+        Example
+        --------
+        ```python
+            import gymnasium as gym
+            import gym_multigrid
+
+            env = gym.make(
+                "multigrid-maze-v0",
+                max_episode_steps=100,
+                kwargs={
+                    "num_agents": 1,
+                    "layout_config": {
+                        "width": 10,
+                        "height": 10,
+                        "flag_positions": [(9, 9)],
+                        "init_agent_positions": [(5, 5)],
+                        "wall_positions": [],
+                    },
+                    "reward_config": {
+                        "flag_reward": 1.0,
+                        "wall_penalty_ratio": 0.0,
+                        "step_penalty_ratio": 0.01,
+                    },
+                    "observation_mode": "tensor",
+                    "render_mode": "rgb_array",
+                },
+            )
+        ```
         """
 
         world: Final[World] = MazeWorld
