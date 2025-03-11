@@ -50,6 +50,24 @@ class CollectActions(enum.IntEnum):
     WEST = 3
 
 
+class SaveTheCityActions(enum.IntEnum):
+    """Set of actions available for the agents in Save the City environment
+
+    Parameters
+    ----------
+    enum : IntEnum
+        Base class for creating enumerated constants that are also subclasses of int.
+    """
+
+    STILL = 0
+    NORTH = 1
+    EAST = 2
+    SOUTH = 3
+    WEST = 4
+    BUILD = 5
+    EXTINGUISH = 6
+
+
 class WildfireActions(enum.IntEnum):
     """Set of actions available for the agents in Wildfire environment
 
