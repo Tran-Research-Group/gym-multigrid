@@ -581,6 +581,47 @@ class Agent(WorldObj):
                 return i
 
         raise ValueError("Invalid direction vector")
+    
+class SaveTheCityAgent(Agent):
+    """
+    Base class for Save The City agents.
+    """
+
+    def __init__(self, world, agent_type: str, move_speed: int, build_speed: int, firefight_speed: int):
+        super().__init__(world, color=self.get_color(agent_type))
+        self.agent_type = agent_type  # "firefighter", "builder", or "generalist"
+        self.move_speed = move_speed  # Movement speed (Generalists move faster)
+        self.build_speed = build_speed  # How fast agent builds
+        self.firefight_speed = firefight_speed  # How fast agent extinguishes fires
+
+    def get_color(self, agent_type: str):
+        """Assign a unique color for each agent type."""
+        if agent_type == "firefighter":
+            return "blue"  # Firefighters are blue
+        elif agent_type == "builder":
+            return "green"  # Builders are green
+        elif agent_type == "generalist":
+            return "yellow"  # Generalists are yellow
+        return "white"  # Default (should not happen)
+
+class Firefighter(SaveTheCityAgent):
+    """Firefighters specialize in putting out fires (20× faster)."""
+
+    def __init__(self, world):
+        super().__init__(world, agent_type="firefighter", move_speed=1, build_speed=1, firefight_speed=20)
+
+class Builder(SaveTheCityAgent):
+    """Builders specialize in construction (20× faster)."""
+
+    def __init__(self, world):
+        super().__init__(world, agent_type="builder", move_speed=1, build_speed=20, firefight_speed=1)
+
+class Generalist(SaveTheCityAgent):
+    """Generalists can do both (5× build and fire, 2× move speed)."""
+
+    def __init__(self, world):
+        super().__init__(world, agent_type="generalist", move_speed=2, build_speed=5, firefight_speed=5)
+
 
 
 class PolicyAgent(Agent):
