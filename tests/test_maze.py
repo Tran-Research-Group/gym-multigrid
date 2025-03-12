@@ -52,3 +52,36 @@ def test_maze_reset_options() -> None:
     assert obs[1, 3, 6] == 1
     assert obs[0, 9, 9] == 0
     assert obs[1, 5, 5] == 0
+
+
+@pytest.mark.parametrize(
+    ["flag_pos", "init_agent_pos", "target_reward", "action"],
+    [([(9, 9)], [(5, 5)], -0.01, 0), ([(8, 9)], [(9, 9)], 0.99, 1)],
+)
+def test_maze_reward(
+    flag_pos: list[tuple[int, int]],
+    init_agent_pos: list[tuple[int, int]],
+    target_reward: int,
+    action: int,
+) -> None:
+    kwargs = {
+        "num_agents": 1,
+        "layout_config": {
+            "width": 10,
+            "height": 10,
+            "flag_positions": flag_pos,
+            "init_agent_positions": init_agent_pos,
+            "wall_positions": [],
+        },
+        "reward_config": {
+            "flag_reward": 1.0,
+            "wall_penalty_ratio": 0.0,
+            "step_penalty_ratio": 0.01,
+        },
+        "observation_mode": "tensor",
+        "render_mode": "rgb_array",
+    }
+    env = gym.make("multigrid-maze-v0", max_episode_steps=100, **kwargs)
+    obs, _ = env.reset()
+    obs, reward, terminated, truncated, info = env.step(action)
+    assert reward == target_reward
