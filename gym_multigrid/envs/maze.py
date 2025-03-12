@@ -46,7 +46,6 @@ class Layout:
     flag_positions: list[tuple[int, int]]
     init_agent_positions: list[tuple[int, int]]
     wall_positions: list[tuple[int, int]]
-    world: Final[World] = MazeWorld
 
     def generate_static_obs(
         self, obj_to_idx: dict[str, int] = MazeWorld.OBJECT_TO_IDX
