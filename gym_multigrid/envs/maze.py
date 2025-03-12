@@ -48,13 +48,19 @@ class Layout:
     wall_positions: list[tuple[int, int]]
     world: Final[World] = MazeWorld
 
-    def __post_init__(self):
-        self.static_obs: NDArray = np.zeros((self.height, self.width))
+    def generate_static_obs(
+        self, obj_to_idx: dict[str, int] = MazeWorld.OBJECT_TO_IDX
+    ) -> NDArray:
+        static_obs: NDArray[np.int64] = np.zeros((self.height, self.width))
         for i, j in self.wall_positions:
-            self.static_obs[i, j] = self.world.OBJECT_TO_IDX["wall"]
+            static_obs[i, j] = obj_to_idx["wall"]
 
         for i, j in self.flag_positions:
-            self.static_obs[i, j] = self.world.OBJECT_TO_IDX["flag"]
+            static_obs[i, j] = obj_to_idx["flag"]
+
+        self.static_obs: NDArray[np.int64] = static_obs
+
+        return static_obs
 
 
 class RewardConfig(TypedDict):
@@ -257,6 +263,7 @@ class MazeEnv(MultiGridEnv):
 
         self.layout_config_dict: LayoutConfig = layout_config
         self.layout = Layout(**layout_config)
+        self.layout.generate_static_obs()
 
         self.observation_mode: ObservationMode = self.metadata["observation_modes"][
             observation_mode
@@ -346,6 +353,7 @@ class MazeEnv(MultiGridEnv):
             if "layout_config" in options:
                 self.layout_config_dict.update(options["layout_config"])
                 self.layout = Layout(**self.layout_config_dict)
+                self.layout.generate_static_obs()
         else:
             pass
 

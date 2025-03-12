@@ -6,7 +6,6 @@ import numpy as np
 import gymnasium as gym
 import imageio
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.maze import LayoutConfig, MazeEnv
 
 
