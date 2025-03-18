@@ -91,7 +91,9 @@ class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
 
     @staticmethod
     def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
-        observation: NDArray[np.int64] = np.zeros((2, env.height, env.width))
+        observation: NDArray[np.int64] = np.zeros(
+            (2, env.height, env.width), dtype=np.int64
+        )
         observation[0, :, :] = env.layout.static_obs
         for agent in env.agents:
             if agent.pos is not None:
