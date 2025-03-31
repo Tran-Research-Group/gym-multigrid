@@ -1,10 +1,11 @@
 from typing import TypeVar, Final
 import numpy as np
 from numpy.typing import NDArray
-from gym_multigrid.core.world import WorldT
-from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import *
-from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
+
+from ..core.world import WorldT
+from ..typing import Position
+from ..utils.rendering import *
+from ..core.constants import STATE_IDX_TO_COLOR_WILDFIRE
 
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")

@@ -1,1 +1,1 @@
-from gym_multigrid.policy.base import BaseAgentPolicy, AgentPolicyT
+from ..policy.base import BaseAgentPolicy, AgentPolicyT

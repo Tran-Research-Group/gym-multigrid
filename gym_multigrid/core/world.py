@@ -2,7 +2,7 @@ from typing import TypeVar
 from dataclasses import dataclass, field
 from numpy.typing import NDArray
 
-from gym_multigrid.core.constants import (
+from ..core.constants import (
     COLORS,
     CTF_COLORS,
     MAZE_COLORS,

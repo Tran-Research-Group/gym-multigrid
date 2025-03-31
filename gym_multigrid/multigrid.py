@@ -10,14 +10,13 @@ from gymnasium import spaces
 from gymnasium.spaces.space import Space, T_cov
 from gymnasium.core import ObsType, ActType
 
-from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.world import DefaultWorld, WorldT
-from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
-from gym_multigrid.typing import Position
-from gym_multigrid.utils.window import Window
-from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
-
+from .core.grid import Grid
+from .core.object import WorldObjT
+from .core.world import DefaultWorld, WorldT
+from .core.agent import ActionsT, AgentT, DefaultActions
+from .typing import Position
+from .utils.window import Window
+from .core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
@@ -219,7 +218,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         if self.max_steps is not None:
             warnings.warn(
                 """
-                `max_steps` will be deprecated in the base class in the future. 
+                `max_steps` will be deprecated in the base class in the future.
                 Please use `gymnasium.wrappers.TimeLimit` instead to limit the number of steps in an episode.
                 If you want to keep using `max_steps` for some purpose, please implement it in your own child classes.
                 """,

@@ -3,10 +3,10 @@ from typing import Type
 from copy import deepcopy
 import numpy as np
 
-from gym_multigrid.core.world import WorldT
-from gym_multigrid.utils.rendering import *
-from gym_multigrid.core.object import WorldObj, Wall, WorldObjT
-from gym_multigrid.core.constants import TILE_PIXELS
+from ..core.world import WorldT
+from ..utils.rendering import *
+from ..core.object import WorldObj, Wall, WorldObjT
+from ..core.constants import TILE_PIXELS
 
 
 class Grid:

@@ -5,13 +5,23 @@ import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
 
-from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
-from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
-from gym_multigrid.core.object import SimpleDoor as Door
-from gym_multigrid.core.world import WorldT, LabyrinthWorld
-from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.typing import Position
+
+from ..core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
+from ..core.grid import Grid
+from ..core.object import AgentGoal, Wall, WorldObjT, Zone
+from ..core.object import SimpleDoor as Door
+from ..core.world import WorldT, LabyrinthWorld
+from ..multigrid import MultiGridEnv
+from ..typing import Position
+
+
+# from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
+# from gym_multigrid.core.grid import Grid
+# from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+# from gym_multigrid.core.object import SimpleDoor as Door
+# from gym_multigrid.core.world import WorldT, LabyrinthWorld
+# from gym_multigrid.multigrid import MultiGridEnv
+# from gym_multigrid.typing import Position
 
 
 class TriggerConfig(TypedDict):
