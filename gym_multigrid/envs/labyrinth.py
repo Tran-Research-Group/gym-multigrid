@@ -15,15 +15,9 @@ from ..multigrid import MultiGridEnv
 from ..typing import Position
 
 
-# from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
-# from gym_multigrid.core.grid import Grid
-# from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
-# from gym_multigrid.core.object import SimpleDoor as Door
-# from gym_multigrid.core.world import WorldT, LabyrinthWorld
-# from gym_multigrid.multigrid import MultiGridEnv
-# from gym_multigrid.typing import Position
-
-
+##################
+# generic classes to define subtasks, rewards, subtask completion triggers, etc.
+##################
 class TriggerConfig(TypedDict):
     condition: str
     action: str
@@ -320,6 +314,9 @@ class Detector:
             return False
 
 
+##################
+# config for a particular env setup
+##################
 subtask_config: list[SubtaskConfig] = [
     {
         "goal_group_index": 0,
@@ -367,6 +364,7 @@ subtask_config: list[SubtaskConfig] = [
         "triggers": [],
     },
 ]
+
 
 obj_group_config: list[ObjectGroupConfig] = [
     {
@@ -448,6 +446,7 @@ obj_group_config: list[ObjectGroupConfig] = [
     },
 ]
 
+
 detector_config: list[DetectorConfig] = [
     {
         "obj_type": "zone",
@@ -463,6 +462,7 @@ detector_config: list[DetectorConfig] = [
     },
 ]
 
+
 reward_config: RewardConfig = {
     "reward_option": "intermediate_goal",
     "movement_reward": -0.02,
@@ -472,6 +472,9 @@ reward_config: RewardConfig = {
 }
 
 
+##################
+# the env class
+##################
 class LabyrinthEnv(MultiGridEnv):
     """
     # Labyrinth Environment
@@ -713,11 +716,15 @@ class LabyrinthEnv(MultiGridEnv):
     ```
     """
 
+    #############
+    # setup and env properties
+    #############
     def __init__(
         self,
-        num_agents: int = 3,
-        p_intended_action: float = 0.95,
-        init_pos: tuple[tuple[int, int], ...] = [(1, 3), (1, 4), (1, 5)],
+        seed: int = 1,
+        p_intended_movement: float = 0.95,
+        actions_set: type[ActionsT] = NavigationActions,
+        world: WorldT = LabyrinthWorld,
         subtask_config: list[SubtaskConfig] = subtask_config,
         obj_group_config: list[ObjectGroupConfig] = obj_group_config,
         detector_config: list[DetectorConfig] = detector_config,
@@ -725,31 +732,26 @@ class LabyrinthEnv(MultiGridEnv):
         observation_option: Literal[
             "final_goal", "intermediate_goal"
         ] = "intermediate_goal",
-        width: int = 10,
-        height: int = 9,
-        actions_set: type[ActionsT] = NavigationActions,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
-        world: WorldT = LabyrinthWorld,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
-        object_options: dict[str, WorldObjT] = {
-            "goal": AgentGoal,
-            "door": Door,
-            "zone": Zone,
-            "wall": Wall,
-        },
     ) -> None:
+
         """
         Constructor for the LabyrinthEnv class.
 
         Parameters
         ----------
-        num_agents : int = 3
-            Number of agents in the environment.
-        p_intended_action : float = 0.95
-            Probability of the intended action.
+        width : int = 10
+            Width of the grid.
+        height : int = 9
+            Height of the grid.
+        num_agents : list[int] = [0, 1, 2]
+            Indices of agents in the environment.
+        p_intended_movement : float = 0.95
+            Probability of the intended movement.
             Should be in the range [0, 1].
-        init_pos : tuple[tuple[int, int],...] = [(1, 3), (1, 4), (1, 5)]
-            Initial positions of the agents.
+        init_state_dist : lol who knows
+            Initial state distribution of the agents.
         subtask_config : list[SubtaskConfig] = subtask_config
             Configuration of the subtasks.
             The following keys are required:
@@ -783,10 +785,6 @@ class LabyrinthEnv(MultiGridEnv):
             Observation option.
             - "final_goal": The observation is the positions of the final goal and agents.
             - "intermediate_goal": The observation is the positions of all the goals and agents.
-        width : int = 10
-            Width of the grid.
-        height : int = 9
-            Height of the grid.
         actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -797,11 +795,9 @@ class LabyrinthEnv(MultiGridEnv):
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
-        object_options : dict[str, WorldObjT] = {"goal": AgentGoal, "door": Door, "zone": Zone, "wall": Wall}
-            Options for the objects that can be placed in the environment.
         """
         self.num_agents: int = num_agents
-        self.p_intended_action: float = p_intended_action
+        self.p_intended_movement: float = p_intended_movement
         self.subtask_config: list[SubtaskConfig] = subtask_config
         self.obj_group_config: list[ObjectGroupConfig] = obj_group_config
         self.detector_config: list[DetectorConfig] = detector_config
@@ -809,7 +805,11 @@ class LabyrinthEnv(MultiGridEnv):
         self.observation_option: Literal["final_goal", "intermediate_goal"] = (
             observation_option
         )
-        self.init_pos: tuple[tuple[int, int], ...] = init_pos
+
+        self.init_state_dist = init_state_dist
+
+        # initialize RNG
+        self.rng = np.random.default_rng(seed)
 
         agent_view_size: int = None
         agents: list[Agent] = [
@@ -856,7 +856,13 @@ class LabyrinthEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
-        self.object_options: dict[str, WorldObjT] = object_options
+
+        self.object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "door": Door,
+            "zone": Zone,
+            "wall": Wall,
+        },
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -921,12 +927,15 @@ class LabyrinthEnv(MultiGridEnv):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
+
         super().reset(seed=seed, options=options)
 
+        # define the current subtask
         self.current_subtasks: list[Subtask] = [
             self.subtask_dict[subtask_id] for subtask_id in self._find_first_subtasks()
         ]
 
+        # define the reward function for the current subtask
         self.rewarded_subtasks: list[Subtask]
         if self.reward_config["reward_option"] == "final_goal":
             self.rewarded_subtasks = [
@@ -934,6 +943,7 @@ class LabyrinthEnv(MultiGridEnv):
                 for subtask in self.current_subtasks
                 if subtask.next_subtask == "terminal"
             ]
+
         elif self.reward_config["reward_option"] == "intermediate_goal":
             self.rewarded_subtasks = self.current_subtasks
         else:
@@ -998,21 +1008,40 @@ class LabyrinthEnv(MultiGridEnv):
 
         return obs
 
+    #############
+    # general env step logic
+    #############
     def step(
         self,
         actions: NDArray[np.int_],
     ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+
         self.step_count += 1
+
+        # TODO dude wtf, this "actual action" thing is just wrong
+        ## this only appears in the labyrinth env, and not in the CTF env
+        ## Ok, so here's what this would do. Imagine deterministic state transitions and deterministic order for resolving agent actions.
+        ## If agent 1 selected "up", and there was another agent in that state, it will end up staying in its current state (simulating a collision).
+        ## This should NOT be treated as if agent 1 selected "stay still". Agent 1's expected return should update as if it took action "up", but it stayed in its current state. That will basically teach it to avoid attempting to go "up" when another agent it there. In the other case where we manually replace its action, we are messing with the learning process by manually changing the agent's policy.
+        ### That could have serious implications for training on-policy RL methods, so this is really really important to get right. This is literally putting a huge, manual bias on the agent's policy that should not be there.
+        ## The reward should NOT be based on the "actual_actions", but should be based on the action the agent selected.
         actual_actions: list[int] = self._move_agents(actions)
+
         obs = self._get_obs()
+
         reward: float = self.compute_reward(np.array(actual_actions))
+
         terminated: bool = (
             self._agents_detected() | self._agents_reached_terminal_goal()
         )
+
         truncated: bool = False
+
         info: dict[str, Any] = self._get_info()
 
         return obs, reward, terminated, truncated, info
+
+
 
     def _move_agents(self, actions: list[int]) -> list[int]:
         """
@@ -1074,9 +1103,9 @@ class LabyrinthEnv(MultiGridEnv):
             action_probs: list[float] = []
             for pos in available_pos:
                 action_probs.append(
-                    self.p_intended_action
+                    self.p_intended_movement
                     if np.array_equal(pos, next_pos)
-                    else (1 - self.p_intended_action) / (len(available_pos) - 1)
+                    else (1 - self.p_intended_movement) / (len(available_pos) - 1)
                 )
 
             # Normalize the action probabilities

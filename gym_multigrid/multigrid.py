@@ -94,6 +94,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
     2D grid world game environment
     """
 
+    #############
+    # setup and env properties
+    #############
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "video.frames_per_second": 10,
@@ -361,6 +364,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
+    #############
+    # env step logic
+    #############
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         pass
 
@@ -382,63 +388,6 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         """
         rewards[current_agent] += reward - 0.9 * (self.step_count / self.max_steps)
         return rewards
-
-    def _rand_int(self, low, high):
-        """
-        Generate random integer in [low,high[
-        """
-
-        return self.np_random.integers(low, high, endpoint=True)
-
-    def _rand_float(self, low, high):
-        """
-        Generate random float in [low,high[
-        """
-
-        return self.np_random.uniform(low, high)
-
-    def _rand_bool(self):
-        """
-        Generate random boolean value
-        """
-
-        return self.np_random.randint(0, 2) == 0
-
-    def _rand_elem(self, iterable):
-        """
-        Pick a random element in a list
-        """
-
-        lst = list(iterable)
-        idx = self._rand_int(0, len(lst) - 1)
-        return lst[idx]
-
-    def _rand_subset(self, iterable, num_elems):
-        """
-        Sample a random subset of distinct elements of a list
-        """
-
-        lst = list(iterable)
-        assert num_elems <= len(lst)
-
-        out = []
-
-        while len(out) < num_elems:
-            elem = self._rand_elem(lst)
-            lst.remove(elem)
-            out.append(elem)
-
-        return out
-
-    def _rand_pos(self, xLow, xHigh, yLow, yHigh):
-        """
-        Generate a random (x,y) position tuple
-        """
-
-        return (
-            self.np_random.randint(xLow, xHigh),
-            self.np_random.randint(yLow, yHigh),
-        )
 
     def place_obj(
         self,
@@ -653,6 +602,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         info = self._get_info()
         return obs, rewards, terminated, truncated, info
 
+    #############
+    # agent obs
+    #############
     def gen_obs_grid(self):
         """
         Generate the sub-grid observed by the agents.
@@ -714,6 +666,69 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return img
 
+    #############
+    # randomizing
+    #############
+    def _rand_int(self, low, high):
+        """
+        Generate random integer in [low,high[
+        """
+
+        return self.np_random.integers(low, high, endpoint=True)
+
+    def _rand_float(self, low, high):
+        """
+        Generate random float in [low,high[
+        """
+
+        return self.np_random.uniform(low, high)
+
+    def _rand_bool(self):
+        """
+        Generate random boolean value
+        """
+
+        return self.np_random.randint(0, 2) == 0
+
+    def _rand_elem(self, iterable):
+        """
+        Pick a random element in a list
+        """
+
+        lst = list(iterable)
+        idx = self._rand_int(0, len(lst) - 1)
+        return lst[idx]
+
+    def _rand_subset(self, iterable, num_elems):
+        """
+        Sample a random subset of distinct elements of a list
+        """
+
+        lst = list(iterable)
+        assert num_elems <= len(lst)
+
+        out = []
+
+        while len(out) < num_elems:
+            elem = self._rand_elem(lst)
+            lst.remove(elem)
+            out.append(elem)
+
+        return out
+
+    def _rand_pos(self, xLow, xHigh, yLow, yHigh):
+        """
+        Generate a random (x,y) position tuple
+        """
+
+        return (
+            self.np_random.randint(xLow, xHigh),
+            self.np_random.randint(yLow, yHigh),
+        )
+
+    #############
+    # env rendering
+    #############
     def render(self):
         """
         Render the whole-grid human view
