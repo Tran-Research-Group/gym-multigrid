@@ -230,7 +230,7 @@ class MazeEnv(MultiGridEnv):
             "wall_penalty_ratio": 0.0,
             "step_penalty_ratio": 0.01,
         },
-        observation_mode: Literal["tensor"] = "map",
+        observation_mode: Literal["tensor"] = "tensor",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         """
