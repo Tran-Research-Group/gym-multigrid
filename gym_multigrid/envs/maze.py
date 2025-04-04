@@ -106,6 +106,33 @@ class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
         return observation
 
 
+class MapObservationMode(ObservationMode[NDArray[np.int64]]):
+    @staticmethod
+    def observation_space(env: MultiGridEnv) -> spaces.Box:
+        return spaces.Box(
+            low=0,
+            high=len(MazeWorld.OBJECT_TO_IDX) - 1,
+            shape=(env.height, env.width),
+            dtype=np.int64,
+        )
+
+    @staticmethod
+    def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
+        observation: NDArray[np.int64] = np.zeros(
+            (env.height, env.width), dtype=np.int64
+        )
+        observation[:, :] = env.layout.static_obs
+        for agent in env.agents:
+            if agent.pos is not None:
+                observation[agent.pos[0], agent.pos[1]] = MazeWorld.OBJECT_TO_IDX[
+                    "agent"
+                ]
+            else:
+                pass
+
+        return observation
+
+
 DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
     "width": 10,
     "height": 10,
@@ -189,7 +216,10 @@ class MazeEnv(MultiGridEnv):
 
     # Update metadata of the parent class
     metadata = MultiGridEnv.metadata.copy()
-    metadata["observation_modes"] = {"tensor": TensorObservationMode}
+    metadata["observation_modes"] = {
+        "tensor": TensorObservationMode,
+        "map": MapObservationMode,
+    }
 
     def __init__(
         self,
@@ -200,7 +230,7 @@ class MazeEnv(MultiGridEnv):
             "wall_penalty_ratio": 0.0,
             "step_penalty_ratio": 0.01,
         },
-        observation_mode: Literal["tensor"] = "tensor",
+        observation_mode: Literal["tensor"] = "map",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
         """

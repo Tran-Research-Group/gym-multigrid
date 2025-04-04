@@ -409,7 +409,7 @@ register(
             "wall_penalty_ratio": 0.0,
             "step_penalty_ratio": 0.01,
         },
-        "observation_mode": "tensor",
+        "observation_mode": "map",
         "render_mode": "rgb_array",
     },
 )

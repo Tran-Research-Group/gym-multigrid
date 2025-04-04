@@ -28,12 +28,20 @@ def test_maze_run() -> None:
     assert os.path.exists(animation_save_path)
 
 
-def test_maze_reset() -> None:
-    env = gym.make("multigrid-maze-v0")
+@pytest.mark.parametrize(
+    ["obs_mode", "obs_shape"],
+    [("tensor", (2, 10, 10)), ("map", (10, 10))],
+)
+def test_maze_reset(obs_mode: str, obs_shape: tuple[int, ...]) -> None:
+    env = gym.make("multigrid-maze-v0", observation_mode=obs_mode)
     obs, _ = env.reset()
-    assert obs.shape == (2, 10, 10)
-    assert obs[0, 9, 9] == 2
-    assert obs[1, 5, 5] == 1
+    assert obs.shape == obs_shape
+    if obs_mode == "tensor":
+        assert obs[0, 9, 9] == 2
+        assert obs[1, 5, 5] == 1
+    elif obs_mode == "map":
+        assert obs[5, 5] == 1
+        assert obs[9, 9] == 2
 
 
 def test_maze_reset_options() -> None:
