@@ -60,6 +60,29 @@ class WorldObj:
     def pos(self, value):
         self._pos = value
 
+    @property
+    def west_pos(self) -> np.array:
+        return self.pos + np.array([-1, 0])
+
+    @property
+    def east_pos(self) -> np.array:
+        return self.pos + np.array([1, 0])
+
+    @property
+    def north_pos(self) -> np.array:
+        return self.pos + np.array([0, -1])
+
+    @property
+    def south_pos(self) -> np.array:
+        return self.pos + np.array([0, 1])
+
+    @property
+    def neighbor_pos(self) -> list[np.array]:
+        """get all of the neighboring positions
+        """
+        # this order is very important for getting avail_actions, must be the same as the order defined in the action space with no actions in between the "move" actions
+        return [self.west_pos(), self.south_pos(), self.east_pos(), self.north_pos()]
+
     def reset(self) -> None:
         """
         Reset the object to its initial state.

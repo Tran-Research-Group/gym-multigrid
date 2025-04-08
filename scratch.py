@@ -1,7 +1,6 @@
 import pdb
 from gym import register
 
-
 from scratch_2 import EnvObjectGroup, RewardFunctions, TerminationFunctions, StateData, SubtaskData, HLMDPData, EnvData
 
 """
@@ -19,6 +18,7 @@ for each subtask, you need to define a separate:
 
 """
 
+
 ####################
 # HLMDP config
 ####################
@@ -26,6 +26,7 @@ for each subtask, you need to define a separate:
 # the subtasks in HLMDPData should have everything they need to be passed into the env and fully specify a given Dec-POMDP for that subtask
 ## there can be no references to subtasks in the labyrinth or multigrid env class
 ## that means you need to define these functions outside the env classes, then read them in to overwrite the env's base reward, termination, and gen_grid functions when you instantiate it
+
 
 state_data_list = [
     StateData(
@@ -83,10 +84,6 @@ env_data = EnvData(state_data=hlmdp_data.state_data,
 
 )
 
-
-pdb.set_trace()
-
-
 # # data to specify each Dec-POMDP that models a subtask
 # dec_pomdp_data = {}
 # for _, data in hlmdp_data.values():
@@ -102,8 +99,6 @@ pdb.set_trace()
 #             "termination_function": TerminationFunctions(termination_condition, final_state).termination_function,
 #             "env_objects": env_objects[subtask_idx]
 #         }
-
-pdb.set_trace()
 
 ####################
 

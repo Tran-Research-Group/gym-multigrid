@@ -94,8 +94,8 @@ class StateData:
     idx: int
     # example with a single initial state: [1.0, [[1, 2], [2, 1]]]
     outgoing_init_state_dist: Tuple[Tuple[float, Tuple[Tuple[int, int], ...]], ...]
-    incoming_subtask_idxs: list | None = None
-    outgoing_subtask_idxs: list | None = None
+    # incoming_subtask_idxs: list | None = None
+    # outgoing_subtask_idxs: list | None = None
 
     # not necessary for training in independent subtasks
     # def __post_init__(self):
