@@ -1,7 +1,14 @@
-from typing import Callable, Tuple
+from abc import ABC
+from typing import Callable, Tuple, Any, Literal, TypeVar
 from dataclasses import dataclass
 
+from ..core.grid import Grid
+from ..core.world import WorldT
+from ..core.object import WorldObjT
+from ..core.object import AgentGoal, Door, Zone, Wall
+
 import pdb
+
 
 @dataclass
 class EnvObjectGroup:
@@ -12,6 +19,7 @@ class EnvObjectGroup:
     pos: tuple[tuple[int, int], ...]
     color: str
     spawned_subtask_idxs: tuple[int, ...]
+    fill_mode: Literal["empty", "filled"] | None
 
 
 @dataclass
@@ -86,62 +94,18 @@ class HLMDPData:
         # adds initial state distribution data to the subtask data based on its outgoing edge
         for _, data in self.subtask_data.items():
             outgoing_state_idx = data.edge[0]
-            data.init_state_dist = self.state_data[outgoing_state_idx].outgoing_init_state_dist
-
-
-
-'''
-##################
-# miki's stuff (old)
-##################
-
-
-##################
-# generic classes to define subtasks, rewards, subtask completion triggers, etc.
-##################
-class TriggerConfig(TypedDict):
-    condition: str
-    action: str
-    obj_type: str
-    obj_group: int
-
-
-class SubtaskConfig(TypedDict):
-    next_subtask: int | Literal["terminal"]
-    goal_group_index: int
-    assigned_agent_goal: dict[int, tuple[int, int]]
-    triggers: list[TriggerConfig]
-
-
-class ObjectGroupConfig(TypedDict):
-    obj_type: str
-    group_index: int
-    pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
-    color: str
-    fill_mode: Literal["empty", "filled"] | None
-
-
-class DetectorConfig(TypedDict):
-    obj_type: str
-    group_index: int
-    visual_detect_prob: float
-    radio_detect_prob: float
-
-
-class RewardConfig(TypedDict):
-    reward_option: Literal["final_goal", "intermediate_goal"]
-    movement_reward: float
-    agent_on_goal_reward: float
-    agent_move_away_from_goal_reward: float
-    all_agents_on_goal_reward: float
+            data.init_state_dist = self.state_data[
+                outgoing_state_idx
+            ].outgoing_init_state_dist
 
 
 class ObjectGroup(ABC):
     def __init__(
         self,
         obj_type: str,
-        group_index: int,
+        group_idx: int,
         pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
+        spawned_subtask_idxs: tuple[int, ...],
         color: str,
         fill_mode: Literal["empty", "filled"] = "filled",
         object_options: dict[str, WorldObjT] = {
@@ -158,8 +122,10 @@ class ObjectGroup(ABC):
         ----------
         obj_type : str
             Type of the object.
-        group_index : int
+        group_idx : int
             Group index of the object.
+        spawned_subtask_idxs: tuple[int, ...]
+            Tuple of ints that tell which subtasks this group of objects will spawn during
         pos : tuple[tuple[int, int] | tuple[int, int, int, int], ...]
             Positions of the objects.
             A tuple element can be either a tuple of two integers or a tuple of four integers.
@@ -171,7 +137,8 @@ class ObjectGroup(ABC):
             - "filled": Filled fill mode.
         """
         self.obj_type: str = obj_type
-        self.group_index: int = group_index
+        self.group_idx: int = group_idx
+        self.spawned_subtask_idxs = spawned_subtask_idxs
         self.color: str = color
         self.object_options: dict[str, WorldObjT] = object_options
 
@@ -299,16 +266,63 @@ class ObjectGroup(ABC):
 ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)
 
 
+"""
+##################
+# miki's stuff (old)
+##################
+
+
+##################
+# generic classes to define subtasks, rewards, subtask completion triggers, etc.
+##################
+class TriggerConfig(TypedDict):
+    condition: str
+    action: str
+    obj_type: str
+    obj_group: int
+
+
+class SubtaskConfig(TypedDict):
+    next_subtask: int | Literal["terminal"]
+    goal_group_idx: int
+    assigned_agent_goal: dict[int, tuple[int, int]]
+    triggers: list[TriggerConfig]
+
+
+class ObjectGroupConfig(TypedDict):
+    obj_type: str
+    group_idx: int
+    pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
+    color: str
+    fill_mode: Literal["empty", "filled"] | None
+
+
+class DetectorConfig(TypedDict):
+    obj_type: str
+    group_idx: int
+    visual_detect_prob: float
+    radio_detect_prob: float
+
+
+class RewardConfig(TypedDict):
+    reward_option: Literal["final_goal", "intermediate_goal"]
+    movement_reward: float
+    agent_on_goal_reward: float
+    agent_move_away_from_goal_reward: float
+    all_agents_on_goal_reward: float
+
+
+
 class Subtask:
     def __init__(
         self,
         next_subtask: int | Literal["terminal"],
-        goal_group_index: int,
+        goal_group_idx: int,
         assigned_agent_goal: dict[int, tuple[int, int]],
         triggers: list[TriggerConfig],
     ) -> None:
         self.next_subtask: int | Literal["terminal"] = next_subtask
-        self.goal_group_index: int = goal_group_index
+        self.goal_group_idx: int = goal_group_idx
         self.assigned_agent_goal: dict[int, tuple[int, int]] = assigned_agent_goal
         self.triggers: list[Trigger] = [Trigger(**trigger) for trigger in triggers]
 
@@ -341,10 +355,10 @@ class Trigger:
         return getattr(self, self.condition)(agents, subtask)
 
     def agents_on_goals(self, agents: list[Agent], subtask: Subtask) -> bool:
-        for agent_index, goal_pos in subtask.assigned_agent_goal.items():
+        for agent_idx, goal_pos in subtask.assigned_agent_goal.items():
             if (
-                agents[agent_index].pos[0] != goal_pos[0]
-                or agents[agent_index].pos[1] != goal_pos[1]
+                agents[agent_idx].pos[0] != goal_pos[0]
+                or agents[agent_idx].pos[1] != goal_pos[1]
             ):
                 return False
             else:
@@ -357,12 +371,12 @@ class Detector:
     def __init__(
         self,
         obj_type: str,
-        group_index: int,
+        group_idx: int,
         visual_detect_prob: float,
         radio_detect_prob: float,
     ) -> None:
         self.obj_type: str = obj_type
-        self.group_index: int = group_index
+        self.group_idx: int = group_idx
         self.visual_detect_prob: float = visual_detect_prob
         self.radio_detect_prob: float = radio_detect_prob
 
@@ -372,7 +386,7 @@ class Detector:
         obj_group_dict: dict[str, dict[int, ObjGroupT]],
         random_generator: np.random.Generator,
     ) -> bool:
-        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_index]
+        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_idx]
         for agent in agents:
             if self.detect_agent(agent, obj_group, random_generator):
                 return True
@@ -393,4 +407,4 @@ class Detector:
             return visual_detect or radio_detect
         else:
             return False
-'''
+"""

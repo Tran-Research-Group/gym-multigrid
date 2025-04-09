@@ -1,4 +1,5 @@
 from typing import Any, Literal, Optional, TypedDict
+from dataclasses import asdict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -16,6 +17,8 @@ from ..utils.subtasks import (
     SubtaskData,
     StateData,
     HLMDPData,
+    ObjectGroup,
+    ObjGroupT,
 )
 
 
@@ -29,7 +32,11 @@ import pdb
 state_data_list = [
     StateData(
         idx=0,
-        outgoing_init_state_dist=[1.0, [[1, 2], [2, 1]]],
+        outgoing_init_state_dist=[1.0, [[1, 3], [1, 6]]],
+    ),
+    StateData(
+        idx=1,
+        outgoing_init_state_dist=[1.0, [[3, 3], [3, 6]]],
     )
 ]
 
@@ -38,13 +45,13 @@ subtask_data_list = [
     SubtaskData(
         edge=(0, 1),
         idx=0,
-        final_state=[[2, 2], [2, 6]],
+        final_state=[[3, 3], [3, 6]],
         termination_condition="reach_assigned_final_state",
     ),
     SubtaskData(
-        edge=(0, 2),
+        edge=(1, 2),
         idx=1,
-        final_state=[[3, 2], [3, 6]],
+        final_state=[[5, 3], [5, 6]],
         termination_condition="reach_assigned_final_state",
     ),
 ]
@@ -83,7 +90,7 @@ class LabyrinthEnv(MultiGridEnv):
         ] = "intermediate_goal",
         obs_type: Literal["dict", "array"] = "array",
         width: int = 10,
-        height: int = 9,
+        height: int = 10,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -155,16 +162,17 @@ class LabyrinthEnv(MultiGridEnv):
         #     if subtask.next_subtask == "terminal"
         # ]
 
-        # for subtask in self.subtask_dict.values():
-        #     for agent_index, pos in subtask.assigned_agent_goal.items():
-        #         if agent_index in self.agent_goals:
-        #             self.agent_goals[agent_index].append(pos)
-        #         else:
-        #             self.agent_goals[agent_index] = [pos]
+        for subtask in self.subtask_dict.values():
+            for agent_index, pos in subtask.assigned_agent_goal.items():
+                if agent_index in self.agent_goals:
+                    self.agent_goals[agent_index].append(pos)
+                else:
+                    self.agent_goals[agent_index] = [pos]
 
-        #     if subtask.next_subtask == "terminal":
-        #         self.final_goal = tuple(subtask.assigned_agent_goal.values())
-        #         self.final_goal_group_index = subtask.goal_group_index
+            if subtask.next_subtask == "terminal":
+                self.final_goal = tuple(subtask.assigned_agent_goal.values())
+                self.final_goal_group_index = subtask.goal_group_index
+
 
         uncached_object_types: list[str] = ["agent"]
 
@@ -184,19 +192,17 @@ class LabyrinthEnv(MultiGridEnv):
         )
 
         # define available objects in this environment
-        self.object_options: dict[str, WorldObjT] = (
-            {
+        self.object_options: dict[str, WorldObjT] = {
                 "goal": AgentGoal,
                 "door": Door,
                 "zone": Zone,
                 "wall": Wall,
-            },
-        )
+        }
+
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
         max_y: int = self.height - 1
-
 
         # goal_indices was originally called "nums_goal", which is a confusing name for a variable when you also have "num_goals" (with no "s" after "num") as a different variable
         if self.observation_option == "final_goal":
@@ -301,45 +307,90 @@ class LabyrinthEnv(MultiGridEnv):
     def _gen_grid(self, width, height) -> None:
         self.grid = Grid(width, height, self.world)
 
+        # make a list of all the objects you want to spawn in the env
+        env_object_config = [
+            # surrounding wall
+            EnvObjectGroup(
+                obj_type="wall",
+                group_idx=0,
+                pos=((0, 0, 7, 10),),
+                color="grey",
+                spawned_subtask_idxs=(0, 1),
+                fill_mode="empty"
+                ),
+            # middle walls
+            EnvObjectGroup(
+                obj_type="wall",
+                group_idx=1,
+                pos=((3, 1),),
+                color="grey",
+                spawned_subtask_idxs=(0, 1),
+                fill_mode="empty"
+                ),
+            EnvObjectGroup(
+                obj_type="wall",
+                group_idx=2,
+                pos=((3, 8),),
+                color="grey",
+                spawned_subtask_idxs=(0, 1),
+                fill_mode="empty"
+                ),
+            EnvObjectGroup(
+                obj_type="wall",
+                group_idx=2,
+                pos=((3, 4, 1, 2),),
+                color="grey",
+                spawned_subtask_idxs=(0, 1),
+                fill_mode="empty"
+                ),
+        ]
 
+        # add the goals for the current subtask
+        for subtask_idx, data in self.hlmdp_data.subtask_data.items():
+            if subtask_idx == self.subtask_idx:
+                env_object_config.append(
+                    EnvObjectGroup(
+                        obj_type="goal",
+                        group_idx=subtask_idx,
+                        pos=data.final_state,
+                        color="green",
+                        spawned_subtask_idxs=(subtask_idx),
+                        fill_mode="empty"
+                    )
+                )
+
+        obj_group_dict: dict[str, dict[int, ObjGroupT]] = {}
+
+        # Place objects
+        for obj_group_config in env_object_config:
+            obj_type: str = obj_group_config.obj_type
+            group_index: int = obj_group_config.group_idx
+
+            if obj_type not in obj_group_dict:
+                obj_group_dict[obj_type] = {}
+            else:
+                pass
+
+            obj_group_dict[obj_type][group_index] = ObjectGroup(
+                object_options=self.object_options, **asdict(obj_group_config)
+            )
+            obj_group_dict[obj_type][group_index].put_objects(self.grid, self.world)
+
+        self.obj_group_dict = obj_group_dict
+
+        # this has to be done before the agents are placed
+        self.init_grid: Grid = self.grid.copy()
+
+        ########################
+        # all the stuff above here has to be done before the agents are placed
+        # espeically the init_grid thing
+        ########################
         # Place the agents
         # pick the init_pos based on the subtask (assuming it is an init pos and not a distribution to sample from)
         init_pos = self.hlmdp_data.subtask_data[self.subtask_idx].init_state_dist[1]
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
-
-
-        # make a list of all the objects you want to spawn in the env
-        env_object_list = [
-            EnvObjectGroup(
-                obj_type="goal",
-                group_idx=0,
-                pos=((4, 1), (4, 2), (4, 3)),
-                color="green",
-                spawned_subtask_idxs=(0, 1, 2),
-            )
-        ]
-
-        # obj_group_dict: dict[str, dict[int, ObjGroupT]] = {}
-
-        # # Place objects
-        # for obj_group_config in self.obj_group_config:
-        #     obj_type: str = obj_group_config["obj_type"]
-        #     group_index: int = obj_group_config["group_index"]
-
-        #     if obj_type not in obj_group_dict:
-        #         obj_group_dict[obj_type] = {}
-        #     else:
-        #         pass
-
-        #     obj_group_dict[obj_type][group_index] = ObjectGroup(
-        #         object_options=self.object_options, **obj_group_config
-        #     )
-        #     obj_group_dict[obj_type][group_index].put_objects(self.grid, self.world)
-
-        # self.obj_group_dict = obj_group_dict
-        self.init_grid: Grid = self.grid.copy()
 
         # # Initialize detectors
         # self.detectors: list[Detector] = [
@@ -379,7 +430,7 @@ class LabyrinthEnv(MultiGridEnv):
         )
         return env_info
 
-    def get_avail_actions(self) -> list[list[bool]]:
+    def get_avail_actions(self, verbose=False) -> list[list[bool]]:
         """gets available actions for each agent
 
         Returns
@@ -391,15 +442,35 @@ class LabyrinthEnv(MultiGridEnv):
         for agent in self.agents:
             avail_actions.append(self._get_avail_actions_agent(agent))
 
+        if verbose:
+            self.print_avail_actions_str(avail_actions)
+
         return avail_actions
+
+    def print_avail_actions_str(self, avail_actions):
+        if self.actions == NavigationActions:
+            actions = [a.name for a in NavigationActions]
+
+            print("Available actions")
+            for agent_idx, avail_actions_agent in enumerate(avail_actions):
+                action_str = ""
+                for i, avail in enumerate(avail_actions_agent):
+                    if avail:
+                        action_str += f"{actions[i]},  "
+
+                print(f"Agent: {agent_idx} --- {action_str}")
 
     def _get_avail_actions_agent(self, agent: Agent) -> list[bool]:
         # we only handle the case of NavigationActions
         ## other action sets need to define their own rules for action availability
         if self.actions == NavigationActions:
-            avail_actions = [1 for _ in NavigationActions]
-            neighbor_positions = agent.neighbor_pos
+            avail_actions = []
+            for action in NavigationActions:
+                # we will handle the logic for "stay" later after the movement actions
+                if action.name != "stay":
+                    avail_actions.append(1)
 
+            neighbor_positions = agent.neighbor_pos
             for i, pos in enumerate(neighbor_positions):
                 neighbor_cell = self.grid.get(*pos)
                 if (neighbor_cell is None) or (neighbor_cell.can_overlap()):
@@ -407,8 +478,10 @@ class LabyrinthEnv(MultiGridEnv):
                 else:
                     avail_actions[i] = 0
 
-        return avail_actions
+            # add representation of "stay" action, which is always available
+            avail_actions.insert(0, 1)
 
+        return avail_actions
 
     #############
     # general env step logic
@@ -594,6 +667,9 @@ class LabyrinthEnv(MultiGridEnv):
 
         # # 3. Penalty for each agent if it moves away from its assigned goal though it was on it
         # for agent, action in zip(self.agents, actions):
+            # this doesn't work if you have stochastic transitions
+            ## it only works if you manually update "action" based on some other logic, but that is like the "actual_actions" thing in that it is not right according to RL theory
+            ## the better way to do this is just grab previous_pos before moving the agents and input it to the reward function
         #     prev_pos: Position = self._get_previous_agent_pos(action, agent)
         #     prev_agent_goal: int = self._is_agent_on_assigned_goal(
         #         (prev_pos[0], prev_pos[1]), agent.index, self.rewarded_subtasks
