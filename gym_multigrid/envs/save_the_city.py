@@ -244,13 +244,17 @@ class SaveTheCityEnv(MultiGridEnv):
         reward = float(np.sum(rewards))  # reduce to one float
         return obs, reward, terminated, truncated, self.info
 
-    def phi_dim(self) -> int:
-        """
-        Helper method to get feature vector dimension
+    def get_nearby_building(self, agent):
+        for pos in agent.adjacent_positions():
+            obj = self.grid.get(*pos)
+            if isinstance(obj, Building):
+                return obj
+        return None
 
-        Returns
-        -------
-        int
-            length of feature vector = number of ball types
-        """
-        return self.num_ball_types
+    def get_nearby_burning_building(self, agent):
+        for pos in agent.adjacent_positions():
+            obj = self.grid.get(*pos)
+            if isinstance(obj, Building) and obj.fire_rate > 0:
+                return obj
+        return None
+
