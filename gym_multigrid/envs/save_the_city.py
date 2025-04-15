@@ -136,66 +136,39 @@ class SaveTheCityEnv(MultiGridEnv):
         return state, self.info
 
     def _reward(
-        self, current_agent: int, rewards: NDArray[np.float64], reward: float = 1
+        self, current_agent: int, rewards: NDArray[np.float64], reward: float, event: str
     ) -> None:
         """
-        Compute the reward to be given upon success
-        """
-        rewards[current_agent] += reward
-
-    def _respawn(self, color):
-        self.place_obj(Ball(self.world, color, self.balls_reward[color]))
-
-    def _handle_pickup(
-        self,
-        i,
-        rewards: NDArray[np.float64],
-        fwd_pos: Position,
-        fwd_cell: WorldObjT | None,
-    ) -> None:
-        if fwd_cell and fwd_cell.can_pickup():
-            fwd_cell.pos = np.array([-1, -1])
-            ball_idx = self.world.COLOR_TO_IDX[fwd_cell.color]
-            self.grid.set(*fwd_pos, None)
-            if self.respawn:
-                self._respawn(ball_idx)
-            self.collected_balls += 1
-            self._reward(i, rewards, fwd_cell.reward)
-            self.info[self.keys[self.num_ball_types * i + ball_idx]] += 1
-
-    def move_agent(
-        self,
-        rewards: NDArray[np.float64],
-        agent_index: int,
-        next_cell: WorldObjT | None,
-        next_pos: Position,
-    ) -> None:
-        """
-        Method to move given agent to given next position
+        Apply reward to the current agent and log event type.
 
         Parameters
         ----------
+        current_agent : int
+            Index of the agent to reward.
         rewards : NDArray[np.float64]
-            array of rewards for each agent
-        agent_index : int
-            index of agent to move
-        next_cell : WorldObjT | None
-            object corresponding to next position
-        next_pos : Position
-            position coordinates to move agent to
+            Array of per-agent reward values.
+        reward : float
+            Amount of reward to give.
+        event : str
+            Type of event: "building_completed" or "fire_extinguished"
         """
-        if next_cell is not None:
-            if next_cell.type == "ball":
-                self._handle_pickup(agent_index, rewards, next_pos, next_cell)
-                # move agent to cell
-                self.grid.set(*next_pos, self.agents[agent_index])
-                self.grid.set(*self.agents[agent_index].pos, None)
-                # update agent position variable
-                self.agents[agent_index].pos = next_pos
-        elif next_cell is None or next_cell.can_overlap():
-            self.grid.set(*next_pos, self.agents[agent_index])
-            self.grid.set(*self.agents[agent_index].pos, None)
-            self.agents[agent_index].pos = next_pos
+        rewards[current_agent] += reward
+
+        # Log the reward type in self.info
+        key = f"agent{current_agent + 1}"
+        if event == "building_completed":
+            self.info[key]["buildings_completed"] += 1
+        elif event == "fire_extinguished":
+            self.info[key]["fires_extinguished"] += 1
+
+    def move_agent(self, agent_index: int, next_cell: WorldObjT | None, next_pos: Position):
+        agent = self.agents[agent_index]
+
+        if next_cell is None or next_cell.can_overlap():
+            self.grid.set(*next_pos, agent)
+            self.grid.set(*agent.pos, None)
+            agent.pos = next_pos
+
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
