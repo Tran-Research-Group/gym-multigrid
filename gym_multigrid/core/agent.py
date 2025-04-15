@@ -9,7 +9,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
+from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords, point_in_circle
 from gym_multigrid.core.object import WorldObj
 from gym_multigrid.core.constants import DIR_TO_VEC
 
@@ -588,7 +588,7 @@ class SaveTheCityAgent(Agent):
     """
 
     def __init__(self, world, agent_type: str, move_speed: int, build_speed: int, firefight_speed: int):
-        super().__init__(world, color=self.get_color(agent_type))
+        super().__init__(world, type=agent_type, color=self.get_color(agent_type))
         self.agent_type = agent_type  # "firefighter", "builder", or "generalist"
         self.move_speed = move_speed  # Movement speed (Generalists move faster)
         self.build_speed = build_speed  # How fast agent builds
@@ -603,6 +603,33 @@ class SaveTheCityAgent(Agent):
         elif agent_type == "generalist":
             return "yellow"  # Generalists are yellow
         return "white"  # Default (should not happen)
+    
+    def render(self, img):
+        """
+        Render the agent as a colored circle with a centered, elongated directional triangle.
+        """
+
+        # Draw circular body
+        agent_color = self.world.COLORS[self.color]
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.3), agent_color)
+
+        # Triangle with its center at (0.5, 0.5) and elongated in direction
+        tri_coords = {
+            0: point_in_triangle([0.4, 0.55], [0.6, 0.55], [0.5, 0.2]),  # Up
+            1: point_in_triangle([0.45, 0.4], [0.45, 0.6], [0.8, 0.5]),  # Right
+            2: point_in_triangle([0.4, 0.45], [0.6, 0.45], [0.5, 0.8]),  # Down
+            3: point_in_triangle([0.55, 0.4], [0.55, 0.6], [0.2, 0.5]),  # Left
+        }
+
+        fill_coords(img, tri_coords[self.dir], (255, 255, 255))  # white triangle
+
+    def adjacent_positions(self) -> list[tuple[int, int]]:
+        """
+        Return a list of adjacent grid positions (N, S, E, W).
+        """
+        x, y = self.pos
+        return [(x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)]
+
 
 class Firefighter(SaveTheCityAgent):
     """Firefighters specialize in putting out fires (20× faster)."""
