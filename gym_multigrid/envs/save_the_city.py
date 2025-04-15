@@ -82,38 +82,34 @@ class SaveTheCityEnv(MultiGridEnv):
 
     def _gen_grid(self, width: int, height: int):
         """
-        Generate grid and place all the balls and agents.
-
-        Parameters
-        ----------
-        width : int
-            width of grid
-        height : int
-            height of grid
+        Generate the grid and place buildings and agents.
         """
         self.grid = Grid(width, height, self.world)
 
-        # Generate the surrounding walls
+        # Generate surrounding walls
         self.grid.horz_wall(0, 0)
         self.grid.horz_wall(0, height - 1)
         self.grid.vert_wall(0, 0)
         self.grid.vert_wall(width - 1, 0)
 
-        if not isinstance(self.num_balls, list):
-            raise TypeError(
-                f"Expected num balls to be of type list, \
-            however type {type(self.num_balls)} was passed"
+        # Place buildings
+        for i in range(self.num_buildings):
+            # Alternate between slow and fast-burning buildings
+            fast_burning = (i % 2 == 0)  # every other building is fast-burning
+            burn_rate = 1
+
+            building = Building(
+                world=self.world,
+                burn_rate=burn_rate,
+                build_speed=2,
+                firefight_speed=2,
+                fast_burning=fast_burning
             )
+            self.place_obj(building)
 
-        for number, index, reward in zip(
-            self.num_balls, self.balls_index, self.balls_reward
-        ):
-            for _ in range(number):
-                self.place_obj(Ball(self.world, index, reward))
-
-        # Randomize the player start position
-        for a in self.agents:
-            self.place_agent(a)
+        # Place agents randomly
+        for agent in self.agents:
+            self.place_agent(agent)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.collected_balls = 0
