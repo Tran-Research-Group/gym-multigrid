@@ -11,8 +11,12 @@ from gym_multigrid.typing import Position
 
 class SaveTheCityEnv(MultiGridEnv):
     """
-    Environment in which the agents have to collect the balls
+    Environment in which agents must build buildings and extinguish fires.
     """
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 30  # or 15/60/etc depending on your use case
+    }
 
     def __init__(self, size: int = 10, num_buildings: int = 3, agent_types: list[str] = None,
                   actions_set=SaveTheCityActions, *args, **kwargs):
