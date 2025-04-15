@@ -1,5 +1,13 @@
 from gymnasium.envs.registration import register
 
+# Save the City
+# ---------------------------------------------
+register(
+    id="SaveTheCity-v0",
+    entry_point="gym_multigrid.envs.save_the_city:SaveTheCityEnv",
+    max_episode_steps=3000,
+)
+
 
 # Collect game with 4 agents and 4 object types
 # ---------------------------------------------
