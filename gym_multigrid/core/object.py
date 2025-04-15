@@ -369,28 +369,37 @@ class Building(WorldObj):
     """
 
     def __init__(self, world, burn_rate: int, build_speed: int, firefight_speed: int, fast_burning: bool = False):
-        super().__init__(world, type="building", color="gray")
-        
+        type_name = "fast_burning_building" if fast_burning else "slow_burning_building"
+        super().__init__(world, type=type_name, color="gray")
+
         self.burn_rate = burn_rate  # How fast the building burns if on fire
         self.build_speed = build_speed  # How fast the building is constructed
         self.firefight_speed = firefight_speed  # How fast firefighters put out fires
-        self.fast_burning = fast_burning  # If True, burns 4x faster
+        self.fast_burning = fast_burning  # If True, burns 2x faster
 
         self.building_state = 50  # Starts at 50 (partially built)
         self.fire_rate = 0  # No fire initially
 
+        self.alive = True
+
     def step(self):
         """Update building state per timestep"""
+        print(self.fire_rate, self.building_state)
+        if not self.alive:
+            return None
+        
         if self.fire_rate > 0 and self.building_state > 0:
             # Fire decreases building state
-            burn_speed = self.fire_rate * (4 if self.fast_burning else 1)
+            burn_speed = self.fire_rate
             self.building_state -= burn_speed
 
             # If building state reaches 0, it's burned down
             if self.building_state <= 0:
                 self.building_state = 0
-                return "burned_down"  # Trigger game penalty
-
+                self.fire_rate = 0
+                self.alive = False
+                self.color = "charcoal"  # visually becomes rubble
+                return "burned_down"
         return None
 
     def build(self, builder_speed: int):
@@ -405,7 +414,7 @@ class Building(WorldObj):
     def burn(self):
         """Start fire if not already burning."""
         if self.fire_rate == 0 and self.building_state > 0:
-            self.fire_rate = self.burn_rate  # Fire starts at the burn rate
+            self.fire_rate = self.burn_rate * (2 if self.fast_burning else 1)  # Fire starts
 
     def fight_fire(self):
         """Firefighters reduce fire. If fire_rate reaches 0, fire is extinguished."""
@@ -418,6 +427,8 @@ class Building(WorldObj):
             self.world.COLOR_TO_IDX[self.color],  # Color (Gray)
             int(self.building_state),  # Building state (0-100)
             int(self.fire_rate),  # Current fire intensity
+            0,  # Padding to match 6D encoding
+            0,  # Padding to match 6D encoding
         )
     
     def render(self, img):
@@ -426,19 +437,25 @@ class Building(WorldObj):
         - Darker color for more construction progress.
         - Red overlay if the building is on fire.
         """
+        rubble_color = self.world.COLORS[self.color]
+        if not self.alive:
+            # Render as rubble: charcoal
+            fill_coords(img, point_in_rect(0.2, 0.8, 0.2, 0.8), rubble_color)
+            return
+        else: 
+            # Get base color (gray) and modify brightness based on construction progress
+            base_color = np.array(self.world.COLORS[self.color])
+            brightness_factor = 0.2 + 0.8 * (self.building_state / 100)  # Scale from 0.2 (dark) to 1 (full brightness)
+            building_color = (base_color * brightness_factor).astype(int)
 
-        # Get base color (gray) and modify brightness based on construction progress
-        base_color = np.array(self.world.COLORS[self.color])
-        brightness_factor = self.building_state / 100  # Scale from 0 (dark) to 1 (full brightness)
-        building_color = (base_color * brightness_factor).astype(int)
-
-        # Draw the main building as a rectangle (since buildings aren’t round like balls)
-        fill_coords(img, point_in_rect(0.2, 0.8, 0.2, 0.8), tuple(building_color))
+            # Draw the main building as a rectangle (since buildings aren’t round like balls)
+            fill_coords(img, point_in_rect(0.2, 0.8, 0.2, 0.8), tuple(building_color))
 
         # If the building is on fire, overlay a red glow
         if self.fire_rate > 0:
-            fire_intensity = min(1, self.fire_rate / 50)  # Scale fire effect
-            fire_color = np.array([255, 0, 0]) * fire_intensity
+            fire_intensity = min(1, self.fire_rate * 0.25 + 0.5)  # Scale fire effect
+            print("FIRE", fire_intensity)
+            fire_color = np.array(self.world.COLORS["red"]) * fire_intensity
             fill_coords(img, point_in_circle(0.5, 0.5, 0.4), tuple(fire_color))
 
 
