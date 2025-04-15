@@ -19,36 +19,37 @@ class SaveTheCityEnv(MultiGridEnv):
     }
 
     def __init__(self, size: int = 10, num_buildings: int = 3, agent_types: list[str] = None,
-                  actions_set=SaveTheCityActions, *args, **kwargs):
+                 actions_set=SaveTheCityActions, *args, **kwargs):
         """
         Initialize the SaveTheCity environment.
 
         Parameters
         ----------
-        size : int, optional
-            Size of the grid (Default: 10).
-        num_buildings : int, optional
+        size : int
+            Grid size (square).
+        num_buildings : int
             Total number of buildings in the environment.
-        agent_types : list[str], optional
-            List of agent types (e.g., ["firefighter", "builder", "generalist"]).
-        actions_set : SaveTheCityActions, optional
-            Actions set for the environment. Default is SaveTheCityActions.
-        respawn_fires : bool, optional
-            Whether to respawn fires after they are extinguished (Default: False).
-        partial_obs : bool, optional
-            Whether to use partial observability (Default: False).
+        agent_types : list[str]
+            List of agent types: "firefighter", "builder", "generalist".
+        actions_set : Enum
+            Action space enum.
+        respawn_fires : bool
+            Whether fires randomly reignite (default: False).
+        partial_obs : bool
+            Whether agents have partial observability (default: False).
         """
         self.size = size
         self.num_buildings = num_buildings
         self.world = SaveTheCityWorld
         self.actions_set = actions_set
         self.respawn_fires = kwargs.get("respawn_fires", False)
-        self.partial_obs: bool = False
+        self.partial_obs: bool = kwargs.get("partial_obs", False)
 
-        # Initialize agents (default to one of each type)
+        # Default agent types if not provided
         if agent_types is None:
             agent_types = ["firefighter", "builder", "generalist"]
 
+        # Initialize agents
         self.agents = []
         for agent_type in agent_types:
             if agent_type == "firefighter":
@@ -57,8 +58,14 @@ class SaveTheCityEnv(MultiGridEnv):
                 self.agents.append(Builder(self.world))
             elif agent_type == "generalist":
                 self.agents.append(Generalist(self.world))
-        
-        self.info = {}
+            else:
+                raise ValueError(f"Unknown agent type: {agent_type}")
+
+        # Initialize per-agent tracking info
+        self.info = {
+            f"agent{i+1}": {"fires_extinguished": 0, "buildings_completed": 0}
+            for i in range(len(self.agents))
+        }
 
         super().__init__(
             grid_size=self.size,
