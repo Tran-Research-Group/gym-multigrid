@@ -170,38 +170,79 @@ class SaveTheCityEnv(MultiGridEnv):
             agent.pos = next_pos
 
 
-    def step(
-        self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict]:
-        order: list[int] = np.random.permutation(len(actions)).tolist()
-        rewards: NDArray[np.float64] = np.zeros(len(actions))
-        terminated: bool = False
-        truncated: bool = False
+    def step(self, actions: list[int]) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict]:
+        order = np.random.permutation(len(actions)).tolist()
+        rewards = np.zeros(len(actions))
+        terminated = False
+        truncated = False
         self.step_count += 1
+
         for i in order:
-            if actions[i] == self.actions.NORTH:
-                next_pos = self.agents[i].north_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.EAST:
-                next_pos = self.agents[i].east_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.SOUTH:
-                next_pos = self.agents[i].south_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-            elif actions[i] == self.actions.WEST:
-                next_pos = self.agents[i].west_pos()
-                next_cell = self.grid.get(*next_pos)
-                self.move_agent(rewards, i, next_cell, next_pos)
-        if not self.respawn and self.collected_balls == self.num_balls:
-            terminated = True
+            agent = self.agents[i]
+            action = actions[i]
+
+            if action in [self.actions.NORTH, self.actions.EAST, self.actions.SOUTH, self.actions.WEST]:
+                for _ in range(agent.move_speed):
+                    if action == self.actions.NORTH:
+                        self.move_agent(i, self.grid.get(*agent.north_pos()), agent.north_pos())
+                        agent.dir = 0
+                    elif action == self.actions.EAST:
+                        self.move_agent(i, self.grid.get(*agent.east_pos()), agent.east_pos())
+                        agent.dir = 1
+                    elif action == self.actions.SOUTH:
+                        self.move_agent(i, self.grid.get(*agent.south_pos()), agent.south_pos())
+                        agent.dir = 2
+                    elif action == self.actions.WEST:
+                        self.move_agent(i, self.grid.get(*agent.west_pos()), agent.west_pos())
+                        agent.dir = 2
+
+            elif action == self.actions.BUILD:
+                building = self.get_nearby_building(agent)
+                if building and building.fire_rate == 0:
+                    result = building.build(agent.build_speed)
+                    if result == "completed":
+                        self._reward(i, rewards, 100, event="building_completed")
+
+            elif action == self.actions.EXTINGUISH:
+                burning = self.get_nearby_burning_building(agent)
+                if burning:
+                    burning.firefight_speed = agent.firefight_speed
+                    burning.fight_fire()
+                    if burning.fire_rate == 0:
+                        self._reward(i, rewards, 20, event="fire_extinguished")
+
+
+        # Let buildings update themselves (burn if on fire)
+        for building in self.buildings:
+            result = building.step()
+            if result == "burned_down":
+                # Optional: Penalize all agents (or team)
+                rewards -= 50  # team penalty
+
+        # # Filter buildings to only alive ones
+        # self.buildings = [b for b in self.buildings if b.alive]
+
+        for building in self.buildings:
+            if building.alive and building.fire_rate == 0 and building.building_state < 100:
+                if np.random.rand() < 0.05:
+                    building.burn()
+
+        # Check for termination: all buildings done or burned
+        terminated = bool(all(
+            b.building_state == 100 or not b.alive
+            for b in self.buildings
+        ))
+        if terminated == True:
+            print("Termination condition occured!")
+
+
         if self.step_count >= self.max_steps:
             truncated = True
+            print("Truncation condition occured!")
 
         obs = self.grid.encode()
-        return obs, rewards, terminated, truncated, self.info
+        reward = float(np.sum(rewards))  # reduce to one float
+        return obs, reward, terminated, truncated, self.info
 
     def phi_dim(self) -> int:
         """
