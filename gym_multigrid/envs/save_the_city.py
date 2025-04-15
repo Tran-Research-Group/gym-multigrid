@@ -112,10 +112,27 @@ class SaveTheCityEnv(MultiGridEnv):
             self.place_agent(agent)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
-        self.collected_balls = 0
-        self.info = {f"agent{i+1}": {"fires_extinguished": 0, "buildings_completed": 0} for i in range(len(self.agents))}
-        super().reset(seed=seed)
+        # Reset random seed if needed
+        if seed is not None:
+            self._np_random, seed = self.seed(seed)
+
+        # Reset per-agent tracking info
+        self.info = {
+            f"agent{i+1}": {"fires_extinguished": 0, "buildings_completed": 0}
+            for i in range(len(self.agents))
+        }
+
+        # Reset step counter and grid via parent class
+        super().reset(seed=seed, options=options)
+
+        # Optionally store a list of buildings for use in step()
+        self.buildings = [
+            obj for obj in self.grid.grid if isinstance(obj, Building)
+        ]
+
+        # Encode full-grid observation
         state = self.grid.encode()
+
         return state, self.info
 
     def _reward(
