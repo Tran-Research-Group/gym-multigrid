@@ -89,11 +89,13 @@ CollectWorld = World(
 )
 
 SaveTheCityWorld = World(
-    encode_dim=4,  # (Object Type, Color Index, Construction Progress, Fire Progress)
+    encode_dim=6,  # (Object Type, Color Index, Construction Progress, Fire Progress)
     normalize_obs=1,  # Normalize observations
     COLORS={  # Define colors used in the environment
         "red": [255, 0, 0],  # Fire
+        "grey": [128, 128, 128],  # Buildings
         "gray": [128, 128, 128],  # Buildings
+        "charcoal": [50, 50, 80],       # ← Charcoal rubble color
         "blue": [0, 0, 255],  # Firefighter
         "green": [0, 255, 0],  # Builder
         "yellow": [255, 255, 0],  # Generalist
