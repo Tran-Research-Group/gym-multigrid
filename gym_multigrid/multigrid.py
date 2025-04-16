@@ -10,13 +10,13 @@ from gymnasium import spaces
 from gymnasium.spaces.space import Space, T_cov
 from gymnasium.core import ObsType, ActType
 
-from .core.grid import Grid
-from .core.object import WorldObjT
-from .core.world import DefaultWorld, WorldT
-from .core.agent import ActionsT, AgentT, DefaultActions
-from .typing import Position
-from .utils.window import Window
-from .core.constants import TILE_PIXELS, OBJECT_TO_STR
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import WorldObjT
+from gym_multigrid.core.world import DefaultWorld, WorldT
+from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
+from gym_multigrid.typing import Position
+from gym_multigrid.utils.window import Window
+from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
@@ -94,9 +94,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
     2D grid world game environment
     """
 
-    #############
-    # setup and env properties
-    #############
+    # Setup and env properties
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "video.frames_per_second": 10,
@@ -364,9 +362,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
-    #############
-    # env step logic
-    #############
+    # Env step logic
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         pass
 
@@ -602,9 +598,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         info = self._get_info()
         return obs, rewards, terminated, truncated, info
 
-    #############
-    # agent obs
-    #############
+    # Agent obs logic
     def gen_obs_grid(self):
         """
         Generate the sub-grid observed by the agents.
@@ -666,9 +660,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return img
 
-    #############
-    # randomizing
-    #############
+    # Randomizing
     def _rand_int(self, low, high):
         """
         Generate random integer in [low,high[
@@ -726,9 +718,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             self.np_random.randint(yLow, yHigh),
         )
 
-    #############
-    # env rendering
-    #############
+    # Env rendering
     def render(self):
         """
         Render the whole-grid human view

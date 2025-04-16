@@ -1,101 +1,143 @@
 from abc import ABC
-from typing import Callable, Tuple, Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 from dataclasses import dataclass
-
-from ..core.grid import Grid
-from ..core.world import WorldT
-from ..core.object import WorldObjT
-from ..core.object import AgentGoal, Door, Zone, Wall
-
+import numpy as np
+from numpy.typing import NDArray
 import pdb
+
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.world import WorldT
+from gym_multigrid.core.object import WorldObjT
+from gym_multigrid.core.object import AgentGoal, Door, Zone, Wall
 
 
 @dataclass
 class EnvObjectGroup:
-    """configure a set of env objects"""
-
+    """configure a set of env objects
+        Parameters
+        ----------
+        obj_type : str
+            type of object
+        group_index : int
+            unique index for the group of objects
+        pos : tuple[tuple[int, int], ...]
+            object position
+        color : str
+            object color
+        spawned_subtask_indices : tuple[int, ...]
+            tuple of subtasks where the objects appear in the environment
+        fill_mode : Literal["empty", "filled"]] | None
+            empty places objects at the positions in the list, filled makes a filled-in square of the objects
+    """
     obj_type: str
-    group_idx: int
+    group_index: int
     pos: tuple[tuple[int, int], ...]
     color: str
-    spawned_subtask_idxs: tuple[int, ...]
+    spawned_subtask_indices: tuple[int, ...]
     fill_mode: Literal["empty", "filled"] | None
 
 
 @dataclass
 class SubtaskData:
-    """manages HLMDP subtask data"""
+    """manages HLMDP subtask data
+        edge: tuple[int, int]
+            edge in the HLMDP that this subtask is associated with
+        idx: int
+            unique index for this subtask
+        final_state: tuple[tuple[int, int], ...]
+            final state the agents reach to complete the subtask
+        termination_condition: Literal["reach_assigned_final_state"]
+            possible conditions to end the subtask. "reach_assigned_final_state" is the only supported condition
+        init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None
+            initial state distribution for this subtask
+    """
 
     # directed edge, defines predecessor and successor state to this subtask
-    edge: Tuple[int, int]
+    edge: tuple[int, int]
     idx: int
-    final_state: Tuple[Tuple[int, int], ...]
-    termination_condition: str
+    final_state: tuple[tuple[int, int], ...]
+    termination_condition: Literal["reach_assigned_final_state"]
 
     # stuff that only needs to be specified when interfacing with a gymnasium env
-    init_state_dist: Tuple[Tuple[float, Tuple[Tuple[int, int], ...]], ...] | None = None
-    reward_function: Callable | None = None
-    termination_function: Callable | None = None
-    env_object_groups: list[EnvObjectGroup] | None = None
+    init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None = None
+
+
+@dataclass
+class PositionDist:
+    """
+    Discrete state distribution
+
+    Parameters
+    ----------
+    states : list[NDArray[np.int_]]
+        States
+    probs : list[float]
+        Probabilities of each state
+    """
+    states: list[NDArray[np.int_]]
+    probs: list[float]
+
+    def __post_init__(self) -> None:
+        assert np.sum(self.probs) == 1
 
 
 @dataclass
 class StateData:
-    """manages HLMDP state data"""
+    """Manages HLMDP state data"""
 
     # data for a single HLMDP state
     idx: int
-    # example with a single initial state: [1.0, [[1, 2], [2, 1]]]
-    outgoing_init_state_dist: Tuple[Tuple[float, Tuple[Tuple[int, int], ...]], ...]
-    # incoming_subtask_idxs: list | None = None
-    # outgoing_subtask_idxs: list | None = None
+    outgoing_init_state_dist: PositionDist
+
+    # incoming_subtask_indices: list | None = None
+    # outgoing_subtask_indices: list | None = None
 
     # not necessary for training in independent subtasks
     # def __post_init__(self):
     #     # it is bad practice to have lists as default function args (say, in __init__), so we do that here instead
     #     # __post_init__ is called after everything else in __init__ for dataclasses
-    #     self.incoming_subtask_idxs = []
-    #     self.outgoing_subtask_idxs = []
+    #     self.incoming_subtask_indices = []
+    #     self.outgoing_subtask_indices = []
 
 
 @dataclass
-class HLMDPData:
-    """manages HLMDP state and subtask data"""
+class HLMDPConfig:
+    """Manages HLMDP state and subtask data"""
 
-    state_data_list: Tuple[StateData, ...]
-    subtask_data_list: Tuple[SubtaskData, ...]
+    state_data_tuple: tuple[StateData, ...]
+    subtask_data_tuple: tuple[SubtaskData, ...]
 
     state_data: dict[int:StateData] | None = None
     subtask_data: dict[int:SubtaskData] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._build_data_dicts()
         # self._add_edge_data()
         self._add_init_state_dist_data()
 
-    def _build_data_dicts(self):
-        self.state_data = {state.idx: state for state in self.state_data_list}
-        self.subtask_data = {subtask.idx: subtask for subtask in self.subtask_data_list}
+    def _build_data_dicts(self) -> None:
+        self.state_data = {state.idx: state for state in self.state_data_tuple}
+        self.subtask_data = {subtask.idx: subtask for subtask in self.subtask_data_tuple}
 
     # def _add_edge_data(self):
     #     """adds outgoing and incoming edges to the state data
     #     """
     #     for subtask in self.subtask_data:
-    #         predecessor_state_idx = subtask.edge[0]
-    #         successor_state_idx = subtask.edge[1]
+    #         predecessor_state_index = subtask.edge[0]
+    #         successor_state_index = subtask.edge[1]
 
     #         for state in self.state_data:
-    #             if state.idx == predecessor_state_idx:
-    #                 state.outgoing_subtask_idxs.append(subtask.idx)
-    #             elif state.idx == successor_state_idx:
-    #                 state.incoming_subtask_idxs.append(subtask.idx)
+    #             if state.idx == predecessor_state_index:
+    #                 state.outgoing_subtask_indices.append(subtask.idx)
+    #             elif state.idx == successor_state_index:
+    #                 state.incoming_subtask_indices.append(subtask.idx)
 
-    def _add_init_state_dist_data(self):
+    def _add_init_state_dist_data(self) -> None:
         # adds initial state distribution data to the subtask data based on its outgoing edge
         for _, data in self.subtask_data.items():
-            outgoing_state_idx = data.edge[0]
+            outgoing_state_index = data.edge[0]
             data.init_state_dist = self.state_data[
-                outgoing_state_idx
+                outgoing_state_index
             ].outgoing_init_state_dist
 
 
@@ -103,9 +145,9 @@ class ObjectGroup(ABC):
     def __init__(
         self,
         obj_type: str,
-        group_idx: int,
+        group_index: int,
         pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...],
-        spawned_subtask_idxs: tuple[int, ...],
+        spawned_subtask_indices: tuple[int, ...],
         color: str,
         fill_mode: Literal["empty", "filled"] = "filled",
         object_options: dict[str, WorldObjT] = {
@@ -122,10 +164,10 @@ class ObjectGroup(ABC):
         ----------
         obj_type : str
             Type of the object.
-        group_idx : int
+        group_index : int
             Group index of the object.
-        spawned_subtask_idxs: tuple[int, ...]
-            Tuple of ints that tell which subtasks this group of objects will spawn during
+        spawned_subtask_indices: tuple[int, ...]
+            tuple of ints that tell which subtasks this group of objects will spawn during
         pos : tuple[tuple[int, int] | tuple[int, int, int, int], ...]
             Positions of the objects.
             A tuple element can be either a tuple of two integers or a tuple of four integers.
@@ -137,8 +179,8 @@ class ObjectGroup(ABC):
             - "filled": Filled fill mode.
         """
         self.obj_type: str = obj_type
-        self.group_idx: int = group_idx
-        self.spawned_subtask_idxs = spawned_subtask_idxs
+        self.group_index: int = group_index
+        self.spawned_subtask_indices = spawned_subtask_indices
         self.color: str = color
         self.object_options: dict[str, WorldObjT] = object_options
 
@@ -264,147 +306,3 @@ class ObjectGroup(ABC):
 
 
 ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)
-
-
-"""
-##################
-# miki's stuff (old)
-##################
-
-
-##################
-# generic classes to define subtasks, rewards, subtask completion triggers, etc.
-##################
-class TriggerConfig(TypedDict):
-    condition: str
-    action: str
-    obj_type: str
-    obj_group: int
-
-
-class SubtaskConfig(TypedDict):
-    next_subtask: int | Literal["terminal"]
-    goal_group_idx: int
-    assigned_agent_goal: dict[int, tuple[int, int]]
-    triggers: list[TriggerConfig]
-
-
-class ObjectGroupConfig(TypedDict):
-    obj_type: str
-    group_idx: int
-    pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
-    color: str
-    fill_mode: Literal["empty", "filled"] | None
-
-
-class DetectorConfig(TypedDict):
-    obj_type: str
-    group_idx: int
-    visual_detect_prob: float
-    radio_detect_prob: float
-
-
-class RewardConfig(TypedDict):
-    reward_option: Literal["final_goal", "intermediate_goal"]
-    movement_reward: float
-    agent_on_goal_reward: float
-    agent_move_away_from_goal_reward: float
-    all_agents_on_goal_reward: float
-
-
-
-class Subtask:
-    def __init__(
-        self,
-        next_subtask: int | Literal["terminal"],
-        goal_group_idx: int,
-        assigned_agent_goal: dict[int, tuple[int, int]],
-        triggers: list[TriggerConfig],
-    ) -> None:
-        self.next_subtask: int | Literal["terminal"] = next_subtask
-        self.goal_group_idx: int = goal_group_idx
-        self.assigned_agent_goal: dict[int, tuple[int, int]] = assigned_agent_goal
-        self.triggers: list[Trigger] = [Trigger(**trigger) for trigger in triggers]
-
-
-class Trigger:
-    def __init__(
-        self,
-        condition: str,
-        action: str,
-        obj_type: str,
-        obj_group: int,
-    ) -> None:
-        self.condition: str = condition
-        self.action: str = action
-        self.obj_type: str = obj_type
-        self.obj_group: int = obj_group
-
-        self.triggered: bool = False
-
-    def trigger_action(
-        self, obj_group_dict: dict[str, dict[int, ObjGroupT]], grid: Grid
-    ) -> None:
-        obj_group_dict[self.obj_type][self.obj_group].apply_obj_action(
-            self.action, grid
-        )
-
-        self.triggered = True
-
-    def is_condition_satisfied(self, agents: list[Agent], subtask: Subtask) -> bool:
-        return getattr(self, self.condition)(agents, subtask)
-
-    def agents_on_goals(self, agents: list[Agent], subtask: Subtask) -> bool:
-        for agent_idx, goal_pos in subtask.assigned_agent_goal.items():
-            if (
-                agents[agent_idx].pos[0] != goal_pos[0]
-                or agents[agent_idx].pos[1] != goal_pos[1]
-            ):
-                return False
-            else:
-                pass
-
-        return True
-
-
-class Detector:
-    def __init__(
-        self,
-        obj_type: str,
-        group_idx: int,
-        visual_detect_prob: float,
-        radio_detect_prob: float,
-    ) -> None:
-        self.obj_type: str = obj_type
-        self.group_idx: int = group_idx
-        self.visual_detect_prob: float = visual_detect_prob
-        self.radio_detect_prob: float = radio_detect_prob
-
-    def detect_agents(
-        self,
-        agents: list[Agent],
-        obj_group_dict: dict[str, dict[int, ObjGroupT]],
-        random_generator: np.random.Generator,
-    ) -> bool:
-        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_idx]
-        for agent in agents:
-            if self.detect_agent(agent, obj_group, random_generator):
-                return True
-            else:
-                pass
-
-        return False
-
-    def detect_agent(
-        self,
-        agent: list[Agent],
-        obj_group: ObjGroupT,
-        random_generator: np.random.Generator,
-    ) -> bool:
-        if (agent.pos[0], agent.pos[1]) in obj_group.pos:
-            visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
-            radio_detect: bool = random_generator.uniform() < self.radio_detect_prob
-            return visual_detect or radio_detect
-        else:
-            return False
-"""

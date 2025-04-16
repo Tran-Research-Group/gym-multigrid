@@ -5,13 +5,14 @@ from typing import Type, TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
-from ..core.grid import Grid
-from ..core.world import WorldT
-from ..policy.base import AgentPolicyT
-from ..typing import Position
-from ..utils.rendering import point_in_triangle, rotate_fn, fill_coords
-from ..core.object import WorldObj
-from ..core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.world import WorldT
+from gym_multigrid.policy.base import AgentPolicyT
+from gym_multigrid.typing import Position
+from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
+from gym_multigrid.core.object import WorldObj
+from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
+
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
