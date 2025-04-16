@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, TypedDict, Tuple
+from typing import Any, Literal, Optional, TypedDict, Tuple, TypeAlias
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -24,9 +24,7 @@ from gym_multigrid.utils.subtasks import (
 )
 
 
-##################
 # HLMDP interface
-##################
 state_data_tuple = (
     StateData(
         idx=0,
@@ -59,12 +57,12 @@ subtask_data_tuple = (
 )
 
 
-hlmdp_config = HLMDPConfig(state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple)
+hlmdp_config = HLMDPConfig(
+    state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
+)
 
 
-##################
 # Classes used to interface with the env
-##################
 class EnvInfo(TypedDict):
     """outputs info about the environment used for PyMARL training"""
 
@@ -82,22 +80,22 @@ class StepInfo(TypedDict):
 
 @dataclass
 class RewardConfig:
-    reward_option: Literal["final_goal", "intermediate_goal"]
     movement_reward: float
     agent_reach_goal_reward: float
     agent_leave_goal_reward: float
     all_agents_at_goal_reward: float
 
 
-
-# Env class config
+# Env config
 reward_config = RewardConfig(
-    reward_option="intermediate_goal",
     movement_reward=-0.02,
     agent_reach_goal_reward=0.2,
     agent_leave_goal_reward=-0.3,
     all_agents_at_goal_reward=1.0,
 )
+
+
+Observation: TypeAlias = dict[str : NDArray[np.int_]] | NDArray[np.int_]
 
 
 class LabyrinthEnv(MultiGridEnv):
@@ -114,10 +112,8 @@ class LabyrinthEnv(MultiGridEnv):
         subtask_idx: int = 0,
         world: WorldT = LabyrinthWorld,
         hlmdp_config: HLMDPConfig = hlmdp_config,
-        observation_option: Literal[
-            "final_goal", "intermediate_goal"
-        ] = "intermediate_goal",
-        obs_type: Literal["dict", "array"] = "array",
+        observation_option: Literal["goal"] = "goal",
+        obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
         reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -140,10 +136,9 @@ class LabyrinthEnv(MultiGridEnv):
             The current subtask index.
         hlmdp_config: HLMDPConfig = hlmdp_config
             Defines the structure of the leader's high-level MDP
-        observation_option : Literal["final_goal", "intermediate_goal"] = "final_goal"
+        observation_option : Literal["goal"] = "goal"
             Observation option.
-            - "final_goal": The observation is the positions of the final goal and agents.
-            - "intermediate_goal": The observation is the positions of all the goals and agents.
+            - "goal": The observation includes agent positions and position of the assigned goal.
         actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -164,10 +159,8 @@ class LabyrinthEnv(MultiGridEnv):
         self.reward_config: RewardConfig = reward_config
 
         # observation config
-        self.observation_option: Literal["final_goal", "intermediate_goal"] = (
-            observation_option
-        )
-        self.obs_type: Literal["dict", "array"] = obs_type
+        self.observation_option: Literal["goal"] = observation_option
+        self.obs_type: Literal["dict", "array", "array_scaled"] = obs_type
 
         # agent config
         agent_view_size: int = None
@@ -183,8 +176,7 @@ class LabyrinthEnv(MultiGridEnv):
         ]
 
         # goal config
-        self.final_goal: tuple[tuple[int, int], ...] = ()
-        self.agent_goals: dict[int, list[tuple[int, int]]] = {}
+        self.goals: tuple[tuple[int, int], ...] = ()
 
         uncached_object_types: list[str] = ["agent"]
 
@@ -215,13 +207,8 @@ class LabyrinthEnv(MultiGridEnv):
         max_x: int = self.width - 1
         max_y: int = self.height - 1
 
-        # goal_indices was originally called "nums_goal", which is a confusing name for a variable when you also have "num_goals" (with no "s" after "num") as a different variable
-        if self.observation_option == "final_goal":
+        if self.observation_option == "goal":
             goal_indices: list[int] = [1 for _ in range(self.num_agents)]
-        elif self.observation_option == "intermediate_goal":
-            goal_indices: list[int] = [
-                len(agent_goals) for agent_goals in self.agent_goals.values()
-            ]
         else:
             raise ValueError(f"Invalid observation option: {self.observation_option}")
 
@@ -237,14 +224,15 @@ class LabyrinthEnv(MultiGridEnv):
                 }
             )
 
-        else:
-            obs = self.get_obs()
+        elif self.obs_type in ["array", "array_scaled"]:
+            obs_shape = (self.num_agents, 4)
+            if self.obs_type == "array":
+                max_val = np.max((max_x, max_y))
+            else:
+                max_val = 1
 
-            # TODO come back and fix this to be the actual shape of the obs
             observation_space = spaces.Box(
-                low=0,
-                high=1,
-                shape=[3],
+                low=np.zeros(obs_shape), high=max_val * np.ones(obs_shape)
             )
 
         return observation_space
@@ -258,7 +246,7 @@ class LabyrinthEnv(MultiGridEnv):
 
         super().reset(seed=seed, options=options)
 
-        obs = self.get_obs()
+        obs: Observation = self.get_obs()
         info: StepInfo = self._get_step_info()
 
         return obs, info
@@ -342,31 +330,44 @@ class LabyrinthEnv(MultiGridEnv):
 
         # Place the agents
         # pick the init_pos based on the subtask (assuming it is an init pos and not a distribution to sample from)
-        init_pos = self.hlmdp_config.subtask_data[self.subtask_idx].init_state_dist.states[0]
+        init_pos = self.hlmdp_config.subtask_data[
+            self.subtask_idx
+        ].init_state_dist.states[0]
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
 
-    def get_obs(self) -> dict[str : NDArray[np.int_]]:
+    def get_obs(self) -> Observation:
         if self.obs_type == "dict":
             obs: dict[str, Any] = {}
 
-            for i, agent in enumerate(self.agents):
-                agent_obs: list[tuple[int, int]] = [agent.pos]
+        elif self.obs_type in ["array", "array_scaled"]:
+            obs: NDArray[np.int_] = np.zeros((self.num_agents, 4))
 
-                if self.observation_option == "final_goal":
-                    agent_obs.append(self.final_goal[i])
-                elif self.observation_option == "intermediate_goal":
-                    agent_obs.extend(self.agent_goals[i])
-                else:
-                    raise ValueError(
-                        f"Invalid observation option: {self.observation_option}"
-                    )
+        for agent in self.agents:
+            # agent_obs: [agent_x, agent_y, assigned_goal_x, assigned_goal_y]
+            agent_obs = np.array(agent.pos)
 
-                obs[str(i)] = np.array(agent_obs).flatten()
+            # agent obs needs to be an np array here b/c final state is already an array
 
-        elif self.obs_type == "array":
-            obs = np.zeros((3, self.num_agents))
+            if self.observation_option == "goal":
+                goal_state = self.hlmdp_config.subtask_data[
+                    self.subtask_idx
+                ].final_state[agent.index, :]
+                agent_obs = np.append(agent_obs, goal_state)
+
+            if self.obs_type == "dict":
+                obs[str(agent.index)] = agent_obs.flatten()
+
+            elif self.obs_type in ["array", "array_scaled"]:
+                obs[agent.index, :] = agent_obs.flatten()
+
+        if self.obs_type == "array_scaled":
+            # subtract 2 b/c we assume an outer wall around the env
+            max_x: int = self.width - 2
+            max_y: int = self.height - 2
+            obs_scaled = obs / np.array([max_x, max_y, max_x, max_y])
+            return obs_scaled
 
         return obs
 
@@ -436,7 +437,7 @@ class LabyrinthEnv(MultiGridEnv):
     def step(
         self,
         actions: NDArray[np.int_],
-    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+    ) -> tuple[Observation, float, bool, bool, StepInfo]:
 
         self.step_count += 1
 
@@ -449,14 +450,14 @@ class LabyrinthEnv(MultiGridEnv):
         )
 
         # get observation from being in s_{t+1}
-        obs = self.get_obs()
+        obs: Observation = self.get_obs()
 
         terminated: bool = self._terminated(next_state)
 
         # truncated is handled by a Gymnasium wrapper
         truncated: bool = False
 
-        info: StepInfo = self._get_step_info()
+        info: StepInfo = self._get_step_info(terminated=terminated)
 
         return obs, reward, terminated, truncated, info
 
@@ -592,7 +593,6 @@ class LabyrinthEnv(MultiGridEnv):
                     pass
 
         return possible_pos
-
 
     # reward function
     def _reward(
@@ -773,9 +773,8 @@ class LabyrinthEnv(MultiGridEnv):
         return np.array_equal(next_state, final_joint_state)
 
     # step info
-    def _get_step_info(self) -> StepInfo:
+    def _get_step_info(self, terminated=False) -> StepInfo:
         """get info to be returned in the step function"""
-
-        step_info = StepInfo(success=1)
+        step_info = StepInfo(success=terminated)
 
         return step_info
