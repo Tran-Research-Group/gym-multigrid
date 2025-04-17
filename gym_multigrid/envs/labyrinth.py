@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, TypedDict, Tuple, TypeAlias
+from typing import Any, Literal, Optional, TypedDict, TypeAlias
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -95,7 +95,7 @@ reward_config = RewardConfig(
 )
 
 
-Observation: TypeAlias = dict[str : NDArray[np.int_]] | NDArray[np.int_]
+Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 
 class LabyrinthEnv(MultiGridEnv):
@@ -464,7 +464,7 @@ class LabyrinthEnv(MultiGridEnv):
     # agent movement
     def _move_agents(
         self, actions: list[int]
-    ) -> Tuple[NDArray[np.int_], NDArray[np.int_]]:
+    ) -> tuple[NDArray[np.int_], NDArray[np.int_]]:
         """
         Move agents based on the chosen action and environment randomness
 
@@ -775,6 +775,6 @@ class LabyrinthEnv(MultiGridEnv):
     # step info
     def _get_step_info(self, terminated=False) -> StepInfo:
         """get info to be returned in the step function"""
-        step_info = StepInfo(success=terminated)
+        step_info: StepInfo = {"success": terminated}
 
         return step_info
