@@ -64,7 +64,7 @@ hlmdp_config = HLMDPConfig(
 
 # Classes used to interface with the env
 class EnvInfo(TypedDict):
-    """outputs info about the environment used for PyMARL training"""
+    """info about the environment used for PyMARL training"""
 
     state_shape: int
     obs_shape: int
@@ -99,8 +99,6 @@ Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 
 class LabyrinthEnv(MultiGridEnv):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
-
     # setup and env properties
     def __init__(
         self,
@@ -372,12 +370,17 @@ class LabyrinthEnv(MultiGridEnv):
         return obs
 
     def get_env_info(self) -> EnvInfo:
-        env_info = EnvInfo(
-            state_shape=self.width * self.height * self.world.encode_dim,
-            obs_shape=int(np.prod(self.observation_space.shape)),
-            n_actions=len(self.actions),
-            n_agents=self.num_agents,
-        )
+        # obs_shape should only be the shape of a single agent
+        # self.observation_space.shape = (n_agents, dim_1_size, dim_2_size, ...)
+        obs_shape = int(np.prod(self.observation_space.shape[1:]))
+
+        env_info: EnvInfo = {
+            "state_shape": self.width * self.height * self.world.encode_dim,
+            "obs_shape": obs_shape,
+            "n_actions": len(self.actions),
+            "n_agents": self.num_agents,
+        }
+
         return env_info
 
     def get_avail_actions(self, verbose=False) -> list[list[bool]]:
@@ -411,8 +414,6 @@ class LabyrinthEnv(MultiGridEnv):
                 print(f"Agent: {agent_idx} --- {action_str}")
 
     def _get_avail_actions_agent(self, agent: Agent) -> list[bool]:
-        # we only handle the case of NavigationActions
-        ## other action sets need to define their own rules for action availability
         if self.actions == NavigationActions:
             avail_actions = []
             for action in NavigationActions:
@@ -430,6 +431,11 @@ class LabyrinthEnv(MultiGridEnv):
 
             # add representation of "stay" action, which is always available
             avail_actions.insert(0, 1)
+
+        else:
+            raise NotImplementedError(
+                "This action space is not implemented in _get_avail_actions"
+            )
 
         return avail_actions
 
@@ -562,7 +568,8 @@ class LabyrinthEnv(MultiGridEnv):
                 )
             else:
                 raise ValueError(
-                    f"Invalid action f{action} and position f{next_state} for agent {agent.index}. Available positions: {available_pos}"
+                    f"Invalid action f{action} and position f{next_state} for agent {agent.index}. \
+                        Available positions: {available_pos}"
                 )
 
         # agent stays in its current state
@@ -705,7 +712,7 @@ class LabyrinthEnv(MultiGridEnv):
                     next_state[agent.index, :], final_joint_state[agent.index, :]
                 )
             ):
-                print(f"Agent {agent.index} left its goal state")
+                # print(f"Agent {agent.index} left its goal state")
                 n_agents_leave_goal += 1
 
         reward += n_agents_leave_goal * self.reward_config.agent_leave_goal_reward
@@ -744,7 +751,6 @@ class LabyrinthEnv(MultiGridEnv):
             terminated tells whether the env is terminated or not
         """
         terminated = self._agents_reached_terminal_goal(next_state)
-        # terminated = self._agents_detected() or self._agents_reached_terminal_goal()
 
         return terminated
 
@@ -759,16 +765,6 @@ class LabyrinthEnv(MultiGridEnv):
         return detected
 
     def _agents_reached_terminal_goal(self, next_state: NDArray[np.int_]) -> bool:
-        # for agent in self.agents:
-        #     if agent.pos is None:
-        #         return False
-        #     elif not self._is_agent_on_terminal_goal(agent.pos):
-        #         return False
-        #     else:
-        #         pass
-
-        # return True
-
         final_joint_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
         return np.array_equal(next_state, final_joint_state)
 
