@@ -1,14 +1,12 @@
-from typing import Literal
-import pytest
-import sys
 import os
+from typing import Literal
 
-import numpy as np
-from numpy.typing import NDArray
-import imageio
 import gymnasium as gym
+import imageio
+import numpy as np
+import pytest
+from numpy.typing import NDArray
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.labyrinth import LabyrinthEnv, RewardConfig
 
 
@@ -17,7 +15,7 @@ def test_labyrinth() -> None:
     os.makedirs(animation_dir, exist_ok=True)
     animation_path: str = os.path.join(animation_dir, "labyrinth.gif")
 
-    env = gym.make("independent_subtask_labyrinth-v0", max_episode_steps=10)
+    env = gym.make("multigrid-independent-subtask-labyrinth-v0", max_episode_steps=10)
 
     obs, _ = env.reset()
     frames = [env.render()]
@@ -32,4 +30,3 @@ def test_labyrinth() -> None:
         print(f"truncated: {truncated}")
 
     imageio.mimsave(animation_path, frames, loop=10)
-

@@ -1,6 +1,5 @@
 from gymnasium.envs.registration import register
 
-
 # Collect game with 2 agents and 3 object types
 # ----------------------------------------
 register(
@@ -223,14 +222,14 @@ register(
 # Wildfire environment
 # ----------------------------------------
 register(
-    id="wildfire-v0",
+    id="multigrid-wildfire-v0",
     entry_point="gym_multigrid.envs:WildfireEnv",
 )
 
 # Labyrinth environment
 # ----------------------------------------
 register(
-    id="independent_subtask_labyrinth-v0",
+    id="multigrid-independent-subtask-labyrinth-v0",
     entry_point="gym_multigrid.envs:LabyrinthEnv",
 )
 
