@@ -29,14 +29,13 @@ state_data_tuple = (
     StateData(
         idx=0,
         outgoing_init_state_dist=PositionDist(
-            probs=[1.0], states=[np.array([[1, 3], [1, 6]])]
+            probs=(1.0,),
+            states=((1, 3), (1, 6)),
         ),
     ),
     StateData(
         idx=1,
-        outgoing_init_state_dist=PositionDist(
-            probs=[1.0], states=[np.array([[3, 3], [3, 6]])]
-        ),
+        outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((3, 3), (3, 6))),
     ),
 )
 
@@ -45,13 +44,13 @@ subtask_data_tuple = (
     SubtaskData(
         edge=(0, 1),
         idx=0,
-        final_state=np.array([[3, 3], [3, 6]]),
+        final_state=((3, 3), (3, 6)),
         termination_condition="reach_assigned_final_state",
     ),
     SubtaskData(
         edge=(1, 2),
         idx=1,
-        final_state=np.array([[5, 3], [5, 6]]),
+        final_state=((5, 3), (5, 6)),
         termination_condition="reach_assigned_final_state",
     ),
 )
@@ -99,12 +98,13 @@ Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 
 class LabyrinthEnv(MultiGridEnv):
+    metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
     # setup and env properties
     def __init__(
         self,
         height: int = 10,
-        width: int = 10,
-        num_agents: int = 3,
+        width: int = 7,
+        num_agents: int = 2,
         p_intended_movement: float = 0.95,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
@@ -161,7 +161,7 @@ class LabyrinthEnv(MultiGridEnv):
         self.obs_type: Literal["dict", "array", "array_scaled"] = obs_type
 
         # agent config
-        agent_view_size: int = None
+        agent_view_size: int | None = None
         agents: list[Agent] = [
             Agent(
                 world=world,
@@ -230,7 +230,7 @@ class LabyrinthEnv(MultiGridEnv):
                 max_val = 1
 
             observation_space = spaces.Box(
-                low=np.zeros(obs_shape), high=max_val * np.ones(obs_shape)
+                low=np.zeros(obs_shape), high=max_val * np.ones(obs_shape), dtype=np.float32
             )
 
         return observation_space
@@ -330,7 +330,8 @@ class LabyrinthEnv(MultiGridEnv):
         # pick the init_pos based on the subtask (assuming it is an init pos and not a distribution to sample from)
         init_pos = self.hlmdp_config.subtask_data[
             self.subtask_idx
-        ].init_state_dist.states[0]
+        ].init_state_dist.states
+
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
@@ -340,18 +341,21 @@ class LabyrinthEnv(MultiGridEnv):
             obs: dict[str, Any] = {}
 
         elif self.obs_type in ["array", "array_scaled"]:
-            obs: NDArray[np.int_] = np.zeros((self.num_agents, 4))
+            obs: NDArray[np.int_] = np.zeros((self.num_agents, 4), dtype=np.float32)
+
+        else:
+            obs = None
 
         for agent in self.agents:
             # agent_obs: [agent_x, agent_y, assigned_goal_x, assigned_goal_y]
-            agent_obs = np.array(agent.pos)
+            agent_obs = np.array(agent.pos, dtype=np.float32)
 
             # agent obs needs to be an np array here b/c final state is already an array
 
             if self.observation_option == "goal":
                 goal_state = self.hlmdp_config.subtask_data[
                     self.subtask_idx
-                ].final_state[agent.index, :]
+                ].final_state[agent.index]
                 agent_obs = np.append(agent_obs, goal_state)
 
             if self.obs_type == "dict":
@@ -364,7 +368,7 @@ class LabyrinthEnv(MultiGridEnv):
             # subtract 2 b/c we assume an outer wall around the env
             max_x: int = self.width - 2
             max_y: int = self.height - 2
-            obs_scaled = obs / np.array([max_x, max_y, max_x, max_y])
+            obs_scaled = obs / np.array([max_x, max_y, max_x, max_y], dtype=np.float32)
             return obs_scaled
 
         return obs
@@ -415,22 +419,25 @@ class LabyrinthEnv(MultiGridEnv):
 
     def _get_avail_actions_agent(self, agent: Agent) -> list[bool]:
         if self.actions == NavigationActions:
-            avail_actions = []
-            for action in NavigationActions:
-                # we will handle the logic for "stay" later after the movement actions
-                if action.name != "stay":
-                    avail_actions.append(1)
+            avail_actions_tmp: dict[int, bool] = {}
 
-            neighbor_positions = agent.neighbor_pos
-            for i, pos in enumerate(neighbor_positions):
+            # populate with filler data
+            for action in NavigationActions:
+                avail_actions_tmp[action.value] = True
+
+            # set the values in avail_actions
+            # you should be able to set the desired order of the neighbor positions here
+            neighbor_positions: dict[str, NDArray[np.int_]] = agent.get_all_neighbor_pos()
+
+            for direction, pos in neighbor_positions.items():
                 neighbor_cell = self.grid.get(*pos)
                 if (neighbor_cell is None) or (neighbor_cell.can_overlap()):
                     continue
                 else:
-                    avail_actions[i] = 0
+                    avail_actions_tmp[NavigationActions[direction].value] = False
 
-            # add representation of "stay" action, which is always available
-            avail_actions.insert(0, 1)
+            # turn avail_actions into a list with the ordering of the actions same as in NavigationActions
+            avail_actions: list[bool] = list(avail_actions_tmp.values())
 
         else:
             raise NotImplementedError(
@@ -492,8 +499,8 @@ class LabyrinthEnv(MultiGridEnv):
 
         # placeholder for the (x, y) positions of all the agents
         ## assumes no other state information matters for the reward calculation
-        curr_state = np.zeros((self.num_agents, 2))
-        next_state = np.zeros((self.num_agents, 2))
+        curr_state: NDArray[np.int_] = np.zeros((self.num_agents, 2))
+        next_state: NDArray[np.int_] = np.zeros((self.num_agents, 2))
 
         for i in agent_indices:
             curr_state[i, :] = self.agents[i].pos
@@ -611,9 +618,13 @@ class LabyrinthEnv(MultiGridEnv):
         reward: float = 0.0
 
         reward += self._reward_movement(actions)
-        reward += self._reward_reach_goal(curr_state, next_state)
-        reward += self._reward_leave_goal(curr_state, next_state)
-        reward += self._reward_all_at_goal(next_state)
+
+        final_state = np.array(
+            self.hlmdp_config.subtask_data[self.subtask_idx].final_state
+        )
+        reward += self._reward_reach_goal(curr_state, next_state, final_state)
+        reward += self._reward_leave_goal(curr_state, next_state, final_state)
+        reward += self._reward_all_at_goal(next_state, final_state)
 
         return reward
 
@@ -638,16 +649,21 @@ class LabyrinthEnv(MultiGridEnv):
         return reward
 
     def _reward_reach_goal(
-        self, curr_state: NDArray[np.int_], next_state: NDArray[np.int_]
+        self,
+        curr_state: NDArray[np.int_],
+        next_state: NDArray[np.int_],
+        final_state: NDArray[np.int_],
     ) -> float:
         """Reward for an agent reaching its assigned final goal state
 
         Parameters
         ----------
         curr_state : NDArray[np.int_]
-            current position
+            current state
         next_state : NDArray[np.int_]
-            next position
+            next state
+        final_state : NDArray[np.int_]
+            final assigned state for the agents for this subtask
 
         Returns
         -------
@@ -656,19 +672,16 @@ class LabyrinthEnv(MultiGridEnv):
         """
         reward = 0
 
-        final_joint_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
         n_agents_reach_goal = 0
 
         for agent in self.agents:
             # agent's next state is its goal state AND
             # agent is not currently in its goal state
             if (
-                np.array_equal(
-                    next_state[agent.index, :], final_joint_state[agent.index, :]
-                )
+                np.array_equal(next_state[agent.index, :], final_state[agent.index, :])
             ) and (
                 not np.array_equal(
-                    curr_state[agent.index, :], final_joint_state[agent.index, :]
+                    curr_state[agent.index, :], final_state[agent.index, :]
                 )
             ):
                 # print(f"Agent {agent.index} reached its goal state")
@@ -679,16 +692,21 @@ class LabyrinthEnv(MultiGridEnv):
         return reward
 
     def _reward_leave_goal(
-        self, curr_state: NDArray[np.int_], next_state: NDArray[np.int_]
+        self,
+        curr_state: NDArray[np.int_],
+        next_state: NDArray[np.int_],
+        final_state: NDArray[np.int_],
     ) -> float:
         """Reward for an agent leaving its assigned final goal state
 
         Parameters
         ----------
         curr_state : NDArray[np.int_]
-            current position
+            current state
         next_state : NDArray[np.int_]
-            next position
+            next state
+        final_state : NDArray[np.int_]
+            final assigned state for the agents for this subtask
 
         Returns
         -------
@@ -697,19 +715,16 @@ class LabyrinthEnv(MultiGridEnv):
         """
         reward = 0
 
-        final_joint_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
         n_agents_leave_goal = 0
 
         for agent in self.agents:
             # agent's current state is its goal state AND
             # agent's next state is not its goal state
             if (
-                np.array_equal(
-                    curr_state[agent.index, :], final_joint_state[agent.index, :]
-                )
+                np.array_equal(curr_state[agent.index, :], final_state[agent.index, :])
             ) and (
                 not np.array_equal(
-                    next_state[agent.index, :], final_joint_state[agent.index, :]
+                    next_state[agent.index, :], final_state[agent.index, :]
                 )
             ):
                 # print(f"Agent {agent.index} left its goal state")
@@ -719,13 +734,17 @@ class LabyrinthEnv(MultiGridEnv):
 
         return reward
 
-    def _reward_all_at_goal(self, next_state: NDArray[np.int_]) -> float:
+    def _reward_all_at_goal(
+        self, next_state: NDArray[np.int_], final_state: NDArray[np.int_]
+    ) -> float:
         """Reward the team for all being at their final assigned states
 
         Parameters
         ----------
         next_state : NDArray[np.int_]
-            next position
+            next state
+        final_state : NDArray[np.int_]
+            final assigned state for the agents for this subtask
 
         Returns
         -------
@@ -734,9 +753,8 @@ class LabyrinthEnv(MultiGridEnv):
         """
         reward = 0
 
-        final_joint_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
         reward += (
-            np.array_equal(next_state, final_joint_state)
+            np.array_equal(next_state, final_state)
             * self.reward_config.all_agents_at_goal_reward
         )
 
@@ -754,19 +772,19 @@ class LabyrinthEnv(MultiGridEnv):
 
         return terminated
 
-    def _agents_detected(self) -> bool:
-        detected: bool = False
-        for detector in self.detectors:
-            if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
-                detected = True
-            else:
-                pass
+    # def _agents_detected(self) -> bool:
+    #     detected: bool = False
+    #     for detector in self.detectors:
+    #         if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
+    #             detected = True
+    #         else:
+    #             pass
 
-        return detected
+    #     return detected
 
     def _agents_reached_terminal_goal(self, next_state: NDArray[np.int_]) -> bool:
-        final_joint_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
-        return np.array_equal(next_state, final_joint_state)
+        final_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
+        return np.array_equal(next_state, final_state)
 
     # step info
     def _get_step_info(self, terminated=False) -> StepInfo:

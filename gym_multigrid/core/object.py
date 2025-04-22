@@ -60,28 +60,70 @@ class WorldObj:
     def pos(self, value):
         self._pos = value
 
-    @property
     def west_pos(self) -> NDArray[np.int_]:
-        return self.pos + np.array([-1, 0])
-
-    @property
-    def east_pos(self) -> NDArray[np.int_]:
-        return self.pos + np.array([1, 0])
-
-    @property
-    def north_pos(self) -> NDArray[np.int_]:
-        return self.pos + np.array([0, -1])
-
-    @property
-    def south_pos(self) -> NDArray[np.int_]:
-        return self.pos + np.array([0, 1])
-
-    @property
-    def neighbor_pos(self) -> list[np.array]:
-        """get all of the neighboring positions
         """
-        # this order is very important for getting avail_actions, must be the same as the order defined in the action space with no actions in between the "move" actions
-        return [self.west_pos(), self.south_pos(), self.east_pos(), self.north_pos()]
+        Get the position of the cell to the left of the object
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the left of the object
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([-1, 0])
+
+    def east_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell to the right of the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the right of the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([1, 0])
+
+    def north_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell above the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell above the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, -1])
+
+    def south_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell below the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell below the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, 1])
+
+    def get_all_neighbor_pos(self) -> dict[str, NDArray[np.int_]]:
+        """get all of the neighboring positions"""
+        return {
+            "left": self.west_pos(),
+            "right": self.east_pos(),
+            "up": self.north_pos(),
+            "down": self.south_pos(),
+        }
 
     def reset(self) -> None:
         """

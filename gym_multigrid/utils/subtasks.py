@@ -38,6 +38,25 @@ class EnvObjectGroup:
 
 
 @dataclass
+class PositionDist:
+    """
+    Discrete state distribution
+
+    Parameters
+    ----------
+    states : tuple[tuple[int, int], ...]
+        States
+    probs : list[float]
+        Probabilities of each state
+    """
+    states: tuple[tuple[int, int], ...]
+    probs: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        assert np.sum(self.probs) == 1
+
+
+@dataclass
 class SubtaskData:
     """manages HLMDP subtask data
         edge: tuple[int, int]
@@ -59,26 +78,7 @@ class SubtaskData:
     termination_condition: Literal["reach_assigned_final_state"]
 
     # stuff that only needs to be specified when interfacing with a gymnasium env
-    init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None = None
-
-
-@dataclass
-class PositionDist:
-    """
-    Discrete state distribution
-
-    Parameters
-    ----------
-    states : list[NDArray[np.int_]]
-        States
-    probs : list[float]
-        Probabilities of each state
-    """
-    states: list[NDArray[np.int_]]
-    probs: list[float]
-
-    def __post_init__(self) -> None:
-        assert np.sum(self.probs) == 1
+    init_state_dist: PositionDist | None = None
 
 
 @dataclass
@@ -107,8 +107,8 @@ class HLMDPConfig:
     state_data_tuple: tuple[StateData, ...]
     subtask_data_tuple: tuple[SubtaskData, ...]
 
-    state_data: dict[int:StateData] | None = None
-    subtask_data: dict[int:SubtaskData] | None = None
+    state_data: dict[int, StateData] | None = None
+    subtask_data: dict[int, SubtaskData] | None = None
 
     def __post_init__(self) -> None:
         self._build_data_dicts()

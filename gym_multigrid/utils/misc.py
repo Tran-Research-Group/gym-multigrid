@@ -1,4 +1,5 @@
 from matplotlib import animation
+import os
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
@@ -38,7 +39,7 @@ def save_frames_as_gif(
         patch.set_data(frames[i])
 
     anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=50)
-    anim.save(path + filename, writer="imagemagick", fps=fps)
+    anim.save(os.path.join(path, filename), writer="imagemagick", fps=fps)
     plt.close()
 
 

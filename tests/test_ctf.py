@@ -5,18 +5,9 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import imageio
-from stable_baselines3 import PPO
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gym_multigrid.envs.ctf import Ctf1v1Env, CtfMvNEnv
-from gym_multigrid.policy.ctf.heuristic import (
-    FightPolicy,
-    CapturePolicy,
-    PatrolPolicy,
-    RwPolicy,
-    PatrolFightPolicy,
-    RoombaPolicy,
-)
 from gym_multigrid.utils.map import load_text_map
 
 
