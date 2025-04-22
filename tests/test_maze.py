@@ -1,10 +1,9 @@
-import sys
 import os
-import pytest
-import numpy as np
 
 import gymnasium as gym
 import imageio
+import numpy as np
+import pytest
 
 from gym_multigrid.envs.maze import LayoutConfig, MazeEnv
 

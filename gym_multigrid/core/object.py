@@ -1,6 +1,7 @@
 from typing import TypeVar, Final
 import numpy as np
 from numpy.typing import NDArray
+
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
@@ -58,6 +59,71 @@ class WorldObj:
     @pos.setter
     def pos(self, value):
         self._pos = value
+
+    def west_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell to the left of the object
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the left of the object
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([-1, 0])
+
+    def east_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell to the right of the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the right of the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([1, 0])
+
+    def north_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell above the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell above the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, -1])
+
+    def south_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell below the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell below the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, 1])
+
+    def get_all_neighbor_pos(self) -> dict[str, NDArray[np.int_]]:
+        """get all of the neighboring positions"""
+        return {
+            "left": self.west_pos(),
+            "right": self.east_pos(),
+            "up": self.north_pos(),
+            "down": self.south_pos(),
+        }
 
     def reset(self) -> None:
         """

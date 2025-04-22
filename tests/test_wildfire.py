@@ -1,9 +1,8 @@
-import sys
 import os
-import numpy as np
-import gymnasium as gym
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import gymnasium as gym
+import numpy as np
+
 from gym_multigrid.utils.misc import save_frames_as_gif
 
 
@@ -11,7 +10,7 @@ def test_wildfire() -> None:
     """Function to manually test the environment's functionality. Runs episodes with random agents in the Wildfire environment and save episode renders as GIFs."""
     # initialize environment. Set the arguments as desired.
     env = gym.make(
-        "wildfire-v0",
+        "multigrid-wildfire-v0",
         alpha=0.15,
         beta=0.9,
         delta_beta=0.7,
@@ -39,13 +38,16 @@ def test_wildfire() -> None:
     for ep in range(num_episodes):
         while True:
             actions = {
-                f"{a.index}": np.random.choice(list(env.actions)) for a in env.agents
+                f"{a.index}": np.random.choice(list(env.unwrapped.actions))
+                for a in env.unwrapped.agents
             }
             obs, reward, terminated, truncated, _ = env.step(actions)
             frames.append(env.render())
             if terminated or truncated:
                 break
-        save_frames_as_gif(frames, path="./", filename="wildfire", ep=ep, fps=1, dpi=40)
+
+        path = os.path.join("out", "animations")
+        save_frames_as_gif(frames, path=path, filename="wildfire", ep=ep, fps=1, dpi=40)
 
 
 test_wildfire()

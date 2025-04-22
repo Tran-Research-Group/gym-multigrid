@@ -1,9 +1,6 @@
-import os
-import sys
-import pytest
 import gymnasium as gym
+import pytest
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import gym_multigrid
 
 
@@ -14,9 +11,9 @@ def test_collect_game(env_id) -> None:
 
     obs, info = env.reset()
     while True:
-        actions = [env.action_space.sample() for a in env.agents]
+        actions = [env.action_space.sample() for a in env.unwrapped.agents]
         obs, reward, terminated, truncated, info = env.step(actions)
         if terminated or truncated:
-            print(f"episode ended after {env.step_count} steps")
-            print(f"agents collected {env.collected_balls} objects")
+            print(f"episode ended after {env.unwrapped.step_count} steps")
+            print(f"agents collected {env.unwrapped.collected_balls} objects")
             break
