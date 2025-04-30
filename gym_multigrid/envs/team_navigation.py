@@ -220,12 +220,31 @@ class Detector:
     def detect_agents(
         self,
         agents: list[Agent],
+        comms_val: float,
         obj_group_dict: dict[str, dict[int, ObjGroupT]],
         random_generator: np.random.Generator,
     ) -> bool:
+        """get the stochastic observation of the detector
+
+        Parameters
+        ----------
+        agents : list[Agent]
+            list of all agents
+        comms_val : float
+            amount of communication used by the team of agents
+        obj_group_dict : dict[str, dict[int, ObjGroupT]]
+            group of objects in the environment
+        random_generator : np.random.Generator
+            random number generator
+
+        Returns
+        -------
+        bool
+            True if the detector observes an agent, False otherwise
+        """
         obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_index]
         for agent in agents:
-            if self.detect_agent(agent, obj_group, random_generator):
+            if self.detect_agent(agent, comms_val, obj_group, random_generator):
                 return True
             else:
                 pass
@@ -234,13 +253,20 @@ class Detector:
 
     def detect_agent(
         self,
-        agent: list[Agent],
+        agent: Agent,
+        comms_val: float,
         obj_group: ObjGroupT,
         random_generator: np.random.Generator,
     ) -> bool:
         if (agent.pos[0], agent.pos[1]) in obj_group.pos:
             visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
-            radio_detect: bool = random_generator.uniform() < self.radio_detect_prob
+
+            radio_detect: bool
+            if comms_val > 0:
+                radio_detect = random_generator.uniform() < self.radio_detect_prob
+            else:
+                radio_detect = False
+
             return visual_detect or radio_detect
         else:
             return False
@@ -258,6 +284,7 @@ class TeamNavigationEnv(MultiGridEnv):
         width: int = 7,
         num_agents: int = 2,
         p_intended_movement: float = 0.95,
+        comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
@@ -281,6 +308,9 @@ class TeamNavigationEnv(MultiGridEnv):
         p_intended_movement : float = 0.95
             Probability of the intended movement.
             Should be in the range [0, 1].
+        comms_val: float = 1.0
+            Amount of communication used by the team of agents.
+            Should be in the range [0, 1].
         subtask_idx: int = 0
             The current subtask index.
         observation_option : Literal["goal"] = "goal"
@@ -301,6 +331,7 @@ class TeamNavigationEnv(MultiGridEnv):
         """
         self.num_agents: int = num_agents
         self.p_intended_movement: float = p_intended_movement
+        self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
         self.reward_config: RewardConfig = reward_config
@@ -449,7 +480,6 @@ class TeamNavigationEnv(MultiGridEnv):
             Detector(
                 obj_type="zone",
                 group_index=0,
-                # visual_detect_prob=0.005,
                 visual_detect_prob=0.005,
                 radio_detect_prob=0.0,
             ),
@@ -470,7 +500,7 @@ class TeamNavigationEnv(MultiGridEnv):
                         group_index=subtask_idx,
                         pos=data.final_state,
                         color="green",
-                        spawned_subtask_indices=(subtask_idx),
+                        spawned_subtask_indices=(subtask_idx,),
                         fill_mode="empty",
                     )
                 )
@@ -948,7 +978,9 @@ class TeamNavigationEnv(MultiGridEnv):
     def _agents_detected(self) -> bool:
         detected: bool = False
         for detector in self.detectors:
-            if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
+            if detector.detect_agents(
+                self.agents, self.comms_val, self.obj_group_dict, self.np_random
+            ):
                 detected = True
             else:
                 pass
