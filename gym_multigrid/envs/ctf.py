@@ -585,6 +585,13 @@ class CtfMvNEnv(MultiGridEnv):
             "red_flag_captured": False,
         }
 
+        self.blue_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_blue_agents)
+        ]
+        self.red_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_red_agents)
+        ]
+
         super().reset(seed=seed, options=options)
 
         self.blue_traj: list[list[Position]] = [
@@ -592,6 +599,13 @@ class CtfMvNEnv(MultiGridEnv):
         ]
         self.red_traj: list[list[Position]] = [
             [agent.pos] for agent in self.agents[self.num_blue_agents :]
+        ]
+
+        self.blue_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.blue_traj
+        ]
+        self.red_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.blue_traj
         ]
 
         obs: Observation = self._get_obs()
@@ -825,8 +839,8 @@ class CtfMvNEnv(MultiGridEnv):
                 else -1
             ),
             "red_actions": [0 for _ in range(self.num_red_agents)],
-            "blue_init_positions": [(0,0) for i in range(self.num_blue_agents)],
-            "red_init_positions": [(0,0) for i in range(self.num_red_agents)]
+            "blue_init_positions": self.blue_init_positions,
+            "red_init_positions": self.red_init_positions,
         } | self.ep_game_stats
         return info
 
