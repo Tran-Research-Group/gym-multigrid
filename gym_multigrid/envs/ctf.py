@@ -964,6 +964,7 @@ class CtfMvNEnv(MultiGridEnv):
             assert type(red_agent) is PolicyAgent
             red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
+
         # Retrieving initial positions of the agents
         blue_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
         red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.red_traj]
