@@ -226,11 +226,16 @@ register(
     entry_point="gym_multigrid.envs:WildfireEnv",
 )
 
-# Labyrinth environment
+# Team Navigation environment
 # ----------------------------------------
 register(
-    id="multigrid-independent-subtask-labyrinth-v0",
-    entry_point="gym_multigrid.envs:LabyrinthEnv",
+    id="multigrid-team-navigation-2-agent-5-task-v0",
+    entry_point="gym_multigrid.envs:TeamNavigationEnv",
+)
+
+register(
+    id="multigrid-team-navigation-3-agent-5-task-v0",
+    entry_point="gym_multigrid.envs:TeamNavigationEnv",
 )
 
 

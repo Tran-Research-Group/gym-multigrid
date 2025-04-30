@@ -66,7 +66,7 @@ MAZE_COLORS: dict[str, NDArray[np.uint]] = {
     "white": np.array([255, 250, 250]),
 }
 
-LABYRINTH_COLORS: dict[str, NDArray[np.uint]] = {
+TEAM_NAVIGATION_COLORS: dict[str, NDArray[np.uint]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),

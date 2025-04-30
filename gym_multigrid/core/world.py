@@ -6,7 +6,7 @@ from gym_multigrid.core.constants import (
     COLORS,
     CTF_COLORS,
     MAZE_COLORS,
-    LABYRINTH_COLORS,
+    TEAM_NAVIGATION_COLORS,
     ACCESSIBLE_COLORS,
 )
 
@@ -128,10 +128,10 @@ MazeWorld = World(
     },
 )
 
-LabyrinthWorld = World(
+TeamNavigationWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=LABYRINTH_COLORS,
+    COLORS=TEAM_NAVIGATION_COLORS,
     OBJECT_TO_IDX={
         "unseen": 0,
         "empty": 1,

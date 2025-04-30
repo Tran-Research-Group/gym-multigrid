@@ -1,16 +1,16 @@
 from typing import Any, Literal, Optional, TypedDict, TypeAlias
 from dataclasses import asdict, dataclass
+import pdb
 
 import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
-import pdb
 
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
 from gym_multigrid.core.object import SimpleDoor as Door
-from gym_multigrid.core.world import WorldT, LabyrinthWorld
+from gym_multigrid.core.world import WorldT, TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.subtasks import (
@@ -24,41 +24,99 @@ from gym_multigrid.utils.subtasks import (
 )
 
 
-# HLMDP interface
-state_data_tuple = (
-    StateData(
-        idx=0,
-        outgoing_init_state_dist=PositionDist(
-            probs=(1.0,),
-            states=((1, 3), (1, 6)),
-        ),
-    ),
-    StateData(
-        idx=1,
-        outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((3, 3), (3, 6))),
-    ),
-)
+def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
+    """gets the high level MDP configuration for this environment
+
+    Parameters
+    ----------
+    num_agents : int
+        number of agents in the enivronment
+
+    Returns
+    -------
+    HLMDPConfig
+        configuration for the high level MDP
+    """
+    match num_agents:
+        # 2 agent version of the env
+        case 2:
+            state_data_tuple = (
+                StateData(
+                    idx=0,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=((1, 3), (1, 6)),
+                    ),
+                ),
+                StateData(
+                    idx=1,
+                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((3, 3), (3, 6))),
+                ),
+            )
+
+            subtask_data_tuple = (
+                SubtaskData(
+                    edge=(0, 1),
+                    idx=0,
+                    final_state=((3, 3), (3, 6)),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(1, 2),
+                    idx=1,
+                    final_state=((5, 3), (5, 6)),
+                    termination_condition="reach_assigned_final_state",
+                ),
+            )
+
+        # 6 agent version of the env
+        case 6:
+            state_data_tuple = (
+                StateData(
+                    idx=0,
+                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),)),
+                ),
+                StateData(
+                    idx=1,
+                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((6, 1), (6, 2), (6, 3), (6, 4), (6, 5), (6, 6),)),
+                ),
+                StateData(
+                    idx=2,
+                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((6, 8), (6, 9), (6, 10), (6, 11), (6, 12), (6, 13),)),
+                ),
+                StateData(
+                    idx=3,
+                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((9, 4), (9, 5), (9, 6), (9, 7), (9, 8), (9, 9),)),
+                ),
+            )
+
+            # this hasn't been implemented yet
+            subtask_data_tuple = (
+                SubtaskData(
+                    edge=(0, 1),
+                    idx=0,
+                    final_state=((3, 3), (3, 6)),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(1, 2),
+                    idx=1,
+                    final_state=((5, 3), (5, 6)),
+                    termination_condition="reach_assigned_final_state",
+                ),
+            )
+
+        case _:
+            raise ValueError("Chosen number of agents not implemented")
 
 
-subtask_data_tuple = (
-    SubtaskData(
-        edge=(0, 1),
-        idx=0,
-        final_state=((3, 3), (3, 6)),
-        termination_condition="reach_assigned_final_state",
-    ),
-    SubtaskData(
-        edge=(1, 2),
-        idx=1,
-        final_state=((5, 3), (5, 6)),
-        termination_condition="reach_assigned_final_state",
-    ),
-)
 
 
-hlmdp_config = HLMDPConfig(
-    state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
-)
+    hlmdp_config: HLMDPConfig = HLMDPConfig(
+        state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
+    )
+
+    return hlmdp_config
 
 
 # Classes used to interface with the env
@@ -97,7 +155,9 @@ reward_config = RewardConfig(
 Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 
-class LabyrinthEnv(MultiGridEnv):
+class TeamNavigationEnv(MultiGridEnv):
+    """team navigation environment
+    """
     metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
     # setup and env properties
     def __init__(
@@ -108,8 +168,7 @@ class LabyrinthEnv(MultiGridEnv):
         p_intended_movement: float = 0.95,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
-        world: WorldT = LabyrinthWorld,
-        hlmdp_config: HLMDPConfig = hlmdp_config,
+        world: WorldT = TeamNavigationWorld,
         observation_option: Literal["goal"] = "goal",
         obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
         reward_config: RewardConfig = reward_config,
@@ -117,7 +176,7 @@ class LabyrinthEnv(MultiGridEnv):
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
         """
-        Constructor for the LabyrinthEnv class.
+        Constructor for the TeamNavigationEnv class.
 
         Parameters
         ----------
@@ -132,8 +191,6 @@ class LabyrinthEnv(MultiGridEnv):
             Should be in the range [0, 1].
         subtask_idx: int = 0
             The current subtask index.
-        hlmdp_config: HLMDPConfig = hlmdp_config
-            Defines the structure of the leader's high-level MDP
         observation_option : Literal["goal"] = "goal"
             Observation option.
             - "goal": The observation includes agent positions and position of the assigned goal.
@@ -153,7 +210,7 @@ class LabyrinthEnv(MultiGridEnv):
         self.num_agents: int = num_agents
         self.p_intended_movement: float = p_intended_movement
         self.subtask_idx: int = subtask_idx
-        self.hlmdp_config: HLMDPConfig = hlmdp_config
+        self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
         self.reward_config: RewardConfig = reward_config
 
         # observation config
@@ -349,8 +406,6 @@ class LabyrinthEnv(MultiGridEnv):
         for agent in self.agents:
             # agent_obs: [agent_x, agent_y, assigned_goal_x, assigned_goal_y]
             agent_obs = np.array(agent.pos, dtype=np.float32)
-
-            # agent obs needs to be an np array here b/c final state is already an array
 
             if self.observation_option == "goal":
                 goal_state = self.hlmdp_config.subtask_data[
