@@ -965,10 +965,6 @@ class CtfMvNEnv(MultiGridEnv):
             red_action: int = red_agent.policy.act(self._get_dict_obs(), red_agent.pos)
             red_actions.append(red_action)
 
-        # Retrieving initial positions of the agents
-        blue_init_positions: list[Position] = [tuple(traj[0]) for traj in self.blue_traj]
-        red_init_positions: list[Position] = [tuple(traj[0]) for traj in self.red_traj]
-
         # Just in case NN outputs are, for some reason, not discrete.
         rounded_blue_actions: NDArray[np.int_] = np.round(blue_actions).astype(np.int_)
         # Concatenate the blue and red actions as 1D array
