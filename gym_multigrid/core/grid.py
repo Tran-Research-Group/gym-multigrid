@@ -4,7 +4,7 @@ from copy import deepcopy
 import numpy as np
 
 from gym_multigrid.core.world import WorldT
-from gym_multigrid.utils.rendering import *
+from gym_multigrid.utils.rendering import downsample, fill_coords, point_in_rect
 from gym_multigrid.core.object import WorldObj, Wall, WorldObjT
 from gym_multigrid.core.constants import TILE_PIXELS
 
@@ -242,7 +242,7 @@ class Grid:
         cls,
         world: WorldT,
         obj: WorldObjT | None,
-        highlights: list[bool] = None,
+        highlights: list[bool] | None = None,
         tile_size: int = TILE_PIXELS,
         subdivs: int = 3,
         cache: bool = True,

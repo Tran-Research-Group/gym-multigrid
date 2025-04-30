@@ -1,7 +1,6 @@
 from typing import Any, Literal, Optional, TypedDict, TypeAlias
 from dataclasses import asdict, dataclass
 import pdb
-
 import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
@@ -9,18 +8,15 @@ from gymnasium import spaces
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
-from gym_multigrid.core.object import SimpleDoor as Door
 from gym_multigrid.core.world import WorldT, TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
+from gym_multigrid.core.object_group import ObjectGroup, EnvObjectGroup, ObjGroupT
 from gym_multigrid.utils.subtasks import (
-    EnvObjectGroup,
     PositionDist,
     SubtaskData,
     StateData,
     HLMDPConfig,
-    ObjectGroup,
-    ObjGroupT,
 )
 
 
@@ -50,7 +46,9 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                 ),
                 StateData(
                     idx=1,
-                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((3, 3), (3, 6))),
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,), states=((3, 3), (3, 6))
+                    ),
                 ),
             )
 
@@ -58,7 +56,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                 SubtaskData(
                     edge=(0, 1),
                     idx=0,
-                    final_state=((3, 3), (3, 6)),
+                    final_state=((6, 3), (6, 6)),
                     termination_condition="reach_assigned_final_state",
                 ),
                 SubtaskData(
@@ -74,19 +72,59 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
             state_data_tuple = (
                 StateData(
                     idx=0,
-                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),)),
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (1, 4),
+                            (1, 5),
+                            (1, 6),
+                            (1, 7),
+                            (1, 8),
+                            (1, 9),
+                        ),
+                    ),
                 ),
                 StateData(
                     idx=1,
-                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((6, 1), (6, 2), (6, 3), (6, 4), (6, 5), (6, 6),)),
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (6, 1),
+                            (6, 2),
+                            (6, 3),
+                            (6, 4),
+                            (6, 5),
+                            (6, 6),
+                        ),
+                    ),
                 ),
                 StateData(
                     idx=2,
-                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((6, 8), (6, 9), (6, 10), (6, 11), (6, 12), (6, 13),)),
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (6, 8),
+                            (6, 9),
+                            (6, 10),
+                            (6, 11),
+                            (6, 12),
+                            (6, 13),
+                        ),
+                    ),
                 ),
                 StateData(
                     idx=3,
-                    outgoing_init_state_dist=PositionDist(probs=(1.0,), states=((9, 4), (9, 5), (9, 6), (9, 7), (9, 8), (9, 9),)),
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (9, 4),
+                            (9, 5),
+                            (9, 6),
+                            (9, 7),
+                            (9, 8),
+                            (9, 9),
+                        ),
+                    ),
                 ),
             )
 
@@ -108,9 +146,6 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
 
         case _:
             raise ValueError("Chosen number of agents not implemented")
-
-
-
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
         state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
@@ -155,10 +190,67 @@ reward_config = RewardConfig(
 Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 
+class Detector:
+    """detects agents in an area with a given object type"""
+
+    def __init__(
+        self,
+        obj_type: str,
+        group_index: int,
+        visual_detect_prob: float,
+        radio_detect_prob: float,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        obj_type : str
+            object type that this detector will observe
+        group_index : int
+            index of group of objects that this detector will observe
+        visual_detect_prob : float
+            probability of detector observing an agent in a space with (obj_type, group_index) during a single time period (t, t+1)
+        radio_detect_prob : float
+            probability of detector observing an agent in a space with (obj_type, group_index) if that agent's communication value is >0
+        """
+        self.obj_type: str = obj_type
+        self.group_index: int = group_index
+        self.visual_detect_prob: float = visual_detect_prob
+        self.radio_detect_prob: float = radio_detect_prob
+
+    def detect_agents(
+        self,
+        agents: list[Agent],
+        obj_group_dict: dict[str, dict[int, ObjGroupT]],
+        random_generator: np.random.Generator,
+    ) -> bool:
+        obj_group: ObjGroupT = obj_group_dict[self.obj_type][self.group_index]
+        for agent in agents:
+            if self.detect_agent(agent, obj_group, random_generator):
+                return True
+            else:
+                pass
+
+        return False
+
+    def detect_agent(
+        self,
+        agent: list[Agent],
+        obj_group: ObjGroupT,
+        random_generator: np.random.Generator,
+    ) -> bool:
+        if (agent.pos[0], agent.pos[1]) in obj_group.pos:
+            visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
+            radio_detect: bool = random_generator.uniform() < self.radio_detect_prob
+            return visual_detect or radio_detect
+        else:
+            return False
+
+
 class TeamNavigationEnv(MultiGridEnv):
-    """team navigation environment
-    """
+    """team navigation environment"""
+
     metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
+
     # setup and env properties
     def __init__(
         self,
@@ -184,8 +276,8 @@ class TeamNavigationEnv(MultiGridEnv):
             Height of the grid.
         width : int = 10
             Width of the grid.
-        num_agents : list[int] = [0, 1, 2]
-            indices dxs of agents in the environment.
+        num_agents : int = 2
+            number of agents in the environment.
         p_intended_movement : float = 0.95
             Probability of the intended movement.
             Should be in the range [0, 1].
@@ -200,7 +292,7 @@ class TeamNavigationEnv(MultiGridEnv):
         agent_dir_to_vec : list[NDArray[np.int_]] = NAV_DIR_TO_VEC
             Direction vectors for the agents.
             The length of the list should be equal to the number of actions in the actions set.
-        reward_config: RewardConfig
+        reward_config: RewardConfig = reward_config
             Configuration for conditions that cause the reward function to output non-zero reward
         world : WorldT = LabyrinthWorld
             World for the environment.
@@ -229,11 +321,11 @@ class TeamNavigationEnv(MultiGridEnv):
             )
             for i in range(num_agents)
         ]
+        uncached_object_types: list[str] = ["agent"]
 
-        # goal config
         self.goals: tuple[tuple[int, int], ...] = ()
 
-        uncached_object_types: list[str] = ["agent"]
+        self.detectors: list[Detector]
 
         super().__init__(
             agents=agents,
@@ -250,13 +342,14 @@ class TeamNavigationEnv(MultiGridEnv):
             [len(self.actions) for _ in range(self.num_agents)]
         )
 
-        # define available objects in this environment
+        # basic grid init
         self.object_options: dict[str, WorldObjT] = {
             "goal": AgentGoal,
-            "door": Door,
             "zone": Zone,
             "wall": Wall,
         }
+        self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
+        self.init_grid: Grid
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -287,7 +380,9 @@ class TeamNavigationEnv(MultiGridEnv):
                 max_val = 1
 
             observation_space = spaces.Box(
-                low=np.zeros(obs_shape), high=max_val * np.ones(obs_shape), dtype=np.float32
+                low=np.zeros(obs_shape),
+                high=max_val * np.ones(obs_shape),
+                dtype=np.float32,
             )
 
         return observation_space
@@ -315,39 +410,58 @@ class TeamNavigationEnv(MultiGridEnv):
             EnvObjectGroup(
                 obj_type="wall",
                 group_index=0,
-                pos=((0, 0, 7, 10),),
+                pos=((0, 0, 14, 15),),
                 color="grey",
-                spawned_subtask_indices=(0, 1),
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
-            # middle walls
+            # middle wall
             EnvObjectGroup(
                 obj_type="wall",
                 group_index=1,
-                pos=((3, 1),),
+                pos=((4, 7, 3, 1),),
                 color="grey",
-                spawned_subtask_indices=(0, 1),
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
+            # blue zone
             EnvObjectGroup(
-                obj_type="wall",
-                group_index=2,
-                pos=((3, 8),),
-                color="grey",
-                spawned_subtask_indices=(0, 1),
+                obj_type="zone",
+                group_index=0,
+                pos=((4, 1, 1, 6),),
+                color="blue",
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
+            # red zone
             EnvObjectGroup(
-                obj_type="wall",
-                group_index=2,
-                pos=((3, 4, 1, 2),),
-                color="grey",
-                spawned_subtask_indices=(0, 1),
+                obj_type="zone",
+                group_index=1,
+                pos=((4, 8, 1, 6),),
+                color="red",
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
         ]
 
-        # add the goals for the current subtask
+        # initialize the detectors
+        self.detectors: list[Detector] = [
+            Detector(
+                obj_type="zone",
+                group_index=0,
+                # visual_detect_prob=0.005,
+                visual_detect_prob=0.005,
+                radio_detect_prob=0.0,
+            ),
+            Detector(
+                obj_type="zone",
+                group_index=1,
+                visual_detect_prob=0.005,
+                radio_detect_prob=0.05,
+            ),
+        ]
+
+        # place the goals for the current subtask
         for subtask_idx, data in self.hlmdp_config.subtask_data.items():
             if subtask_idx == self.subtask_idx:
                 env_object_config.append(
@@ -482,7 +596,9 @@ class TeamNavigationEnv(MultiGridEnv):
 
             # set the values in avail_actions
             # you should be able to set the desired order of the neighbor positions here
-            neighbor_positions: dict[str, NDArray[np.int_]] = agent.get_all_neighbor_pos()
+            neighbor_positions: dict[str, NDArray[np.int_]] = (
+                agent.get_all_neighbor_pos()
+            )
 
             for direction, pos in neighbor_positions.items():
                 neighbor_cell = self.grid.get(*pos)
@@ -823,19 +939,21 @@ class TeamNavigationEnv(MultiGridEnv):
         bool
             terminated tells whether the env is terminated or not
         """
-        terminated = self._agents_reached_terminal_goal(next_state)
+        terminated = (
+            self._agents_reached_terminal_goal(next_state) | self._agents_detected()
+        )
 
         return terminated
 
-    # def _agents_detected(self) -> bool:
-    #     detected: bool = False
-    #     for detector in self.detectors:
-    #         if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
-    #             detected = True
-    #         else:
-    #             pass
+    def _agents_detected(self) -> bool:
+        detected: bool = False
+        for detector in self.detectors:
+            if detector.detect_agents(self.agents, self.obj_group_dict, self.np_random):
+                detected = True
+            else:
+                pass
 
-    #     return detected
+        return detected
 
     def _agents_reached_terminal_goal(self, next_state: NDArray[np.int_]) -> bool:
         final_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
