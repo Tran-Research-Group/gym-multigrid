@@ -34,7 +34,6 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
         configuration for the high level MDP
     """
     match num_agents:
-        # 2 agent version of the env
         case 2:
             state_data_tuple = (
                 StateData(
@@ -67,7 +66,107 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                 ),
             )
 
-        # 6 agent version of the env
+        case 3:
+            state_data_tuple = (
+                StateData(
+                    idx=0,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (1, 6),
+                            (1, 7),
+                            (1, 8),
+                        ),
+                    ),
+                ),
+                StateData(
+                    idx=1,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (6, 2),
+                            (6, 3),
+                            (6, 4),
+                        ),
+                    ),
+                ),
+                StateData(
+                    idx=2,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (6, 10),
+                            (6, 11),
+                            (6, 12),
+                        ),
+                    ),
+                ),
+                StateData(
+                    idx=3,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,),
+                        states=(
+                            (9, 6),
+                            (9, 7),
+                            (9, 8),
+                        ),
+                    ),
+                ),
+            )
+
+            subtask_data_tuple = (
+                SubtaskData(
+                    edge=(0, 1),
+                    idx=0,
+                    final_state=(
+                        (6, 2),
+                        (6, 3),
+                        (6, 4),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(1, 3),
+                    idx=1,
+                    final_state=(
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(0, 2),
+                    idx=2,
+                    final_state=(
+                        (6, 10),
+                        (6, 11),
+                        (6, 12),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(2, 3),
+                    idx=3,
+                    final_state=(
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(3, 4),
+                    idx=4,
+                    final_state=(
+                        (12, 6),
+                        (12, 7),
+                        (12, 8),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+            )
+
         case 6:
             state_data_tuple = (
                 StateData(
@@ -128,24 +227,78 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                 ),
             )
 
-            # this hasn't been implemented yet
             subtask_data_tuple = (
                 SubtaskData(
                     edge=(0, 1),
                     idx=0,
-                    final_state=((3, 3), (3, 6)),
+                    final_state=(
+                        (6, 1),
+                        (6, 2),
+                        (6, 3),
+                        (6, 4),
+                        (6, 5),
+                        (6, 6),
+                    ),
                     termination_condition="reach_assigned_final_state",
                 ),
                 SubtaskData(
-                    edge=(1, 2),
+                    edge=(1, 3),
                     idx=1,
-                    final_state=((5, 3), (5, 6)),
+                    final_state=(
+                        (9, 4),
+                        (9, 5),
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                        (9, 9),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(0, 2),
+                    idx=2,
+                    final_state=(
+                        (6, 8),
+                        (6, 9),
+                        (6, 10),
+                        (6, 11),
+                        (6, 12),
+                        (6, 13),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(2, 3),
+                    idx=3,
+                    final_state=(
+                        (9, 4),
+                        (9, 5),
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                        (9, 9),
+                    ),
+                    termination_condition="reach_assigned_final_state",
+                ),
+                SubtaskData(
+                    edge=(3, 4),
+                    idx=4,
+                    final_state=(
+                        (12, 4),
+                        (12, 5),
+                        (12, 6),
+                        (12, 7),
+                        (12, 8),
+                        (12, 9),
+                    ),
                     termination_condition="reach_assigned_final_state",
                 ),
             )
 
         case _:
-            raise ValueError("Chosen number of agents not implemented")
+            raise ValueError(
+                "Chosen number of agents not implemented in the environment."
+            )
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
         state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
