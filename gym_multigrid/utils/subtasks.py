@@ -1,5 +1,5 @@
 from typing import Literal
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 
@@ -74,8 +74,8 @@ class HLMDPConfig:
     state_data_tuple: tuple[StateData, ...]
     subtask_data_tuple: tuple[SubtaskData, ...]
 
-    state_data: dict[int, StateData] | None = None
-    subtask_data: dict[int, SubtaskData] | None = None
+    state_data: dict[int, StateData] = field(init=False)
+    subtask_data: dict[int, SubtaskData] = field(init=False)
 
     def __post_init__(self) -> None:
         self._build_data_dicts()
@@ -83,8 +83,10 @@ class HLMDPConfig:
         self._add_init_state_dist_data()
 
     def _build_data_dicts(self) -> None:
-        self.state_data = {state.idx: state for state in self.state_data_tuple}
-        self.subtask_data = {
+        self.state_data: dict[int, StateData] = {
+            state.idx: state for state in self.state_data_tuple
+        }
+        self.subtask_data: dict[int, SubtaskData] = {
             subtask.idx: subtask for subtask in self.subtask_data_tuple
         }
 

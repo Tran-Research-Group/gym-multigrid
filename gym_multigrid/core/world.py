@@ -139,11 +139,6 @@ TeamNavigationWorld = World(
         "agent": 3,
         "door": 4,
         "goal": 5,
-        "button": 6,
-        "box": 7,
-        "zone": 8,
-        "blue_zone": 9,
-        "red_zone": 10,
-        "purple_zone": 11,
+        "zone": 6,
     },
 )
