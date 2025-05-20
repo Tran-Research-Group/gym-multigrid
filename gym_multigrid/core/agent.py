@@ -547,3 +547,24 @@ class PolicyAgent(Agent):
     def reset(self) -> None:
         super().reset()
         self.policy.reset()
+
+
+class TypedAgent(Agent):
+    """agent class with an agent_type attribute"""
+
+    def __init__(
+        self,
+        world: WorldT,
+        agent_type: int = 0,
+        index: int = 0,
+        view_size: int | None = None,
+        actions: Type[ActionsT] = DefaultActions,
+        dir_to_vec: list[NDArray] = DIR_TO_VEC,
+        color: str | None = None,
+        bg_color: str | None = None,
+        type: str = "agent",
+    ):
+        super().__init__(
+            world, index, view_size, actions, dir_to_vec, color, bg_color, type
+        )
+        self.agent_type: int = agent_type

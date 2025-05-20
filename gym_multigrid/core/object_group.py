@@ -200,8 +200,8 @@ class EnvObjectGroup:
     pos: tuple[tuple[int, int] | tuple[int, int, int, int], ...]
 
     color: str
-    spawned_subtask_indices: tuple[int, ...]
     fill_mode: Literal["empty", "filled"] | None
+    spawned_subtask_indices: tuple[int, ...] | None = None
 
 
 ObjGroupT = TypeVar("ObjGroupT", bound=ObjectGroup)

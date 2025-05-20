@@ -233,6 +233,12 @@ register(
     entry_point="gym_multigrid.envs:TeamNavigationEnv",
 )
 
+# One-step coordiation environment
+# ----------------------------------------
+register(
+    id="multigrid-one-step-coordination-v0",
+    entry_point="gym_multigrid.envs:OneStepCoordinationEnv",
+)
 
 # Maze environment
 # ----------------------------------------

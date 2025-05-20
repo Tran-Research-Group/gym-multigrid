@@ -5,7 +5,8 @@ import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
 
-from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
+from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent
+from gym_multigrid.core.agent import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
 from gym_multigrid.core.world import WorldT, TeamNavigationWorld
@@ -520,6 +521,15 @@ class TeamNavigationEnv(MultiGridEnv):
 
         self.detectors: list[Detector]
 
+        # basic grid init
+        self.object_options: dict[str, WorldObjT] = {
+            "goal": AgentGoal,
+            "zone": Zone,
+            "wall": Wall,
+        }
+        self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
+        self.init_grid: Grid
+
         super().__init__(
             agents=agents,
             width=width,
@@ -534,15 +544,6 @@ class TeamNavigationEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
-
-        # basic grid init
-        self.object_options: dict[str, WorldObjT] = {
-            "goal": AgentGoal,
-            "zone": Zone,
-            "wall": Wall,
-        }
-        self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
-        self.init_grid: Grid
 
         # subtract 2 here b/c we assume an outer wall around the env that don't contribute to the height + width of the environment the agents can access
         self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
@@ -573,6 +574,16 @@ class TeamNavigationEnv(MultiGridEnv):
                 high=max_val * np.ones(obs_shape),
                 dtype=np.float32,
             )
+
+        elif self.obs_type in ["one_hot_array"]:
+            obs_shape = self.reset()[0].shape
+
+            observation_space = spaces.Box(
+                low=np.zeros(obs_shape),
+                high=np.ones(obs_shape),
+                dtype=np.float32,
+            )
+
         else:
             raise ValueError(f"Invalid observation option: {self.observation_option}")
 
@@ -601,7 +612,7 @@ class TeamNavigationEnv(MultiGridEnv):
             EnvObjectGroup(
                 obj_type="wall",
                 group_index=0,
-                pos=((0, 0, 14, 15),),
+                pos=((0, 0, self.width, self.height),),
                 color="grey",
                 spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
@@ -701,6 +712,9 @@ class TeamNavigationEnv(MultiGridEnv):
         # get empty map of the env
         map_obs: NDArray[np.int_] = self._get_map()
 
+        # for one-hot, start with the empty map
+        # then, for each agent add in its obs data
+
         for agent_idx, agent in enumerate(self.agents):
             if self.obs_type == "array_scaled":
                 agent_obs = np.array(
@@ -710,6 +724,14 @@ class TeamNavigationEnv(MultiGridEnv):
                     ),
                     dtype=np.float32,
                 )
+
+            elif self.obs_type in ["one_hot_array"]:
+                agent_x, agent_y = np.zeros(self.width), np.zeros(self.height)
+                agent_x[agent.pos[0]], agent_y[agent.pos[1]] = 1, 1
+                agent_obs = np.concatenate((agent_x, agent_y))
+
+                agent_obs_map = map_obs.copy()
+                agent_obs_map_flat = []
 
             else:
                 agent_obs = np.array(agent.pos, dtype=np.float32)
@@ -724,7 +746,14 @@ class TeamNavigationEnv(MultiGridEnv):
                         goal_state[0] / self.obs_scaling["x"],
                         goal_state[1] / self.obs_scaling["y"],
                     )
-                agent_obs = np.append(agent_obs, goal_state)
+
+                if self.obs_type in ["array", "array_scaled"]:
+                    agent_obs = np.append(agent_obs, goal_state)
+
+                elif self.obs_type in ["one_hot_array"]:
+                    agent_obs_map[
+                        goal_state[0], goal_state[1], self.world.OBJECT_TO_IDX["goal"]
+                    ] = 1
 
             elif self.observation_option == "all_goals":
                 goal_states: list[tuple[float, float]] = []
@@ -736,17 +765,49 @@ class TeamNavigationEnv(MultiGridEnv):
                             goal_state[1] / self.obs_scaling["y"],
                         )
                     goal_states.append(goal_state)
-                agent_obs = np.append(agent_obs, goal_states)
 
-            # add the static map to agent obs
-            agent_obs = np.append(agent_obs, map_obs.flatten())
+                if self.obs_type in ["array", "array_scaled"]:
+                    agent_obs = np.append(agent_obs, goal_states)
 
-            if agent_idx == 0:
-                obs: NDArray[np.int_] = np.zeros(
-                    (self.num_agents, len(agent_obs)), dtype=np.float32
-                )
+                elif self.obs_type in ["one_hot_array"]:
+                    for goal_state in goal_states:
+                        agent_obs_map[
+                            goal_state[1],
+                            goal_state[0],
+                            self.world.OBJECT_TO_IDX["goal"],
+                        ] = 1
 
-            obs[agent.index, :] = agent_obs.flatten()
+                    # # remove states that are empty in the agent map
+                    # this didn't end up working b/c when an agent would walk over a Zone space, the zone is removed from the map causing the observation to change size throughout the episode
+                    # for x in range(self.width):
+                    #     for y in range(self.height):
+                    #         zeros = np.zeros(len(self.world.OBJECT_TO_IDX))
+
+                    #         if not np.array_equal(agent_obs_map[y, x, :], zeros):
+                    #             agent_obs_map_flat += agent_obs_map[y, x, :].tolist()
+
+            if self.obs_type in ["array", "array_scaled"]:
+                # add the static map to agent obs
+                agent_obs = np.append(agent_obs, map_obs.flatten())
+
+                if agent_idx == 0:
+                    obs: NDArray[np.int_] = np.zeros(
+                        (self.num_agents, len(agent_obs)), dtype=np.float32
+                    )
+
+                obs[agent.index, :] = agent_obs.flatten()
+
+            elif self.obs_type in ["one_hot_array"]:
+                agent_obs = agent_obs.flatten()
+
+                agent_obs = np.concatenate((agent_obs, agent_obs_map_flat))
+
+                if agent_idx == 0:
+                    obs: NDArray[np.int_] = np.zeros(
+                        (self.num_agents, len(agent_obs)), dtype=np.int_
+                    )
+
+                obs[agent.index, :] = agent_obs
 
         return obs
 
@@ -759,31 +820,51 @@ class TeamNavigationEnv(MultiGridEnv):
         # loop over every x-y position, get the object type, and get the encoding idx of that object type
         # this will start out as a (width, height, 3) tensor, but it will get flattened, which will remove the fact that the tensor directly represents the env
         ## so we need the x-y position data to make sure that information is not lost
-        env_map: NDArray[np.int_] = np.zeros(
-            (self.height, self.width, 3), dtype=np.int_
-        )
+        if self.obs_type in ["array", "array_scaled"]:
+            env_map: NDArray[np.int_] = np.zeros(
+                (self.height, self.width, 3), dtype=np.int_
+            )
 
-        for x in range(self.width):
-            for y in range(self.height):
-                obj = self.grid.get(x, y)
+            for x in range(self.width):
+                for y in range(self.height):
+                    obj = self.grid.get(x, y)
 
-                # we do not include information about the positions of other agents or the goals in the map view
-                if (obj is None) or obj.type in ["goal", "agent"]:
-                    obj_encoding: int = self.world.OBJECT_TO_IDX["empty"]
-                else:
-                    obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
+                    # we do not include information about the positions of other agents or the goals in the map view
+                    if (obj is None) or obj.type in ["goal", "agent"]:
+                        obj_encoding: int = self.world.OBJECT_TO_IDX["empty"]
+                    else:
+                        obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
 
-                if self.obs_type == "array_scaled":
-                    env_map[y, x, :] = np.array(
-                        [
-                            x / self.obs_scaling["x"],
-                            y / self.obs_scaling["y"],
-                            obj_encoding / self.obs_scaling["obj_encoding"],
-                        ]
-                    )
+                    if self.obs_type == "array_scaled":
+                        env_map[y, x, :] = np.array(
+                            [
+                                x / self.obs_scaling["x"],
+                                y / self.obs_scaling["y"],
+                                obj_encoding / self.obs_scaling["obj_encoding"],
+                            ]
+                        )
 
-                else:
-                    env_map[y, x, :] = np.array([x, y, obj_encoding])
+                    else:
+                        env_map[y, x, :] = np.array([x, y, obj_encoding])
+
+        elif self.obs_type in ["one_hot_array"]:
+            env_map: NDArray[np.int_] = np.zeros(
+                (self.height, self.width, len(self.world.OBJECT_TO_IDX)), dtype=np.int_
+            )
+
+            for x in range(self.width):
+                for y in range(self.height):
+                    obj = self.grid.get(x, y)
+
+                    if (obj is None) or obj.type in ["goal", "agent"]:
+                        pass
+
+                    else:
+                        idx = self.world.OBJECT_TO_IDX[obj.type]
+                        env_map[y, x, idx] = 1
+
+        else:
+            raise NotImplementedError
 
         return env_map
 

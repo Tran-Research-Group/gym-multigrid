@@ -133,12 +133,10 @@ TeamNavigationWorld = World(
     normalize_obs=1,
     COLORS=TEAM_NAVIGATION_COLORS,
     OBJECT_TO_IDX={
-        "unseen": 0,
-        "empty": 1,
-        "wall": 2,
-        "agent": 3,
-        "door": 4,
-        "goal": 5,
-        "zone": 6,
+        "empty": 0,
+        "wall": 1,
+        "agent": 2,
+        "goal": 3,
+        "zone": 4,
     },
 )

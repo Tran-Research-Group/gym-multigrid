@@ -148,6 +148,7 @@ NAV_DIR_TO_VEC: list[NDArray[np.int_]] = [
     np.array((0, -1)),
 ]
 
+
 # Map of object types to short string
 OBJECT_TO_STR = {
     "wall": "x",
