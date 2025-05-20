@@ -1,6 +1,5 @@
 from typing import TypeVar
 from dataclasses import dataclass, field
-
 from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import (
@@ -8,6 +7,7 @@ from gym_multigrid.core.constants import (
     CTF_COLORS,
     MAZE_COLORS,
     LABYRINTH_COLORS,
+    ACCESSIBLE_COLORS,
 )
 
 WorldT = TypeVar("WorldT", bound="World")
@@ -15,6 +15,8 @@ WorldT = TypeVar("WorldT", bound="World")
 
 @dataclass
 class World:
+    """This class defines the world within which grid is situated."""
+
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
@@ -87,6 +89,18 @@ CollectWorld = World(
     },
 )
 
+WildfireWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "tree": 1,
+        "agent": 2,
+        "wall": 3,
+    },
+)
+
 CtfWorld = World(
     encode_dim=3,
     normalize_obs=1,
@@ -105,12 +119,12 @@ CtfWorld = World(
 MazeWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=MAZE_COLORS,
+    COLORS=ACCESSIBLE_COLORS,
     OBJECT_TO_IDX={
         "background": 0,
         "agent": 1,
         "flag": 2,
-        "obstacle": 3,
+        "wall": 3,
     },
 )
 
@@ -123,7 +137,7 @@ LabyrinthWorld = World(
         "empty": 1,
         "wall": 2,
         "agent": 3,
-        "block": 4,
+        "door": 4,
         "goal": 5,
         "button": 6,
         "box": 7,

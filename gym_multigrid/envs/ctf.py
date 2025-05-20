@@ -1102,10 +1102,6 @@ class CtfMvNEnv(MultiGridEnv):
         # Add red agent actions to the info dictionary.
         info["red_actions"] = red_actions
 
-        # Adding blue and red agents initial positions into info dictionary
-        info["blue_init_positions"] = blue_init_positions
-        info["red_init_positions"] = red_init_positions
-
         if terminated or truncated:
             self.ep_game_stats = self.game_stats
         else:

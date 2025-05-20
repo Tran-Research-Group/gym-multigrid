@@ -4,7 +4,9 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.typing import Position
-from ..utils.rendering import *
+from gym_multigrid.utils.rendering import *
+from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
+
 
 WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
 
@@ -21,6 +23,19 @@ class WorldObj:
         color: str = "grey",
         bg_color: str | None = None,
     ):
+        """Create a WorldObj object
+
+        Parameters
+        ----------
+        world : WorldT
+            the world in which the object exists
+        type : str, optional
+            type of the object, by default "base"
+        color : str, optional
+            color of the object, by default "grey"
+        bg_color : str | None, optional
+            background color of the tile containing object, by default None
+        """
         assert type in world.OBJECT_TO_IDX, type
         assert color in world.COLOR_TO_IDX, color
         self.type: str = type
@@ -35,7 +50,80 @@ class WorldObj:
         self.init_pos: Final[Position | None] = None
 
         # Current position of the object
-        self.pos: Position | None = None
+        self._pos: Position | None = None
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, value):
+        self._pos = value
+
+    def west_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell to the left of the object
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the left of the object
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([-1, 0])
+
+    def east_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell to the right of the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell to the right of the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([1, 0])
+
+    def north_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell above the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell above the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, -1])
+
+    def south_pos(self) -> NDArray[np.int_]:
+        """
+        Get the position of the cell below the agent
+
+        Returns
+        -------
+        NDArray
+            the position of the cell below the agent
+        """
+        if self.pos is None:
+            raise ValueError("Agent position is not set")
+        else:
+            return self.pos + np.array([0, 1])
+
+    def get_all_neighbor_pos(self) -> dict[str, NDArray[np.int_]]:
+        """get all of the neighboring positions"""
+        return {
+            "left": self.west_pos(),
+            "right": self.east_pos(),
+            "up": self.north_pos(),
+            "down": self.south_pos(),
+        }
 
     def reset(self) -> None:
         """
@@ -151,7 +239,7 @@ class Floor(WorldObj):
     """
 
     def __init__(self, world: WorldT, color: str = "blue", type: str = "floor"):
-        super().__init__(world, type, color)
+        super().__init__(world, type, color, color)
 
     def can_overlap(self) -> bool:
         return True
@@ -193,8 +281,8 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world: WorldT, color: str = "grey"):
-        super().__init__(world, "wall", color)
+    def __init__(self, world: WorldT, type: str = "wall", color: str = "grey"):
+        super().__init__(world, type, color)
 
     def see_behind(self):
         return False
@@ -393,19 +481,43 @@ class Flag(WorldObj):
         )
 
 
+class Tree(WorldObj):
+    def __init__(
+        self,
+        world: WorldT,
+        tree_state_idx: int = 0,
+        region: str = "common",
+    ):
+        super().__init__(world, "tree", STATE_IDX_TO_COLOR_WILDFIRE[tree_state_idx])
+        self.state = tree_state_idx
+        self.agent_above = False
+        self.region = region
+
+    def can_overlap(self):
+        return True
+
+    def encode(self, current_agent: bool = False):
+        return (
+            self.world.OBJECT_TO_IDX[self.type],
+            self.world.COLOR_TO_IDX[self.color],
+            self.state,
+        )
+
+    def render(self, img):
+        c = self.world.COLORS[self.color]
+
+        fill_coords(img, point_in_rect(0, 1, 0, 1), c)
+
+
 class AgentGoal(WorldObj):
     def __init__(
         self,
         world: WorldT,
-        accepting_agent_idx: int,
-        goal_group: int,
         type: str = "goal",
-        color: str = "yellow",
+        color: str = "green",
         bg_color: str | None = None,
     ):
         super().__init__(world, type, color, bg_color)
-        self.accepting_agent_idx: int = accepting_agent_idx
-        self.goal_group: int = goal_group
 
     def can_overlap(self):
         return True
@@ -414,14 +526,19 @@ class AgentGoal(WorldObj):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
 
 
-class Block(WorldObj):
+class SimpleDoor(WorldObj):
     def __init__(
         self,
         world: WorldT,
+        color: str = "light_grey",
+        type: str = "door",
     ):
-        super().__init__(world, "block", color="light_grey")
+        super().__init__(world, type=type, color=color)
 
         self.locked: bool = True
+
+    def is_open(self) -> bool:
+        return self.locked
 
     def can_overlap(self) -> bool:
         return not self.locked
@@ -429,6 +546,10 @@ class Block(WorldObj):
     def open(self) -> None:
         self.locked = False
         self.color = "grey"
+
+    def close(self) -> None:
+        self.locked = True
+        self.color = self.init_color
 
     def see_behind(self) -> bool:
         return False
