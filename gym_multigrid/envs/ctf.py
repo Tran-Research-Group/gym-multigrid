@@ -605,7 +605,7 @@ class CtfMvNEnv(MultiGridEnv):
             tuple(traj[0]) for traj in self.blue_traj
         ]
         self.red_init_positions: list[Position] = [
-            tuple(traj[0]) for traj in self.blue_traj
+            tuple(traj[0]) for traj in self.red_traj
         ]
 
         obs: Observation = self._get_obs()
