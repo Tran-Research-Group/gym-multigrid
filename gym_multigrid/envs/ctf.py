@@ -1,19 +1,18 @@
-from typing import Final, Literal, TypeAlias, TypedDict, Any, Type
+from typing import Any, Final, Literal, Type, TypeAlias, TypedDict
 
-from gymnasium import spaces
 import numpy as np
+from gymnasium import spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
+from gym_multigrid.core.agent import Agent, AgentT, CtfActions, PolicyAgent
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObjT
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT, HEURISTIC_POLICIES
+from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicyT, RwPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
-
 
 Observation: TypeAlias = (
     ObservationDict | NDArray[np.int_] | dict[str, NDArray[np.int_] | int]
@@ -39,6 +38,14 @@ ObservationOption: TypeAlias = Literal[
 class CtfMvNEnv(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
+
+    Actions
+    -------
+    - stay = 0
+    - left = 1
+    - down = 2
+    - right = 3
+    - up = 4
     """
 
     def __init__(
@@ -577,6 +584,13 @@ class CtfMvNEnv(MultiGridEnv):
             "red_flag_captured": False,
         }
 
+        self.blue_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_blue_agents)
+        ]
+        self.red_init_positions: list[Position] = [
+            (0, 0) for _ in range(self.num_red_agents)
+        ]
+
         super().reset(seed=seed, options=options)
 
         self.blue_traj: list[list[Position]] = [
@@ -584,6 +598,13 @@ class CtfMvNEnv(MultiGridEnv):
         ]
         self.red_traj: list[list[Position]] = [
             [agent.pos] for agent in self.agents[self.num_blue_agents :]
+        ]
+
+        self.blue_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.blue_traj
+        ]
+        self.red_init_positions: list[Position] = [
+            tuple(traj[0]) for traj in self.red_traj
         ]
 
         obs: Observation = self._get_obs()
@@ -816,6 +837,9 @@ class CtfMvNEnv(MultiGridEnv):
                 if self.num_red_agents == self.game_stats["defeated_red_agents"]
                 else -1
             ),
+            "red_actions": [0 for _ in range(self.num_red_agents)],
+            "blue_init_positions": self.blue_init_positions,
+            "red_init_positions": self.red_init_positions,
         } | self.ep_game_stats
         return info
 
@@ -1072,7 +1096,10 @@ class CtfMvNEnv(MultiGridEnv):
         reward -= self.step_penalty
 
         observation: Observation = self._get_obs()
-        info: dict[str, float] = self._get_info()
+        info: dict[str, Any] = self._get_info()
+
+        # Add red agent actions to the info dictionary.
+        info["red_actions"] = red_actions
 
         if terminated or truncated:
             self.ep_game_stats = self.game_stats
@@ -1082,7 +1109,7 @@ class CtfMvNEnv(MultiGridEnv):
         return observation, reward, terminated, truncated, info
 
 
-class CtF(CtfMvNEnv):
+class Ctf1v1Env(CtfMvNEnv):
     """
     Environment for capture the flag game with one ego (blue) agent and one enemy (red) agent.
     """
@@ -1090,8 +1117,6 @@ class CtF(CtfMvNEnv):
     def __init__(
         self,
         map_path: str,
-        num_blue_agents: int,
-        num_red_agents: str,
         enemy_policy: Type[CtfPolicyT] | str = RwPolicy,
         enemy_policy_kwarg: dict[str, Any] = {},
         battle_range: float = 1,
@@ -1141,6 +1166,9 @@ class CtF(CtfMvNEnv):
         uncached_object_types : list[str] = ["red_agent", "blue_agent"]
             Types of objects that should not be cached.
         """
+
+        num_blue_agents: Final[int] = 1
+        num_red_agents: Final[int] = 1
         super().__init__(
             map_path=map_path,
             num_blue_agents=num_blue_agents,
