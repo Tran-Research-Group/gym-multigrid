@@ -13,6 +13,7 @@ from gym_multigrid.utils.window import Window
 from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, FRActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal
+from gym_multigrid.core.object import Lava
 from gym_multigrid.core.world import FRWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
@@ -43,7 +44,7 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
-class FourRooms(MultiGridEnv):
+class LavaRooms(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -54,8 +55,8 @@ class FourRooms(MultiGridEnv):
         grid_size: tuple = (13, 13),
         agent_view_size: int = 7,
         max_steps: int = 100,
-        highlight_visible_cells: bool | None = True,
         tile_size: int = 20,
+        highlight_visible_cells: bool | None = True,
         partial_observability: bool = False,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -68,7 +69,7 @@ class FourRooms(MultiGridEnv):
         """
         if grid_type < 0 or grid_type >= 2:
             raise ValueError(
-                f"The Fourroom only accepts grid_type of 0 and 1, given {grid_type}"
+                f"The Lavaroom only accepts grid_type of 0 and 1, given {grid_type}"
             )
         else:
             self.grid_type = grid_type
@@ -93,21 +94,48 @@ class FourRooms(MultiGridEnv):
             )
         ]
 
-        self.doorway_positions = [(3, 6), (6, 2), (10, 6), (7, 9)]
-        self.vert_wall_positions = [(6, 0), (7, 6)]
-        self.hor_wall_positions = [(0, 6), (6, 6)]
+        # These define a fixed grid information
+        # each index corresponds to the grid type
+        self.doorway_positions = [[(2, 6), (6, 2)]]
+        self.vert_wall_positions = [[(6, 0)]]
+        self.hor_wall_positions = [[(0, 6)]]
 
-        self.goal_positions = [
-            (3, 9),
-            (7, 9),
-        ]  # (7, 1)
-        self.agent_positions = [
-            (9, 3),
-            (11, 1),
+        self.goal_positions = [[(9, 9)]]  # (7, 1)
+        self.agent_positions = [(3, 3)]
+        self.lava_positions = [
+            [
+                [
+                    (7, 4),
+                    (8, 4),
+                    (8, 5),
+                    (8, 6),
+                    (9, 3),
+                    (9, 4),
+                    (9, 5),
+                    (9, 6),
+                    (9, 7),
+                    (10, 4),
+                    (10, 5),
+                    (10, 6),
+                    (11, 5),
+                ],
+                [
+                    (4, 7),
+                    (4, 8),
+                    (5, 8),
+                    (6, 8),
+                    (3, 9),
+                    (4, 9),
+                    (5, 9),
+                    (6, 9),
+                    (7, 9),
+                    (4, 10),
+                    (5, 10),
+                    (6, 10),
+                    (5, 11),
+                ],
+            ],
         ]
-
-        self.grids = {}
-        self.grid_imgs = {}
 
         super().__init__(
             width=self.width,
@@ -129,33 +157,37 @@ class FourRooms(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
 
         # Generate the surrounding walls
-        self.grid.horz_wall(0, 0)
-        self.grid.horz_wall(0, height - 1)
-        self.grid.vert_wall(0, 0)
-        self.grid.vert_wall(width - 1, 0)
+        self.grid.wall_rect(0, 0, width, height)
 
         room_w = width // 2
         room_h = height // 2
 
         # Bottom wall and door
-        for coord in self.vert_wall_positions:
-            self.grid.vert_wall(coord[0], coord[1], room_h)
+        for coord in self.vert_wall_positions[self.grid_type]:
+            self.grid.vert_wall(coord[0], coord[1], room_h + 1)
 
         # Bottom wall and door
-        for coord in self.hor_wall_positions:
+        for coord in self.hor_wall_positions[self.grid_type]:
             self.grid.horz_wall(coord[0], coord[1], room_w)
 
-        for pos in self.doorway_positions:
+        for pos in self.doorway_positions[self.grid_type]:
             self.grid.set(*pos, None)
 
+        # goal allocation
         # place goal
-        goal = Goal(self.world, 0)
-        self.put_obj(goal, *self.goal_positions[self.grid_type])
-        goal.init_pos, goal.cur_pos = self.goal_positions[self.grid_type]
+        for i, pos in enumerate(self.goal_positions[self.grid_type]):
+            goal = Goal(self.world, i)
+            self.put_obj(goal, *pos)
 
-        # place agent
-        for agent in self.agents:
-            self.place_agent(agent, pos=self.agent_positions[self.grid_type])
+        # lava allocation
+        for lava_pos_samples in self.lava_positions[self.grid_type]:
+            random_lava_positions = random.sample(lava_pos_samples, 3)
+            for lava_pos in random_lava_positions:
+                lava = Lava(self.world)
+                self.put_obj(lava, *lava_pos)
+
+        # agent allocation
+        self.place_agent(self.agents[0], pos=self.agent_positions[self.grid_type])
 
     def reset(
         self,
@@ -202,15 +234,19 @@ class FourRooms(MultiGridEnv):
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
                         done = True
-                        rewards = self._reward(i, rewards, 1)
+                        rewards += 1.0  # - 0.5 * (self.step_count / self.max_steps)
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
                     elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "lava":
+                        rewards[i] = -0.25
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*self.agents[i].pos, None)
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
+                else:
+                    rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Rotate right
@@ -221,15 +257,19 @@ class FourRooms(MultiGridEnv):
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
                         done = True
-                        rewards = self._reward(i, rewards, 1)
+                        rewards += 1.0
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
                     elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "lava":
+                        rewards[i] = -0.25
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*self.agents[i].pos, None)
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
+                else:
+                    rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Move forward
@@ -240,15 +280,19 @@ class FourRooms(MultiGridEnv):
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
                         done = True
-                        rewards = self._reward(i, rewards, 1)
+                        rewards += 1.0
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
                     elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "lava":
+                        rewards[i] = -0.25
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*self.agents[i].pos, None)
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
+                else:
+                    rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             elif actions[i] == self.actions.down:
@@ -258,15 +302,19 @@ class FourRooms(MultiGridEnv):
                 if fwd_cell is not None:
                     if fwd_cell.type == "goal":
                         done = True
-                        rewards = self._reward(i, rewards, 1)
+                        rewards += 1.0
                     elif fwd_cell.type == "switch":
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
                     elif fwd_cell.type == "ball":
                         rewards = self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+                    elif fwd_cell.type == "lava":
+                        rewards[i] = -0.25
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*self.agents[i].pos, None)
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.agents[i].pos = fwd_pos
+                else:
+                    rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
             else:
                 assert False, "unknown action"

@@ -1,19 +1,18 @@
-from typing import Final, Literal, TypeAlias, TypedDict, Any, Type
+from typing import Any, Final, Literal, Type, TypeAlias, TypedDict
 
-from gymnasium import spaces
 import numpy as np
+from gymnasium import spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, CtfActions
+from gym_multigrid.core.agent import Agent, AgentT, CtfActions, PolicyAgent
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Floor, Flag, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObjT
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.ctf.heuristic import RwPolicy, CtfPolicyT, HEURISTIC_POLICIES
+from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicyT, RwPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
-
 
 Observation: TypeAlias = (
     ObservationDict | NDArray[np.int_] | dict[str, NDArray[np.int_] | int]
