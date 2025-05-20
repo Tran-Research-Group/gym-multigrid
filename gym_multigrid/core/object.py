@@ -239,7 +239,7 @@ class Floor(WorldObj):
     """
 
     def __init__(self, world: WorldT, color: str = "blue", type: str = "floor"):
-        super().__init__(world, type, color)
+        super().__init__(world, type, color, color)
 
     def can_overlap(self) -> bool:
         return True
