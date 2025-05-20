@@ -1,29 +1,105 @@
+from abc import ABC, abstractmethod
 import math
-import random
-from typing import Literal, Type, TypeVar, Callable
+import warnings
+from typing import Generic, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
+
 import numpy as np
+from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium import spaces
+from gymnasium.spaces.space import Space, T_cov
+from gymnasium.core import ObsType, ActType
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, WorldT
 from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import *
 from gym_multigrid.utils.window import Window
-from gym_multigrid.core.constants import *
-
+from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
-class MultiGridEnv(gym.Env):
+class ObservationMode(Generic[T_cov], ABC):
+    @staticmethod
+    @abstractmethod
+    def observation_space(env: gym.Env[ObsType, ActType]) -> Space[T_cov]: ...
+
+    """
+    Define the observation space of the environment.
+
+    Parameters
+    ----------
+    env : gym.Env[ObsType, ActType]
+        The environment
+
+    Returns
+    -------
+    observation_space: gym.Space
+        The observation space of the environment
+    """
+
+    @staticmethod
+    @abstractmethod
+    def create_observation(env: gym.Env[ObsType, ActType]) -> T_cov: ...
+
+    """
+    Create an observation from the environment.
+
+    Parameters
+    ----------
+    env : gym.Env[ObsType, ActType]
+        The environment
+
+    Returns
+    -------
+    observation: T_cov
+        The observation
+    """
+
+
+class GridConfig(TypedDict, total=False):
+    grid_size: int | None
+    width: int | None
+    height: int | None
+    world: WorldT
+    actions_set: Type[ActionsT]
+
+
+class RenderingConfig(TypedDict):
+    render_mode: Literal["human", "rgb_array"]
+    close_window: bool
+    uncached_object_types: list[str]
+    tile_size: int
+
+
+class PartialObsConfig(TypedDict):
+    partial_obs: bool
+    agent_view_size: int | None
+    see_through_walls: bool
+    highlight_visible_cells: bool
+
+
+DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
+    "partial_obs": False,
+    "agent_view_size": None,
+    "see_through_walls": False,
+    "highlight_visible_cells": False,
+}
+
+
+class MultiGridEnv(gym.Env[ObsType, ActType]):
     """
     2D grid world game environment
     """
 
-    metadata = {"render_modes": ["human", "rgb_array"], "video.frames_per_second": 10}
+    # Setup and env properties
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "video.frames_per_second": 10,
+        "observation_modes": {},  # type: dict[str, ObservationMode]
+    }
 
     def __init__(
         self,
@@ -31,27 +107,77 @@ class MultiGridEnv(gym.Env):
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
-        max_steps: int = 100,
-        see_through_walls: bool = False,
-        partial_obs: bool = False,
-        agent_view_size: int = 7,
-        actions_set: Type[ActionsT] = DefaultActions,
         world: WorldT = DefaultWorld,
+        actions_set: Type[ActionsT] = DefaultActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
         close_window: bool = False,
-        highlight_visible_cells: bool = False,
         tile_size: int = TILE_PIXELS,
+        partial_obs: bool = False,
+        agent_view_size: int | None = None,
+        see_through_walls: bool = False,
+        highlight_visible_cells: bool = False,
+        max_steps: int | None = None,
     ) -> None:
-        self.agents: list[AgentT] = agents
+        """
+        Initialize a new grid world environment
+
+        Parameters
+        ----------
+        agents : list[gym_multigrid.core.agent.AgentT]
+            List of agents in the environment
+        grid_size : int | None = None
+            Size of the grid (if square).
+            If None, width and height must be set.
+        width : int | None = None
+            Width of the grid
+        height : int | None = None
+            Height of the grid
+        world : WorldT = DefaultWorld
+            World object that defines the objects in the environment
+        actions_set : Type[ActionsT] = DefaultActions
+            Actions available to the agents
+        render_mode : Literal["human", "rgb_array"] = "rgb_array"
+            Rendering mode
+        uncached_object_types : list[str] = []
+            List of object types that should not be cached in the rendering cache
+        close_window : bool = False
+            Whether to close the rendering window
+        tile_size : int = TILE_PIXELS
+            Size of the tiles in the rendering
+        partial_obs : bool = False
+            Whether agents have partial or full observation.
+            If True, the agent's observation is a square view area centered on the agent, specified by agent_view_size.
+        agent_view_size : int | None = None
+            Size of the square view area centered on the agent
+        see_through_walls : bool = False
+            Whether agents can see through walls
+        highlight_visible_cells : bool = False
+            Whether to highlight the cells visible to the agent
+        max_steps : int | None = None
+            Maximum number of steps per episode.
+            If `None`, `truncated` returned by the `step` method will always be False.
+        """
+        self.agents = agents
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode: Literal["human", "rgb_array"] = render_mode
         self.uncached_object_types: list[str] = uncached_object_types
         self.close_window: bool = close_window
-        self.highlight_visible_cells: bool = highlight_visible_cells
         self.tile_size: int = tile_size
+
         # Does the agents have partial or full observation?
-        self.partial_obs = partial_obs
+        self.partial_obs: bool = partial_obs
+        self.see_through_walls: bool = see_through_walls and self.partial_obs
+        self.highlight_visible_cells: bool = highlight_visible_cells
+        if self.partial_obs and agent_view_size is None:
+            warnings.warn(
+                "Partial observation is enabled but agent_view_size is not set. Defaulting to 7.",
+                UserWarning,
+            )
+            agent_view_size = 7
+        else:
+            pass
+
         self.agent_view_size = agent_view_size
 
         # Can't set both grid_size and width/height
@@ -66,7 +192,7 @@ class MultiGridEnv(gym.Env):
         self.height: int = height
 
         # Action enumeration for this environment
-        self.actions = actions_set
+        self.actions: Type[ActionsT] = actions_set
 
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions))
@@ -79,17 +205,28 @@ class MultiGridEnv(gym.Env):
             self.ob_dim = np.prod(self.observation_space.shape)
         else:
             pass
-        self.ac_dim = self.action_space.n
+
+        self.ac_dim: np.int64 = self.action_space.n
 
         # Range of possible rewards
-        self.reward_range = (0, 1)
+        self.reward_range: tuple[int, int] = (0, 1)
 
         # Window to use for human rendering mode
-        self.window = None
+        self.window: Window | None = None
 
         # Environment configuration
-        self.max_steps = max_steps
-        self.see_through_walls = see_through_walls
+        self.max_steps: int | None = max_steps
+        if self.max_steps is not None:
+            warnings.warn(
+                """
+                `max_steps` will be deprecated in the base class in the future.
+                Please use `gymnasium.wrappers.TimeLimit` instead to limit the number of steps in an episode.
+                If you want to keep using `max_steps` for some purpose, please implement it in your own child classes.
+                """,
+                DeprecationWarning,
+            )
+        else:
+            pass
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
@@ -117,31 +254,50 @@ class MultiGridEnv(gym.Env):
 
         return observation_space
 
+    def _reset_gym(self, seed: int | None = None) -> None:
+        super().reset(seed=seed)
+
+    def _reset_agents(self) -> None:
+        """
+        Reset the agents to their initial positions
+        """
+
+        # for a in self.agents:
+        #     a.reset()
+        #     self.place_agent(a)
+
+        for a in self.agents:
+            assert a.pos is not None
+            assert a.dir is not None
+
     def reset(
         self,
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ):
+    ) -> tuple[ObsType, dict]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
         # If you only use this RNG, you do not need to worry much about seeding,
         # but you need to remember to call ``super().reset(seed=seed)`` to make
         # sure that gymnasium.Env correctly seeds the RNG
-        super().reset(seed=seed, options=options)
+        self._reset_gym(seed=seed)
+
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
-        self._gen_grid(self.width, self.height)
+        # if state is given in options, then use it to generate the grid with given state as the initial state
+        if options is not None:
+            state = options["state"]
+            if state is not None:
+                self._gen_grid(self.width, self.height, state)
+            else:
+                self._gen_grid(self.width, self.height)
+        else:
+            self._gen_grid(self.width, self.height)
 
-        # These fields should be defined by _gen_grid
-        for a in self.agents:
-            assert a.pos is not None
-            assert a.dir is not None
-
-        # Item picked up, being carried, initially nothing
-        for a in self.agents:
-            a.carrying = None
+        # Agent status should be reset inside self._gen_grid
+        self._reset_agents()
 
         # Step count since episode start
         self.step_count: int = 0
@@ -206,6 +362,7 @@ class MultiGridEnv(gym.Env):
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
+    # Env step logic
     def _handle_pickup(self, i, rewards, fwd_pos, fwd_cell):
         pass
 
@@ -227,63 +384,6 @@ class MultiGridEnv(gym.Env):
         """
         rewards[current_agent] += reward - 0.9 * (self.step_count / self.max_steps)
         return rewards
-
-    def _rand_int(self, low, high):
-        """
-        Generate random integer in [low,high[
-        """
-
-        return self.np_random.integers(low, high, endpoint=True)
-
-    def _rand_float(self, low, high):
-        """
-        Generate random float in [low,high[
-        """
-
-        return self.np_random.uniform(low, high)
-
-    def _rand_bool(self):
-        """
-        Generate random boolean value
-        """
-
-        return self.np_random.randint(0, 2) == 0
-
-    def _rand_elem(self, iterable):
-        """
-        Pick a random element in a list
-        """
-
-        lst = list(iterable)
-        idx = self._rand_int(0, len(lst) - 1)
-        return lst[idx]
-
-    def _rand_subset(self, iterable, num_elems):
-        """
-        Sample a random subset of distinct elements of a list
-        """
-
-        lst = list(iterable)
-        assert num_elems <= len(lst)
-
-        out = []
-
-        while len(out) < num_elems:
-            elem = self._rand_elem(lst)
-            lst.remove(elem)
-            out.append(elem)
-
-        return out
-
-    def _rand_pos(self, xLow, xHigh, yLow, yHigh):
-        """
-        Generate a random (x,y) position tuple
-        """
-
-        return (
-            self.np_random.randint(xLow, xHigh),
-            self.np_random.randint(yLow, yHigh),
-        )
 
     def place_obj(
         self,
@@ -408,7 +508,11 @@ class MultiGridEnv(gym.Env):
 
     def step(
         self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[NDArray[np.int_], NDArray[np.float64], bool, bool, dict]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict]:
+        """
+        Example method showing potential implementation of the step method.
+        Implement this method in your own environment.
+        """
         self.step_count += 1
 
         order = np.random.permutation(len(actions))
@@ -479,7 +583,7 @@ class MultiGridEnv(gym.Env):
             else:
                 assert False, "unknown action"
 
-        if self.step_count >= self.max_steps:
+        if self.max_steps is not None and self.step_count >= self.max_steps:
             truncated = True
 
         if self.partial_obs:
@@ -494,6 +598,7 @@ class MultiGridEnv(gym.Env):
         info = self._get_info()
         return obs, rewards, terminated, truncated, info
 
+    # Agent obs logic
     def gen_obs_grid(self):
         """
         Generate the sub-grid observed by the agents.
@@ -514,7 +619,7 @@ class MultiGridEnv(gym.Env):
 
             # Process occluders and visibility
             # Note that this incurs some performance cost
-            if not self.see_through_walls:
+            if self.partial_obs and not self.see_through_walls:
                 vis_mask = grid.process_vis(
                     agent_pos=(a.view_size // 2, a.view_size - 1)
                 )
@@ -555,6 +660,65 @@ class MultiGridEnv(gym.Env):
 
         return img
 
+    # Randomizing
+    def _rand_int(self, low, high):
+        """
+        Generate random integer in [low,high[
+        """
+
+        return self.np_random.integers(low, high, endpoint=True)
+
+    def _rand_float(self, low, high):
+        """
+        Generate random float in [low,high[
+        """
+
+        return self.np_random.uniform(low, high)
+
+    def _rand_bool(self):
+        """
+        Generate random boolean value
+        """
+
+        return self.np_random.randint(0, 2) == 0
+
+    def _rand_elem(self, iterable):
+        """
+        Pick a random element in a list
+        """
+
+        lst = list(iterable)
+        idx = self._rand_int(0, len(lst) - 1)
+        return lst[idx]
+
+    def _rand_subset(self, iterable, num_elems):
+        """
+        Sample a random subset of distinct elements of a list
+        """
+
+        lst = list(iterable)
+        assert num_elems <= len(lst)
+
+        out = []
+
+        while len(out) < num_elems:
+            elem = self._rand_elem(lst)
+            lst.remove(elem)
+            out.append(elem)
+
+        return out
+
+    def _rand_pos(self, xLow, xHigh, yLow, yHigh):
+        """
+        Generate a random (x,y) position tuple
+        """
+
+        return (
+            self.np_random.randint(xLow, xHigh),
+            self.np_random.randint(yLow, yHigh),
+        )
+
+    # Env rendering
     def render(self):
         """
         Render the whole-grid human view

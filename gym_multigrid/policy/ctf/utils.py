@@ -218,6 +218,21 @@ def loc_can_overlap(
 def get_unterminated_opponent_pos(
     observation: ObservationDict, opponent_agent: Literal["red_agent", "blue_agent"]
 ) -> list[Position]:
+    """
+    Get the positions of the opponent agents that are not terminated
+
+    Parameters
+    ----------
+    observation : ObservationDict
+        Observation dictionary
+    opponent_agent : Literal["red_agent", "blue_agent"]
+        Opponent agent to get the positions
+
+    Returns
+    -------
+    opponent_pos: list[Position]
+        List of positions of the opponent agents that are not terminated
+    """
     num_blue_agents: int = observation["blue_agent"].reshape([-1, 2]).shape[0]
     num_red_agents: int = observation["red_agent"].reshape([-1, 2]).shape[0]
     terminated_opponent_agents: NDArray[np.int_] = (
