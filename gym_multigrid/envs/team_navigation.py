@@ -545,10 +545,9 @@ class TeamNavigationEnv(MultiGridEnv):
             [len(self.actions) for _ in range(self.num_agents)]
         )
 
-        # subtract 2 here b/c we assume an outer wall around the env that don't contribute to the height + width of the environment the agents can access
         self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
-            "x": self.width - 2,
-            "y": self.height - 2,
+            "x": self.width - 1,
+            "y": self.height - 1,
             "obj_encoding": max(world.OBJECT_TO_IDX.values()),
         }
 
@@ -708,19 +707,24 @@ class TeamNavigationEnv(MultiGridEnv):
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
 
+        # get the static components of each agent's observations for use during the episode
+        self.static_map_obs = self._get_map()
+
     def get_obs(self) -> Observation:
-        # get empty map of the env
-        map_obs: NDArray[np.int_] = self._get_map()
-
-        # for one-hot, start with the empty map
-        # then, for each agent add in its obs data
-
         for agent_idx, agent in enumerate(self.agents):
-            if self.obs_type == "array_scaled":
+            # add agent position to its observation
+            if self.obs_type == "array":
+                agent_obs = np.array(
+                    [agent.pos, self.world.OBJECT_TO_IDX["agent"]], dtype=np.float32
+                )
+
+            elif self.obs_type == "array_scaled":
                 agent_obs = np.array(
                     (
                         agent.pos[0] / self.obs_scaling["x"],
                         agent.pos[1] / self.obs_scaling["y"],
+                        self.world.OBJECT_TO_IDX["agent"]
+                        / self.obs_scaling["obj_encoding"],
                     ),
                     dtype=np.float32,
                 )
@@ -730,77 +734,63 @@ class TeamNavigationEnv(MultiGridEnv):
                 agent_x[agent.pos[0]], agent_y[agent.pos[1]] = 1, 1
                 agent_obs = np.concatenate((agent_x, agent_y))
 
-                agent_obs_map = map_obs.copy()
-                agent_obs_map_flat = []
-
-            else:
-                agent_obs = np.array(agent.pos, dtype=np.float32)
+                agent_obs_map = self.static_map_obs.copy()
 
             # add each agent's goals to its obs
+            goal_states: list[tuple] = []
+
             if self.observation_option == "goal":
                 goal_state = self.hlmdp_config.subtask_data[
                     self.subtask_idx
                 ].final_state[agent.index]
+
                 if self.obs_type == "array_scaled":
                     goal_state = (
                         goal_state[0] / self.obs_scaling["x"],
                         goal_state[1] / self.obs_scaling["y"],
+                        self.world.OBJECT_TO_IDX["goal"]
+                        / self.obs_scaling["obj_encoding"],
                     )
 
-                if self.obs_type in ["array", "array_scaled"]:
-                    agent_obs = np.append(agent_obs, goal_state)
-
-                elif self.obs_type in ["one_hot_array"]:
-                    agent_obs_map[
-                        goal_state[0], goal_state[1], self.world.OBJECT_TO_IDX["goal"]
-                    ] = 1
+                goal_states.append(goal_state)
 
             elif self.observation_option == "all_goals":
-                goal_states: list[tuple[float, float]] = []
                 for _, data in self.hlmdp_config.subtask_data.items():
                     goal_state = data.final_state[agent_idx]
+
                     if self.obs_type == "array_scaled":
                         goal_state = (
                             goal_state[0] / self.obs_scaling["x"],
                             goal_state[1] / self.obs_scaling["y"],
+                            self.world.OBJECT_TO_IDX["agent"]
+                            / self.obs_scaling["obj_encoding"],
                         )
                     goal_states.append(goal_state)
 
-                if self.obs_type in ["array", "array_scaled"]:
-                    agent_obs = np.append(agent_obs, goal_states)
-
-                elif self.obs_type in ["one_hot_array"]:
-                    for goal_state in goal_states:
-                        agent_obs_map[
-                            goal_state[1],
-                            goal_state[0],
-                            self.world.OBJECT_TO_IDX["goal"],
-                        ] = 1
-
-                    # # remove states that are empty in the agent map
-                    # this didn't end up working b/c when an agent would walk over a Zone space, the zone is removed from the map causing the observation to change size throughout the episode
-                    # for x in range(self.width):
-                    #     for y in range(self.height):
-                    #         zeros = np.zeros(len(self.world.OBJECT_TO_IDX))
-
-                    #         if not np.array_equal(agent_obs_map[y, x, :], zeros):
-                    #             agent_obs_map_flat += agent_obs_map[y, x, :].tolist()
-
             if self.obs_type in ["array", "array_scaled"]:
-                # add the static map to agent obs
-                agent_obs = np.append(agent_obs, map_obs.flatten())
+                agent_obs = np.append(agent_obs, goal_states)
+
+            elif self.obs_type in ["one_hot_array"]:
+                for goal_state in goal_states:
+                    agent_obs_map[
+                        goal_state[1],
+                        goal_state[0],
+                        self.world.OBJECT_TO_IDX["goal"],
+                    ] = 1
+
+            # add the static map to each agent's obs
+            if self.obs_type in ["array", "array_scaled"]:
+                agent_obs = np.append(agent_obs, self.static_map_obs)
 
                 if agent_idx == 0:
                     obs: NDArray[np.int_] = np.zeros(
                         (self.num_agents, len(agent_obs)), dtype=np.float32
                     )
-
-                obs[agent.index, :] = agent_obs.flatten()
+                obs[agent.index, :] = agent_obs
 
             elif self.obs_type in ["one_hot_array"]:
                 agent_obs = agent_obs.flatten()
-
-                agent_obs = np.concatenate((agent_obs, agent_obs_map_flat))
+                agent_obs = np.concatenate((agent_obs, agent_obs_map.flatten()))
 
                 if agent_idx == 0:
                     obs: NDArray[np.int_] = np.zeros(
@@ -812,40 +802,39 @@ class TeamNavigationEnv(MultiGridEnv):
         return obs
 
     def _get_map(self) -> NDArray[np.int_]:
-
-        # I want a (max_width, max_height, encode_dim) size np array that represents the map without any agents or goals in it
-        ## If the env doesn't change, I just need to run this function once at the start of the episode
-        ## eh, just run it each step in get_obs
-
-        # loop over every x-y position, get the object type, and get the encoding idx of that object type
-        # this will start out as a (width, height, 3) tensor, but it will get flattened, which will remove the fact that the tensor directly represents the env
-        ## so we need the x-y position data to make sure that information is not lost
         if self.obs_type in ["array", "array_scaled"]:
-            env_map: NDArray[np.int_] = np.zeros(
-                (self.height, self.width, 3), dtype=np.int_
-            )
+            # represent the map as a 1D vector where each object type is grouped as follows: map = [obj_type_0, obj_type_1, ...] where obj_type_i = [obj_type, x_0, y_0, x_1, y_1, ...]
+            # you only include the object type one time in the observation to avoid redundant data the neural net would have to learn to ignore
+            # None is equivalent to an "empty" space in the environment
+            ignored_objects = ["goal", "agent"]
+            objects: dict[int, list[tuple[float, float, float]]] = {}
 
             for x in range(self.width):
                 for y in range(self.height):
                     obj = self.grid.get(x, y)
+                    if (obj is None) or (obj.type in ignored_objects):
+                        continue
 
-                    # we do not include information about the positions of other agents or the goals in the map view
-                    if (obj is None) or obj.type in ["goal", "agent"]:
-                        obj_encoding: int = self.world.OBJECT_TO_IDX["empty"]
                     else:
                         obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
+                        if obj_encoding not in objects:
+                            objects[obj_encoding] = []
+                        if self.obs_type == "array_scaled":
+                            objects[obj_encoding].append(
+                                (
+                                    x / self.obs_scaling["x"],
+                                    y / self.obs_scaling["y"],
+                                )
+                            )
+                        else:
+                            objects[obj_encoding].append((x, y))
 
-                    if self.obs_type == "array_scaled":
-                        env_map[y, x, :] = np.array(
-                            [
-                                x / self.obs_scaling["x"],
-                                y / self.obs_scaling["y"],
-                                obj_encoding / self.obs_scaling["obj_encoding"],
-                            ]
-                        )
+            tmp_map = []
 
-                    else:
-                        env_map[y, x, :] = np.array([x, y, obj_encoding])
+            for obj_idx, positions in objects.items():
+                tmp_map.append(obj_idx / self.obs_scaling["obj_encoding"])
+                tmp_map += [item for tup in positions for item in tup]
+            env_map = np.array(tmp_map)
 
         elif self.obs_type in ["one_hot_array"]:
             env_map: NDArray[np.int_] = np.zeros(
