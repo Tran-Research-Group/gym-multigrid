@@ -529,6 +529,11 @@ class TeamNavigationEnv(MultiGridEnv):
         }
         self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
         self.init_grid: Grid
+        self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
+            "x": width - 1,
+            "y": height - 1,
+            "obj_encoding": max(world.OBJECT_TO_IDX.values()),
+        }
 
         super().__init__(
             agents=agents,
@@ -545,24 +550,12 @@ class TeamNavigationEnv(MultiGridEnv):
             [len(self.actions) for _ in range(self.num_agents)]
         )
 
-        self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
-            "x": self.width - 1,
-            "y": self.height - 1,
-            "obj_encoding": max(world.OBJECT_TO_IDX.values()),
-        }
-
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
         max_y: int = self.height - 1
 
+        obs_shape = self.reset()[0].shape
         if self.obs_type in ["array", "array_scaled"]:
-            obs_shape = (
-                self.num_agents,
-                2
-                + (self.height * self.width * self.world.encode_dim)
-                + (2 * len(self.hlmdp_config.subtask_data)),
-            )
-
             if self.obs_type == "array":
                 max_val = np.max((max_x, max_y))
             else:
@@ -575,8 +568,6 @@ class TeamNavigationEnv(MultiGridEnv):
             )
 
         elif self.obs_type in ["one_hot_array"]:
-            obs_shape = self.reset()[0].shape
-
             observation_space = spaces.Box(
                 low=np.zeros(obs_shape),
                 high=np.ones(obs_shape),
