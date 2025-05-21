@@ -651,14 +651,14 @@ class TeamNavigationEnv(MultiGridEnv):
             Detector(
                 obj_type="zone",
                 group_index=0,
-                visual_detect_prob=0.005,
+                visual_detect_prob=0.0,
                 radio_detect_prob=0.0,
             ),
             Detector(
                 obj_type="zone",
                 group_index=1,
-                visual_detect_prob=0.005,
-                radio_detect_prob=0.05,
+                visual_detect_prob=0.0,
+                radio_detect_prob=0.0,
             ),
         ]
 
