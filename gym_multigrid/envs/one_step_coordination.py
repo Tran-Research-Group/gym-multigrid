@@ -111,7 +111,7 @@ class OneStepCoordinationEnv(MultiGridEnv):
     def __init__(
         self,
         num_agent_groups: int = 2,
-        num_type_1_agents: int = 5,
+        num_type_1_agents: int | None = None,
         p_intended_movement: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         world: WorldT = TeamNavigationWorld,
@@ -143,15 +143,16 @@ class OneStepCoordinationEnv(MultiGridEnv):
             Render mode for the environment.
         """
         self.num_agent_groups = num_agent_groups
-        self.num_type_1_agents = num_type_1_agents
+        self.num_agents_per_group = 3
+
         self.p_intended_movement: float = p_intended_movement
         self.reward_config: RewardConfig = reward_config
 
-        self.num_agents_per_group = 3
         width: int = 7
         height: int = 3 * self.num_agent_groups + 1
         self.num_agents = self.num_agents_per_group * self.num_agent_groups
-        assert self.num_type_1_agents <= self.num_agents
+        if num_type_1_agents is None:
+            self.num_type_1_agents = self.num_agents
 
         # observation config
         self.obs_type: Literal["array"] = obs_type
@@ -217,7 +218,29 @@ class OneStepCoordinationEnv(MultiGridEnv):
 
         return agent_groups
 
-    def _assign_agent_types(self) -> None:
+    def _assign_agent_types_polynomial_cgs(self) -> None:
+        """assigns types to agents such that only one group of agents can all take the "down" action"""
+
+        # pick one of the agent groups at random
+        chosen_group_idx = self.np_random.choice(
+            list(self.agent_groups.keys()), size=1
+        )[0]
+
+        self.agent_types = {
+            i: [0] * self.num_agents_per_group for i in range(self.num_agent_groups)
+        }
+
+        # assign all agents in that group type
+        for agent in self.agent_groups[chosen_group_idx]:
+            agent.agent_type = 1
+
+            for group_idx, group in self.agent_groups.items():
+                if agent in group:
+                    agent_idx = group.index(agent)
+                    self.agent_types[group_idx][agent_idx] = 1
+
+    def _assign_agent_types_coordination_machines(self) -> None:
+        """assigns agent types uniformly randomly such that the number of groups that can take the "down" action is not constant across episodes"""
         agent_idxs: NDArray = np.array([agent.index for agent in self.agents])
 
         self.agent_types = {
@@ -240,9 +263,10 @@ class OneStepCoordinationEnv(MultiGridEnv):
                     self.agent_types[group_idx][agent_idx] = 1
 
     def _set_observation_space(self) -> spaces.Box:
+        obs_size = (self.num_agents, 1 + self.num_agent_groups)
         observation_space = spaces.Box(
-            low=np.zeros(self.num_agents),
-            high=np.ones(self.num_agents),
+            low=np.zeros(obs_size),
+            high=np.ones(obs_size),
             dtype=np.float32,
         )
 
@@ -273,7 +297,7 @@ class OneStepCoordinationEnv(MultiGridEnv):
         self.agent_groups = self._get_agent_groups()
 
         # assign agents to types
-        self._assign_agent_types()
+        self._assign_agent_types_polynomial_cgs()
 
         # make a list of all the objects you want to spawn in the env
         env_object_config = []
@@ -374,11 +398,21 @@ class OneStepCoordinationEnv(MultiGridEnv):
             self.place_agent(agent, agent.pos)
 
     def get_obs(self) -> Observation:
-        obs: NDArray[np.int_] = np.zeros((self.num_agents), dtype=np.int_)
+        obs_list: list = [[] for agent in self.agents]
 
         for agent_idx, agent in enumerate(self.agents):
-            obs[agent_idx] = agent.agent_type
+            obs_list[agent_idx].append(agent.agent_type)
 
+            # get one hot encoded version of agent's group ID
+            agent_group_obs = np.zeros(len(self.agent_groups))
+            for agent_group_idx, agent_group in self.agent_groups.items():
+                if agent in agent_group:
+                    agent_group_obs[agent_group_idx] = 1
+
+            obs_list[agent_idx] += [*agent_group_obs]
+
+        # convert to np array of size N x F
+        obs: NDArray = np.array(obs_list)
         return obs
 
     def _get_map(self) -> NDArray[np.int_]:
@@ -669,14 +703,21 @@ class OneStepCoordinationEnv(MultiGridEnv):
             # get the actions of the agents in this group
             agent_idxs: list[int] = [agent.index for agent in agents]
             group_action = actions[agent_idxs]
-            if np.array_equal(group_action, np.ones(len(group_action))):
+
+            down_action_bool: NDArray = group_action == self.actions.down
+
+            if np.array_equal(down_action_bool, np.ones(len(group_action))):
                 group_reward += self.reward_config.all_action_1
 
-            group_reward += self.reward_config.single_action_1 * np.sum(group_action)
+            group_reward += self.reward_config.single_action_1 * np.sum(
+                down_action_bool
+            )
 
             # if all agents are type 1 AND all took action 1, that group was successful
             if (
-                np.array_equal(self.agent_types[group_idx], np.ones(len(group_action)))
+                np.array_equal(
+                    self.agent_types[group_idx], np.ones(len(down_action_bool))
+                )
             ) and (group_reward == 1.0):
                 group_success[group_idx] = True
             # if any other group composition AND all took action 0, that group was successful
