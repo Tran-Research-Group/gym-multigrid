@@ -1,5 +1,5 @@
 from typing import Literal, Optional, TypedDict, TypeAlias
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import pdb
 import numpy as np
 from numpy.typing import NDArray
@@ -324,28 +324,13 @@ class StepInfo(TypedDict):
     success: bool
 
 
-@dataclass
 class RewardConfig:
-    movement_reward: float
-    agent_reach_goal_reward: float
-    agent_leave_goal_reward: float
-    all_agents_at_goal_reward: float
-
-
-# Env config
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=0.2,
-#     agent_leave_goal_reward=-0.3,
-#     all_agents_at_goal_reward=1.0,
-# )
-
-reward_config = RewardConfig(
-    movement_reward=0.0,
-    agent_reach_goal_reward=0.9,
-    agent_leave_goal_reward=-1.0,
-    all_agents_at_goal_reward=1.0,
-)
+    def __init__(self, num_agents: int) -> None:
+        self.movement_reward: float = 0.0
+        self.eps: float = 0.1
+        self.agent_reach_goal_reward: float = 1 / num_agents
+        self.agent_leave_goal_reward: float = 1 / num_agents + self.eps
+        self.all_agents_at_goal_reward: float = 1.0
 
 
 Observation: TypeAlias = (
@@ -453,7 +438,6 @@ class TeamNavigationEnv(MultiGridEnv):
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["goal", "all_goals"] = "all_goals",
         obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
-        reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -485,8 +469,6 @@ class TeamNavigationEnv(MultiGridEnv):
         agent_dir_to_vec : list[NDArray[np.int_]] = NAV_DIR_TO_VEC
             Direction vectors for the agents.
             The length of the list should be equal to the number of actions in the actions set.
-        reward_config: RewardConfig = reward_config
-            Configuration for conditions that cause the reward function to output non-zero reward
         world : WorldT = LabyrinthWorld
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
@@ -497,7 +479,8 @@ class TeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
-        self.reward_config: RewardConfig = reward_config
+
+        self.reward_config = RewardConfig(num_agents=self.num_agents)
 
         # observation config
         self.observation_option: Literal["goal"] = observation_option

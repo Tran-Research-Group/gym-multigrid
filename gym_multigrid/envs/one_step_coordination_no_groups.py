@@ -209,7 +209,8 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
             agent.agent_type = 1
 
     def _set_observation_space(self) -> spaces.Box:
-        obs_size = (self.num_agents, 2)
+        # num agents + num of agent types
+        obs_size = (self.num_agents, self.num_agents + 2)
         observation_space = spaces.Box(
             low=np.zeros(obs_size),
             high=np.ones(obs_size),
@@ -322,14 +323,20 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
             self.place_agent(agent, agent.pos)
 
     def get_obs(self) -> Observation:
-        obs_list: list = [[] for agent in self.agents]
+        obs_list: list = []
 
         for agent_idx, agent in enumerate(self.agents):
-            # one-hot representation of agent type
-            one_hot_obs = np.zeros(2)
-            one_hot_obs[agent.agent_type] = 1
+            # one-hot representation of num_type_1_thres (part of the environment state)
+            one_hot_thres = np.zeros(self.num_agents)
+            one_hot_thres[self.num_type_1_thres] = 1
 
-            obs_list[agent_idx].append(one_hot_obs)
+            # one-hot representation of agent type
+            one_hot_type = np.zeros(2)
+            one_hot_type[agent.agent_type] = 1
+
+            agent_obs = np.concatenate((one_hot_thres, one_hot_type))
+
+            obs_list.append(agent_obs)
 
         # convert to np array of size N x F
         obs: NDArray = np.array(obs_list)
