@@ -328,8 +328,8 @@ class RewardConfig:
     def __init__(self, num_agents: int) -> None:
         self.movement_reward: float = 0.0
         self.eps: float = 0.1
-        self.agent_reach_goal_reward: float = 1 / num_agents
-        self.agent_leave_goal_reward: float = 1 / num_agents + self.eps
+        self.agent_reach_goal_reward: float = 1.0 / num_agents
+        self.agent_leave_goal_reward: float = -1.0 / num_agents + self.eps
         self.all_agents_at_goal_reward: float = 1.0
 
 
@@ -538,7 +538,12 @@ class TeamNavigationEnv(MultiGridEnv):
         max_y: int = self.height - 1
 
         obs_shape = self.reset()[0].shape
-        if self.obs_type in ["array", "array_scaled"]:
+        if self.obs_type in [
+            "array",
+            "array_scaled",
+            "array_scaled_test_1",
+            "array_scaled_test_2",
+        ]:
             if self.obs_type == "array":
                 max_val = np.max((max_x, max_y))
             else:
@@ -558,7 +563,7 @@ class TeamNavigationEnv(MultiGridEnv):
             )
 
         else:
-            raise ValueError(f"Invalid observation option: {self.observation_option}")
+            raise ValueError(f"Invalid observation type: {self.observation_type}")
 
         return observation_space
 
@@ -692,7 +697,11 @@ class TeamNavigationEnv(MultiGridEnv):
                     [agent.pos, self.world.OBJECT_TO_IDX["agent"]], dtype=np.float32
                 )
 
-            elif self.obs_type == "array_scaled":
+            elif self.obs_type in [
+                "array_scaled",
+                "array_scaled_test_1",
+                "array_scaled_test_2",
+            ]:
                 agent_obs = np.array(
                     (
                         agent.pos[0] / self.obs_scaling["x"],
@@ -732,7 +741,11 @@ class TeamNavigationEnv(MultiGridEnv):
                 for _, data in self.hlmdp_config.subtask_data.items():
                     goal_state = data.final_state[agent_idx]
 
-                    if self.obs_type == "array_scaled":
+                    if self.obs_type in [
+                        "array_scaled",
+                        "array_scaled_test_1",
+                        "array_scaled_test_2",
+                    ]:
                         goal_state = (
                             goal_state[0] / self.obs_scaling["x"],
                             goal_state[1] / self.obs_scaling["y"],
@@ -753,7 +766,12 @@ class TeamNavigationEnv(MultiGridEnv):
                     ] = 1
 
             # add the static map to each agent's obs
-            if self.obs_type in ["array", "array_scaled"]:
+            if self.obs_type in [
+                "array",
+                "array_scaled",
+                "array_scaled_test_1",
+                "array_scaled_test_2",
+            ]:
                 agent_obs = np.append(agent_obs, self.static_map_obs)
 
                 if agent_idx == 0:
@@ -776,7 +794,12 @@ class TeamNavigationEnv(MultiGridEnv):
         return obs
 
     def _get_map(self) -> NDArray[np.int_]:
-        if self.obs_type in ["array", "array_scaled"]:
+        if self.obs_type in [
+            "array",
+            "array_scaled",
+            "array_scaled_test_1",
+            "array_scaled_test_2",
+        ]:
             # represent the map as a 1D vector where each object type is grouped as follows: map = [obj_type_0, obj_type_1, ...] where obj_type_i = [obj_type, x_0, y_0, x_1, y_1, ...]
             # you only include the object type one time in the observation to avoid redundant data the neural net would have to learn to ignore
             # None is equivalent to an "empty" space in the environment
@@ -786,22 +809,50 @@ class TeamNavigationEnv(MultiGridEnv):
             for x in range(self.width):
                 for y in range(self.height):
                     obj = self.grid.get(x, y)
-                    if (obj is None) or (obj.type in ignored_objects):
-                        continue
+                    if self.obs_type in [
+                        "array",
+                        "array_scaled",
+                        "array_scaled_test_1",
+                    ]:
+                        object_condition: bool = (obj is None) or (
+                            obj.type in ignored_objects
+                        )
 
+                    elif self.obs_type in ["array_scaled_test_2"]:
+                        object_condition: bool = (obj is not None) and (
+                            obj.type in ignored_objects
+                        )
+
+                    if object_condition:
+                        continue
                     else:
-                        obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
+                        if obj is None:
+                            obj_encoding: int = self.world.OBJECT_TO_IDX["empty"]
+                        else:
+                            obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
+
                         if obj_encoding not in objects:
                             objects[obj_encoding] = []
+
                         if self.obs_type == "array_scaled":
                             objects[obj_encoding].append(
                                 (
                                     x / self.obs_scaling["x"],
                                     y / self.obs_scaling["y"],
-                                )
+                                )  # type: ignore
                             )
+                        elif self.obs_type == "array_scaled_test_1":
+                            objects[obj_encoding].append(
+                                (
+                                    x / self.obs_scaling["x"],
+                                    y / self.obs_scaling["y"],
+                                    self.world.OBJECT_TO_IDX[obj.type]
+                                    / self.obs_scaling["obj_encoding"],
+                                )  # type: ignore
+                            )
+
                         else:
-                            objects[obj_encoding].append((x, y))
+                            objects[obj_encoding].append((x, y))  # type: ignore
 
             tmp_map = []
 
