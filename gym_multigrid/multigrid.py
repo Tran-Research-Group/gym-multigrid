@@ -1,22 +1,22 @@
-from abc import ABC, abstractmethod
 import math
 import warnings
-from typing import Generic, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
+from abc import ABC, abstractmethod
+from typing import Callable, Generic, Literal, SupportsFloat, Type, TypedDict, TypeVar
 
-import numpy as np
-from numpy.typing import NDArray
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
+from gymnasium.core import ActType, ObsType
 from gymnasium.spaces.space import Space, T_cov
-from gymnasium.core import ObsType, ActType
+from numpy.typing import NDArray
 
+from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
+from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, WorldT
-from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
-from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
 
 MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
@@ -390,7 +390,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         obj: WorldObjT,
         top: Position | None = None,
         size: tuple[int, int] | None = None,
-        reject_fn: Callable[["MultiGridEnv", NDArray], bool] | None = None,
+        reject_fn: Callable[["MultiGridEnv", Position], bool] | None = None,
         max_tries: float = math.inf,
     ):
         """
@@ -419,11 +419,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
             num_tries += 1
 
-            pos = np.array(
-                (
-                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
-                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
-                )
+            pos: Position = (
+                self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
+                self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
             )
 
             # Don't place the object on top of another object

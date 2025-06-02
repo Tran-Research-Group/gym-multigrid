@@ -1,14 +1,14 @@
-from typing import TypeVar, Final
+from typing import Final, TypeVar
+
 import numpy as np
 from numpy.typing import NDArray
 
+from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import *
-from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
 
-
-WorldObjT = TypeVar("WorldObjT", bound="WorldObj")
+WorldObjT = TypeVar("WorldObjT", bound="WorldObj", covariant=True)
 
 
 class WorldObj:
@@ -47,10 +47,20 @@ class WorldObj:
         self.init_bg_color: Final[str | None] = bg_color
 
         # Initial position of the object
-        self.init_pos: Final[Position | None] = None
+        self.init_pos: Position = (-1, -1)
 
         # Current position of the object
-        self._pos: Position | None = None
+        self._pos: Position = (-1, -1)
+
+    @property
+    def init_pos_undefined(self) -> bool:
+        """Check if the initial position of the object is undefined"""
+        return self.init_pos == (-1, -1)
+
+    @property
+    def pos_undefined(self) -> bool:
+        """Check if the current position of the object is undefined"""
+        return self.pos == (-1, -1)
 
     @property
     def pos(self):
@@ -151,7 +161,7 @@ class WorldObj:
         """Can the agent see behind this object?"""
         return True
 
-    def toggle(self, env, pos: Position):
+    def toggle(self, env, pos: Position) -> bool:
         """Method to trigger/toggle an action this object performs"""
         return False
 
@@ -177,7 +187,7 @@ class WorldObj:
     def decode(type_idx: int, color_idx: int, state: int):
         assert False, "not implemented"
 
-    def render(self, r: NDArray) -> None:
+    def render(self, img: NDArray[np.int_]) -> None:
         """Draw this object with the given renderer"""
         raise NotImplementedError
 
@@ -202,7 +212,7 @@ class ObjectGoal(WorldObj):
     def can_overlap(self):
         return False
 
-    def render(self, img: NDArray):
+    def render(self, img: NDArray[np.int_]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -218,7 +228,7 @@ class Goal(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray):
+    def render(self, img: NDArray[np.int_]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -229,7 +239,7 @@ class Switch(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray):
+    def render(self, img: NDArray[np.int_]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -244,7 +254,7 @@ class Floor(WorldObj):
     def can_overlap(self) -> bool:
         return True
 
-    def render(self, img: NDArray):
+    def render(self, img: NDArray[np.int_]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -264,7 +274,7 @@ class Lava(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray):
+    def render(self, img: NDArray[np.int_]):
         c = (255, 128, 0)
 
         # Background color
@@ -332,7 +342,7 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    def toggle(self, env, pos: Position):
+    def toggle(self, env, pos: Position) -> bool:
         # If the player has the right key to open the door
         if self.is_locked:
             if isinstance(env.carrying, Key) and env.carrying.color == self.color:

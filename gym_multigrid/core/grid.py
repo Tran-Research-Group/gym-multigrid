@@ -1,15 +1,16 @@
 # pylint: disable=line-too-long, dangerous-default-value, unused-wildcard-import, wildcard-import
-from typing import Type
 from copy import deepcopy
+from typing import Generic, Type
+
 import numpy as np
 
+from gym_multigrid.core.constants import TILE_PIXELS
+from gym_multigrid.core.object import Wall, WorldObj, WorldObjT
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.utils.rendering import *
-from gym_multigrid.core.object import WorldObj, Wall, WorldObjT
-from gym_multigrid.core.constants import TILE_PIXELS
 
 
-class Grid:
+class Grid(Generic[WorldT, WorldObjT]):
     """
     Represent a grid and operations on it
     """
@@ -32,11 +33,11 @@ class Grid:
         assert width >= 3
         assert height >= 3
 
-        self.width = width
-        self.height = height
-        self.world = world
+        self.width: int = width
+        self.height: int = height
+        self.world: WorldT = world
 
-        self.grid: list[WorldObjT | None] = [None] * width * height
+        self.grid: list[WorldObjT | None] = [None for _ in range(width * height)]
 
     def __contains__(self, key: type[WorldObjT] | tuple) -> bool:
         if isinstance(key, WorldObj):
@@ -53,12 +54,15 @@ class Grid:
                     return True
         return False
 
-    def __eq__(self, other: "Grid") -> bool:
+    def __eq__(self, other: object) -> bool:
         grid1 = self.encode()
-        grid2 = other.encode()
-        return np.array_equal(grid2, grid1)
+        if not isinstance(other, Grid):
+            return False
+        else:
+            grid2 = other.encode()
+            return np.array_equal(grid2, grid1)
 
-    def __ne__(self, other: "Grid") -> bool:
+    def __ne__(self, other: object) -> bool:
         return not self == other
 
     def copy(self) -> "Grid":

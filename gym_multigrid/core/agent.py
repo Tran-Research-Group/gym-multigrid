@@ -5,14 +5,13 @@ from typing import Type, TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
+from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import WorldObj, WorldObjT
 from gym_multigrid.core.world import WorldT
 from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
-from gym_multigrid.core.object import WorldObj
-from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
-
+from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
 
@@ -269,7 +268,7 @@ class Agent(WorldObj):
     def move(
         self,
         next_pos: Position,
-        grid: Grid,
+        grid: Grid[WorldT, WorldObjT],
         init_grid: Grid | None = None,
         dummy_move: bool = False,
         bg_color: str | None = None,
