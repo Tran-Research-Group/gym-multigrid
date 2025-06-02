@@ -1,35 +1,36 @@
 # pylint: disable=line-too-long, dangerous-default-value
-"""Defines the WildfireEnv class, which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire
-"""
+"""Defines the WildfireEnv class, which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire"""
 
+import random
 from collections import OrderedDict
 from typing import Any
-import random
 
-from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
 import numpy.typing as npt
+from gymnasium.spaces import Box, Dict, Discrete
 
-from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.core.world import WildfireWorld
-from gym_multigrid.core.agent import WildfireActions, Agent
-from gym_multigrid.core.object import Tree
-from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.agent import Actions, Agent, WildfireActions
 from gym_multigrid.core.constants import (
+    COLORS,
+    STATE_IDX_TO_COLOR_WILDFIRE,
     STATE_TO_IDX_WILDFIRE,
     TILE_PIXELS,
-    STATE_IDX_TO_COLOR_WILDFIRE,
-    COLORS,
+)
+from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import Tree
+from gym_multigrid.core.world import WildfireWorld
+from gym_multigrid.multigrid import MultiGridEnv
+from gym_multigrid.utils.misc import (
+    get_initial_fire_coordinates,
+    render_agent_tiles,
 )
 from gym_multigrid.utils.window import Window
-from gym_multigrid.utils.misc import (
-    render_agent_tiles,
-    get_initial_fire_coordinates,
-)
 
 
 class WildfireEnv(MultiGridEnv):
     """Grid environment which simulates dynamics of unmanned aerial vehicles (UAVs) fighting a spreading wildfire"""
+
+    helper_grid: Grid
 
     def __init__(
         self,
@@ -45,7 +46,7 @@ class WildfireEnv(MultiGridEnv):
         initial_fire_size: int = 1,
         max_steps: int = 100,
         partial_obs: bool = False,
-        actions_set: WildfireActions = WildfireActions,
+        actions_set: type[Actions] = WildfireActions,
         render_mode: str = "rgb_array",
         render_selfish_region_boundaries: bool = False,
         cooperative_reward: bool = False,
@@ -205,7 +206,6 @@ class WildfireEnv(MultiGridEnv):
             world=self.world,
             render_mode=render_mode,
         )
-        self.helper_grid = None
         self.observation_space: Box | Dict = self._set_observation_space()
         self.action_space = Dict(
             {f"{a.index}": Discrete(len(self.actions)) for a in self.agents}
@@ -360,14 +360,16 @@ class WildfireEnv(MultiGridEnv):
                 if self.agent_groups:
                     for i, _ in enumerate(self.agent_groups):
                         if self.in_selfish_region(
-                            *(tree_obj.pos), i  # pylint: disable=not-an-iterable
+                            *(tree_obj.pos),
+                            i,  # pylint: disable=not-an-iterable
                         ):
                             tree_obj.region = f"{i}"
                             break
                 else:
                     for a in self.agents:
                         if self.in_selfish_region(
-                            *(tree_obj.pos), a.index  # pylint: disable=not-an-iterable
+                            *(tree_obj.pos),
+                            a.index,  # pylint: disable=not-an-iterable
                         ):
                             tree_obj.region = f"{a.index}"
                             break
@@ -532,13 +534,13 @@ class WildfireEnv(MultiGridEnv):
             for j in range(self.grid_size):
                 if state[1, j, i] == 1:
                     if print_interpretation:
-                        print(f"Tree at position {(i,j)} is on fire.")
+                        print(f"Tree at position {(i, j)} is on fire.")
                     trees_on_fire.append((i, j))
                 for o in self.agents:
                     index = o.index
                     if state[len(STATE_IDX_TO_COLOR_WILDFIRE) + 1 + index, j, i] == 1:
                         if print_interpretation:
-                            print(f"Agent {o.index} is at position {(i,j)}.")
+                            print(f"Agent {o.index} is at position {(i, j)}.")
         if print_interpretation:
             print(f"Time step: {time_step}")
             print("-------------------------------------------------------------")
@@ -634,13 +636,7 @@ class WildfireEnv(MultiGridEnv):
             self.selfish_region_burnt_trees = np.zeros(len(self.selfish_xmin))
 
         # parse options
-        if options is not None:
-            state = options["state"]
-            # reset the grid with the specified state
-            super().reset(seed=seed, options={"state": state})
-        else:
-            # reset the grid with a random state
-            super().reset(seed=seed)
+        super().reset(seed=seed)
 
         # get agent observations
         agent_obs = self._get_obs()

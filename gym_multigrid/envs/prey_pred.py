@@ -371,7 +371,7 @@ DEFAULT_PREY_TYPES: list[PreyType] = [
 ]
 
 
-class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
+class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
     """
     Environment in which the predator must catch the prey.
 

@@ -81,19 +81,20 @@ class ResetOptions(TypedDict):
 
 class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
     @staticmethod
-    def observation_space(env: MultiGridEnv) -> spaces.Box:
+    def observation_space(env: MultiGridEnv[NDArray[np.int64]]) -> spaces.Box:
         return spaces.Box(
             low=0,
-            high=len(MazeWorld.OBJECT_TO_IDX) - 1,
+            high=len(env.world.OBJECT_TO_IDX) - 1,
             shape=(2, env.height, env.width),
             dtype=np.int64,
         )
 
     @staticmethod
-    def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
+    def create_observation(env: MultiGridEnv[NDArray[np.int64]]) -> NDArray[np.int64]:
         observation: NDArray[np.int64] = np.zeros(
             (2, env.height, env.width), dtype=np.int64
         )
+
         observation[0, :, :] = env.layout.static_obs
         for agent in env.agents:
             if agent.pos is not None:
@@ -142,7 +143,7 @@ DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
 }
 
 
-class MazeEnv(MultiGridEnv):
+class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
     """
     Multi-agent grid world environment with a maze layout to navigate through to reach the flags.
 

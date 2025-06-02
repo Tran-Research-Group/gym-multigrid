@@ -19,6 +19,7 @@ from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces.space import Space, T_cov
 from numpy.typing import NDArray
+from pydantic import BaseModel, Field
 
 from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
 from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
@@ -28,13 +29,11 @@ from gym_multigrid.core.world import DefaultWorld, World
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
 
-MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
-
-class ObservationMode(Generic[T_cov], ABC):
+class ObservationMode(Generic[ObsType], ABC):
     @staticmethod
     @abstractmethod
-    def observation_space(env: gym.Env[ObsType, ActType]) -> Space[T_cov]: ...
+    def observation_space(env: "MultiGridEnv[ObsType]") -> Space: ...
 
     """
     Define the observation space of the environment.
@@ -52,7 +51,7 @@ class ObservationMode(Generic[T_cov], ABC):
 
     @staticmethod
     @abstractmethod
-    def create_observation(env: gym.Env[ObsType, ActType]) -> T_cov: ...
+    def create_observation(env: "MultiGridEnv[ObsType]") -> ObsType: ...
 
     """
     Create an observation from the environment.
@@ -64,7 +63,7 @@ class ObservationMode(Generic[T_cov], ABC):
 
     Returns
     -------
-    observation: T_cov
+    observation: ObsType
         The observation
     """
 
@@ -287,11 +286,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ) -> tuple[ObsType, dict]:
-        raise NotImplementedError(
-            "reset is not implemented in the base class. "
-            "Please implement it in your own environment."
-        )
+    ) -> tuple[ObsType, dict[str, Any]]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
         # If you only use this RNG, you do not need to worry much about seeding,
@@ -312,16 +307,18 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self.step_count: int = 0
 
         # Return first observation
-        if self.partial_obs:
-            obs = self.gen_obs()
-        else:
-            obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-                for i in range(len(self.agents))
-            ]
-        obs = [self.world.normalize_obs * ob for ob in obs]
-        info = self._get_info()
-        return obs, info
+        # if self.partial_obs:
+        #     obs = self.gen_obs()
+        # else:
+        #     obs = [
+        #         self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
+        #         for i in range(len(self.agents))
+        #     ]
+        # obs = [self.world.normalize_obs * ob for ob in obs]
+        # info = self._get_info()
+        # return obs, info
+
+        return None, None  # type: ignore
 
     def _get_obs(self) -> ObsType:
         """
