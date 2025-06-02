@@ -241,7 +241,7 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
 
         self.num_type_1_agents = self.np_random.choice(
-            np.arange(0, self.num_agents + 1)
+            np.arange(1, self.num_agents + 1)
         )
 
         # assign agents to types

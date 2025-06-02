@@ -329,7 +329,7 @@ class RewardConfig:
         self.movement_reward: float = 0.0
         self.eps: float = 0.1
         self.agent_reach_goal_reward: float = 1.0 / num_agents
-        self.agent_leave_goal_reward: float = -1.0 / num_agents + self.eps
+        self.agent_leave_goal_reward: float = -1.0 * (1.0 / num_agents + self.eps)
         self.all_agents_at_goal_reward: float = 1.0
 
 
@@ -432,6 +432,9 @@ class TeamNavigationEnv(MultiGridEnv):
         width: int = 7,
         num_agents: int = 2,
         p_intended_movement: float = 0.95,
+        p_detect_visual_blue: float = 0.005,
+        p_detect_visual_red: float = 0.005,
+        zone_width: int = 1,
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
@@ -479,6 +482,10 @@ class TeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
+        print(p_detect_visual_blue)
+        self.p_detect_visual_blue = p_detect_visual_blue
+        self.p_detect_visual_red = p_detect_visual_red
+        self.zone_width = zone_width
 
         self.reward_config = RewardConfig(num_agents=self.num_agents)
 
@@ -608,7 +615,7 @@ class TeamNavigationEnv(MultiGridEnv):
             EnvObjectGroup(
                 obj_type="zone",
                 group_index=0,
-                pos=((4, 1, 1, 6),),
+                pos=((4, 1, self.zone_width, 6),),
                 color="blue",
                 spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
@@ -617,7 +624,7 @@ class TeamNavigationEnv(MultiGridEnv):
             EnvObjectGroup(
                 obj_type="zone",
                 group_index=1,
-                pos=((4, 8, 1, 6),),
+                pos=((4, 8, self.zone_width, 6),),
                 color="red",
                 spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
@@ -629,13 +636,13 @@ class TeamNavigationEnv(MultiGridEnv):
             Detector(
                 obj_type="zone",
                 group_index=0,
-                visual_detect_prob=0.0,
+                visual_detect_prob=self.p_detect_visual_blue,
                 radio_detect_prob=0.0,
             ),
             Detector(
                 obj_type="zone",
                 group_index=1,
-                visual_detect_prob=0.0,
+                visual_detect_prob=self.p_detect_visual_red,
                 radio_detect_prob=0.0,
             ),
         ]
