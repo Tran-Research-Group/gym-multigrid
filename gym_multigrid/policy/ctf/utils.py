@@ -1,12 +1,12 @@
 from heapq import heapify, heappop, heappush
-from typing import NamedTuple, Union, Literal
+from typing import Literal, NamedTuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
 
+from gym_multigrid.core.world import World
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
-from gym_multigrid.core.world import WorldT
 
 
 class AStarNode(NamedTuple):
@@ -21,7 +21,7 @@ def a_star(
     start: Position,
     end: Position,
     field_map: NDArray[np.int_],
-    world: WorldT,
+    world: World,
     avoided_objects: list[str] = ["obstacle", "blue_agent", "red_agent"],
 ) -> list[Position]:
     """
@@ -35,7 +35,7 @@ def a_star(
         End position
     field_map : NDArray[np.int_]
         Map of the environment
-    world : WorldT
+    world : World
         World object
 
     Returns
@@ -178,7 +178,7 @@ def loc_can_overlap(
     loc: Position,
     end_loc: Position,
     field_map: NDArray[np.int_],
-    world: WorldT,
+    world: World,
     avoided_objects: list[str],
 ) -> bool:
     """
@@ -195,7 +195,7 @@ def loc_can_overlap(
         End location
     field_map: NDArray[np.int_]
         Map of the environment
-    world: WorldT
+    world: World
         World object
     avoided_objects: list[str]
         List of objects to avoid

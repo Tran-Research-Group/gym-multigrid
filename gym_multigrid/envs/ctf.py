@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import Agent, AgentT, CtfActions, PolicyAgent
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObj
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicyT, RwPolicy
@@ -870,7 +870,7 @@ class CtfMvNEnv(MultiGridEnv):
         ):
             pass
         else:
-            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+            next_cell: WorldObj | None = self.grid.get(*next_pos)
 
             is_agent_in_blue_territory: bool = self._is_agent_in_territory(
                 agent.type, "blue", next_pos

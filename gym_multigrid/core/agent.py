@@ -1,19 +1,19 @@
 import enum
 import math
-from typing import Type, TypeVar
+from typing import Type, TypeAlias, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import WorldObj, WorldObjT
-from gym_multigrid.core.world import WorldT
-from gym_multigrid.policy.base import AgentPolicyT
+from gym_multigrid.core.object import WorldObj
+from gym_multigrid.core.world import World
+from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
 
-ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)
+Actions: TypeAlias = enum.IntEnum
 
 
 class DefaultActions(enum.IntEnum):
@@ -105,10 +105,10 @@ class Agent(WorldObj):
 
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         index: int = 0,
         view_size: int | None = None,
-        actions: Type[ActionsT] = DefaultActions,
+        actions: Type[Actions] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
         bg_color: str | None = None,
@@ -118,13 +118,13 @@ class Agent(WorldObj):
 
         Parameters
         ----------
-        world : WorldT
+        world : World
             the world within which grid is situated
         index : int, optional
             a number useful to identify the instantiated agent, by default 0
         view_size : int, optional
             the size of agent view, if partial observability holds, by default 7
-        actions : Type[ActionsT], optional
+        actions : Type[Actions], optional
             set of actions available to the agent, by default DefaultActions
         dir_to_vec : list[NDArray], optional
             map of agent direction indices to vectors, by default DIR_TO_VEC
@@ -141,8 +141,8 @@ class Agent(WorldObj):
             pass
 
         super().__init__(world, type, color, bg_color)
-        self.dir: int | None = None
-        self.init_dir: int | None = None
+        self.dir: int = 0
+        self.init_dir: int = 0
         self.index = index
         self.view_size = view_size
         self.carrying = None
@@ -168,8 +168,8 @@ class Agent(WorldObj):
         - collided: False
         """
         super().reset()
-        self.dir = None
-        self.init_dir = None
+        self.dir = 0
+        self.init_dir = 0
         self.carrying = None
         self.terminated = False
         self.started = True
@@ -211,7 +211,7 @@ class Agent(WorldObj):
             img, tri_fn, c, self.world.COLORS[self.bg_color] if self.bg_color else None
         )
 
-    def encode(self, current_agent=False):
+    def encode(self, current_agent: bool = False) -> tuple[int, ...]:
         """Encode a description of this object as a 3-tuple of integers
 
         Parameters
@@ -268,7 +268,7 @@ class Agent(WorldObj):
     def move(
         self,
         next_pos: Position,
-        grid: Grid[WorldT, WorldObjT],
+        grid: Grid,
         init_grid: Grid | None = None,
         dummy_move: bool = False,
         bg_color: str | None = None,
@@ -306,13 +306,14 @@ class Agent(WorldObj):
         else:
             self.pos = next_pos
 
-        assert self.pos is not None
         grid.set(*self.pos, self)
 
         self.bg_color = bg_color
 
-        if init_grid is not None and init_grid.get(*self.pos) is not None:
-            self.bg_color = init_grid.get(*self.pos).bg_color if init_grid else bg_color
+        if init_grid is not None:
+            obj = init_grid.get(*self.pos)
+            if isinstance(obj, WorldObj):
+                self.bg_color = obj.bg_color
 
     @property
     def dir_vec(self):
@@ -326,7 +327,6 @@ class Agent(WorldObj):
             the direction vector for forward movement in the current orientation of the agent
         """
 
-        assert self.dir is not None
         assert self.dir >= 0 and self.dir < len(self.dir_to_vec)
         return self.dir_to_vec[self.dir]
 
@@ -376,12 +376,12 @@ class Agent(WorldObj):
             the coordinates of the grid in the agent's view
         """
 
-        assert self.pos is not None
         ax, ay = self.pos
         dx, dy = self.dir_vec
         rx, ry = self.right_vec
 
         # Compute the absolute coordinates of the top-left view corner
+        assert self.view_size is not None
         sz = self.view_size
         hs = self.view_size // 2
         tx = ax + (dx * (sz - 1)) - (rx * hs)
@@ -408,7 +408,7 @@ class Agent(WorldObj):
             the extents of the square set of tiles visible to the agent
         """
 
-        assert self.pos is not None
+        assert self.view_size is not None
 
         # Facing right
         if self.dir == 0:
@@ -477,7 +477,9 @@ class Agent(WorldObj):
 
         return self.relative_coords(x, y) is not None
 
-    def dir2vec(self, direction: int, in_tuple: bool = False) -> NDArray[np.int_]:
+    def dir2vec(
+        self, direction: int, in_tuple: bool = False
+    ) -> NDArray[np.int_] | tuple[int, int]:
         """
         Get the vector corresponding to the given direction
         """
@@ -505,11 +507,11 @@ class PolicyAgent(Agent):
 
     def __init__(
         self,
-        policy: AgentPolicyT,
-        world: WorldT,
+        policy: AgentPolicy,
+        world: World,
         index: int = 0,
         view_size: int | None = None,
-        actions: type[ActionsT] = DefaultActions,
+        actions: type[Actions] = DefaultActions,
         dir_to_vec: list[NDArray] = DIR_TO_VEC,
         color: str | None = None,
         bg_color: str | None = None,
@@ -519,15 +521,15 @@ class PolicyAgent(Agent):
 
         Parameters
         ----------
-        policy : AgentPolicyT
+        policy : AgentPolicy
             the policy that determines the agent's actions
-        world : WorldT
+        world : World
             the world within which grid is situated
         index : int, optional
             a number useful to identify the instantiated agent, by default 0
         view_size : int, optional
             the size of agent view, if partial observability holds, by default 7
-        actions : type[ActionsT], optional
+        actions : type[Actions], optional
             set of actions available to the agent, by default DefaultActions
         dir_to_vec : list[NDArray], optional
             map of agent direction indices to vectors, by default DIR_TO_VEC
@@ -541,7 +543,7 @@ class PolicyAgent(Agent):
         super().__init__(
             world, index, view_size, actions, dir_to_vec, color, bg_color, type
         )
-        self.policy: AgentPolicyT = policy
+        self.policy: AgentPolicy = policy
 
     def reset(self) -> None:
         super().reset()

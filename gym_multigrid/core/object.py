@@ -1,14 +1,17 @@
-from typing import Final, TypeVar
+from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
-from gym_multigrid.core.world import WorldT
+from gym_multigrid.core.world import World
 from gym_multigrid.typing import Position
-from gym_multigrid.utils.rendering import *
-
-WorldObjT = TypeVar("WorldObjT", bound="WorldObj", covariant=True)
+from gym_multigrid.utils.rendering import (
+    fill_coords,
+    point_in_circle,
+    point_in_line,
+    point_in_rect,
+)
 
 
 class WorldObj:
@@ -18,7 +21,7 @@ class WorldObj:
 
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         type: str = "base",
         color: str = "grey",
         bg_color: str | None = None,
@@ -27,7 +30,7 @@ class WorldObj:
 
         Parameters
         ----------
-        world : WorldT
+        world : World
             the world in which the object exists
         type : str, optional
             type of the object, by default "base"
@@ -187,7 +190,7 @@ class WorldObj:
     def decode(type_idx: int, color_idx: int, state: int):
         assert False, "not implemented"
 
-    def render(self, img: NDArray[np.int_]) -> None:
+    def render(self, img: NDArray[np.uint8]) -> None:
         """Draw this object with the given renderer"""
         raise NotImplementedError
 
@@ -195,7 +198,7 @@ class WorldObj:
 class ObjectGoal(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         index: int,
         target_type: str = "ball",
         reward: float = 1,
@@ -212,12 +215,12 @@ class ObjectGoal(WorldObj):
     def can_overlap(self):
         return False
 
-    def render(self, img: NDArray[np.int_]):
+    def render(self, img: NDArray[np.uint8]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Goal(WorldObj):
-    def __init__(self, world: WorldT, index: int, reward=1, color=None):
+    def __init__(self, world: World, index: int, reward=1, color=None):
         if color is None:
             super().__init__(world, "goal", world.IDX_TO_COLOR[index])
         else:
@@ -228,18 +231,18 @@ class Goal(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.int_]):
+    def render(self, img: NDArray[np.uint8]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
 class Switch(WorldObj):
-    def __init__(self, world: WorldT):
+    def __init__(self, world: World):
         super().__init__(world, "switch", world.IDX_TO_COLOR[0])
 
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.int_]):
+    def render(self, img: NDArray[np.uint8]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -248,13 +251,13 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
 
-    def __init__(self, world: WorldT, color: str = "blue", type: str = "floor"):
+    def __init__(self, world: World, color: str = "blue", type: str = "floor"):
         super().__init__(world, type, color, color)
 
     def can_overlap(self) -> bool:
         return True
 
-    def render(self, img: NDArray[np.int_]):
+    def render(self, img: NDArray[np.uint8]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -263,18 +266,18 @@ class Zone(Floor):
     Alias for Floor
     """
 
-    def __init__(self, world: WorldT, color: str = "blue", type: str = "zone"):
+    def __init__(self, world: World, color: str = "blue", type: str = "zone"):
         super().__init__(world, color, type)
 
 
 class Lava(WorldObj):
-    def __init__(self, world: WorldT):
+    def __init__(self, world: World):
         super().__init__(world, "lava", "red")
 
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.int_]):
+    def render(self, img: NDArray[np.uint8]):
         c = (255, 128, 0)
 
         # Background color
@@ -291,7 +294,7 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, world: WorldT, type: str = "wall", color: str = "grey"):
+    def __init__(self, world: World, type: str = "wall", color: str = "grey"):
         super().__init__(world, type, color)
 
     def see_behind(self):
@@ -304,7 +307,7 @@ class Wall(WorldObj):
 class Obstacle(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         penalty: float = 0,
         can_see_through: bool = True,
         color: str = "grey",
@@ -326,7 +329,7 @@ class Obstacle(WorldObj):
 class Door(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         color: str,
         is_open: bool = False,
         is_locked: bool = False,
@@ -403,7 +406,7 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
-    def __init__(self, world: WorldT, color: str = "blue"):
+    def __init__(self, world: World, color: str = "blue"):
         super(Key, self).__init__(world, "key", color)
 
     def can_pickup(self):
@@ -425,7 +428,7 @@ class Key(WorldObj):
 
 
 class Ball(WorldObj):
-    def __init__(self, world: WorldT, index: int = 0, reward: float = 2):
+    def __init__(self, world: World, index: int = 0, reward: float = 2):
         super().__init__(world, "ball", world.IDX_TO_COLOR[index])
         self.index = index
         self.reward = reward
@@ -441,7 +444,7 @@ class Ball(WorldObj):
 
 
 class Box(WorldObj):
-    def __init__(self, world: WorldT, color: str, contains=None):
+    def __init__(self, world: World, color: str, contains=None):
         super(Box, self).__init__(world, "box", color)
         self.contains = contains
 
@@ -467,7 +470,7 @@ class Box(WorldObj):
 class Flag(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         index: int,
         type: str = "flag",
         color: str = "blue",
@@ -494,7 +497,7 @@ class Flag(WorldObj):
 class Tree(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         tree_state_idx: int = 0,
         region: str = "common",
     ):
@@ -522,7 +525,7 @@ class Tree(WorldObj):
 class AgentGoal(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         type: str = "goal",
         color: str = "green",
         bg_color: str | None = None,
@@ -539,7 +542,7 @@ class AgentGoal(WorldObj):
 class SimpleDoor(WorldObj):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         color: str = "light_grey",
         type: str = "door",
     ):

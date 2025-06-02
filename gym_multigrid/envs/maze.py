@@ -1,14 +1,14 @@
 from dataclasses import dataclass
-from typing import Final, Literal, TypedDict, TypeAlias, cast
+from typing import Final, Literal, TypeAlias, TypedDict, cast
 
-from gymnasium import Space, spaces
 import numpy as np
+from gymnasium import Space, spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import ActionsT, Agent, AgentT, MazeActions
+from gym_multigrid.core.agent import Actions, Agent, AgentT, MazeActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Flag, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Obstacle, WorldObj
 from gym_multigrid.core.world import MazeWorld, World
 from gym_multigrid.multigrid import (
     DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
@@ -290,7 +290,7 @@ class MazeEnv(MultiGridEnv):
         """
 
         world: Final[World] = MazeWorld
-        action_set: ActionsT = MazeActions
+        action_set: Actions = MazeActions
 
         self.layout_config_dict: LayoutConfig = layout_config
         self.layout = Layout(**layout_config)
@@ -379,7 +379,6 @@ class MazeEnv(MultiGridEnv):
     def reset(
         self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[Observation, dict[str, float]]:
-
         if options is not None:
             if "layout_config" in options:
                 self.layout_config_dict.update(options["layout_config"])
@@ -436,7 +435,7 @@ class MazeEnv(MultiGridEnv):
         ):
             pass  # Do nothing
         else:
-            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+            next_cell: WorldObj | None = self.grid.get(*next_pos)
 
             if next_cell is None:
                 agent.move(next_pos, self.grid, self.init_grid)
@@ -473,7 +472,6 @@ class MazeEnv(MultiGridEnv):
     def step(
         self, action: int | list[int]
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-
         actions: list[int] = np.array([action]).flatten().tolist()
 
         self._move_agents(actions)

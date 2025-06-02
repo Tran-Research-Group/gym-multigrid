@@ -1,24 +1,30 @@
 # pylint: disable=line-too-long, dangerous-default-value, unused-wildcard-import, wildcard-import
 from copy import deepcopy
-from typing import Generic, Type
+from typing import Type
 
 import numpy as np
+from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import TILE_PIXELS
-from gym_multigrid.core.object import Wall, WorldObj, WorldObjT
-from gym_multigrid.core.world import WorldT
-from gym_multigrid.utils.rendering import *
+from gym_multigrid.core.object import Wall, WorldObj
+from gym_multigrid.core.world import World
+from gym_multigrid.utils.rendering import (
+    downsample,
+    fill_coords,
+    highlight_img,
+    point_in_rect,
+)
 
 
-class Grid(Generic[WorldT, WorldObjT]):
+class Grid:
     """
     Represent a grid and operations on it
     """
 
     # Static cache of pre-renderer tiles
-    tile_cache = {}
+    tile_cache: dict[tuple, NDArray[np.uint8]] = {}
 
-    def __init__(self, width: int, height: int, world: WorldT):
+    def __init__(self, width: int, height: int, world: World):
         """Create a grid of a given width and height in given world
 
         Parameters
@@ -27,7 +33,7 @@ class Grid(Generic[WorldT, WorldObjT]):
             width of the grid
         height : int
             height of the grid
-        world : WorldT
+        world : World
             world object in which the grid is situated
         """
         assert width >= 3
@@ -35,11 +41,11 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         self.width: int = width
         self.height: int = height
-        self.world: WorldT = world
+        self.world: World = world
 
-        self.grid: list[WorldObjT | None] = [None for _ in range(width * height)]
+        self.grid: list[WorldObj | None] = [None for _ in range(width * height)]
 
-    def __contains__(self, key: type[WorldObjT] | tuple) -> bool:
+    def __contains__(self, key: WorldObj | tuple) -> bool:
         if isinstance(key, WorldObj):
             for e in self.grid:
                 if e is key:
@@ -76,7 +82,7 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         return deepcopy(self)
 
-    def set(self, i: int, j: int, v: WorldObjT | None) -> None:
+    def set(self, i: int, j: int, v: WorldObj | None) -> None:
         """Insert the given object at the given position in the grid
 
         Parameters
@@ -85,14 +91,14 @@ class Grid(Generic[WorldT, WorldObjT]):
             x-coordinate of the position
         j : int
             y-coordinate of the position
-        v : WorldObjT | None
+        v : WorldObj | None
             object to be inserted
         """
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
         self.grid[j * self.width + i] = v
 
-    def get(self, i: int, j: int) -> WorldObjT | None:
+    def get(self, i: int, j: int) -> WorldObj | None:
         """Get the object at the given position in the grid
 
         Parameters
@@ -104,7 +110,7 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         Returns
         -------
-        WorldObjT | None
+        WorldObj | None
             object at the given position in the grid
         """
         assert i >= 0 and i < self.width
@@ -116,7 +122,7 @@ class Grid(Generic[WorldT, WorldObjT]):
         x: int,
         y: int,
         length: int | None = None,
-        obj_type: Type[WorldObjT] = Wall,
+        obj_type: Type[WorldObj] = Wall,
     ) -> None:
         """Create a horizontal wall starting from given point (x, y) and of given length.
 
@@ -128,7 +134,7 @@ class Grid(Generic[WorldT, WorldObjT]):
             y-coordinate of the starting point
         length : int | None, optional
             length of the wall, by default None
-        obj_type : Type[WorldObjT], optional
+        obj_type : Type[WorldObj], optional
             type of object to be inserted, by default Wall
         """
         if length is None:
@@ -144,7 +150,7 @@ class Grid(Generic[WorldT, WorldObjT]):
         x: int,
         y: int,
         length: int | None = None,
-        obj_type: Type[WorldObjT] = Wall,
+        obj_type: Type[WorldObj] = Wall,
     ):
         """Create a vertical wall starting from given point (x, y) and of given length.
 
@@ -156,7 +162,7 @@ class Grid(Generic[WorldT, WorldObjT]):
             y-coordinate of the starting point
         length : int | None, optional
             length of the wall, by default None
-        obj_type : Type[WorldObjT], optional
+        obj_type : Type[WorldObj], optional
             type of object to be inserted, by default Wall
         """
         if length is None:
@@ -166,7 +172,7 @@ class Grid(Generic[WorldT, WorldObjT]):
             wall_obj.pos = (x, y + j)
             self.set(x, y + j, wall_obj)
 
-    def rect_filled(self, x: int, y: int, w: int, h: int, obj: WorldObjT) -> None:
+    def rect_filled(self, x: int, y: int, w: int, h: int, obj: WorldObj) -> None:
         for i in range(w):
             for j in range(h):
                 self.set(x + i, y + j, obj)
@@ -244,9 +250,9 @@ class Grid(Generic[WorldT, WorldObjT]):
     @classmethod
     def render_tile(
         cls,
-        world: WorldT,
-        obj: WorldObjT | None,
-        highlights: list[bool] = None,
+        world: World,
+        obj: WorldObj | None,
+        highlights: list[bool] = [],
         tile_size: int = TILE_PIXELS,
         subdivs: int = 3,
         cache: bool = True,
@@ -258,9 +264,9 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         Parameters
         ----------
-        world : WorldT
+        world : World
             world object in which the grid is situated
-        obj : WorldObjT | None
+        obj : WorldObj | None
             object to be rendered
         highlights : list[bool], optional
             list of booleans indicating whether to highlight the tile, by default None
@@ -280,13 +286,13 @@ class Grid(Generic[WorldT, WorldObjT]):
         key = (*highlights, tile_size)
         key = obj.encode() + key if obj else key
         if cell_location != 0:
-            key = (key, (cell_location, selfish_boundary_color.tobytes()))
+            key = (key, (cell_location, np.array(selfish_boundary_color).tobytes()))
 
         # Return the cached tile if it exists
         if key in cls.tile_cache:
             return cls.tile_cache[key]
 
-        img = np.zeros(
+        img: NDArray[np.uint8] = np.zeros(
             shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8
         )
 
@@ -333,12 +339,12 @@ class Grid(Generic[WorldT, WorldObjT]):
         self,
         tile_size,
         highlight_masks=None,
-        uncached_object_types: list[str] = None,
-        x_min: list[int] = None,
-        y_min: list[int] = None,
-        x_max: list[int] = None,
-        y_max: list[int] = None,
-        colors: list[tuple[int, int, int]] = None,
+        uncached_object_types: list[str] = [],
+        x_min: list[int] = [],
+        y_min: list[int] = [],
+        x_max: list[int] = [],
+        y_max: list[int] = [],
+        colors: list[tuple[int, int, int]] = [],
     ):
         """
         Render this grid at a given scale
@@ -433,7 +439,7 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         return img
 
-    def encode(self, vis_mask: np.ndarray[bool] | None = None) -> np.ndarray:
+    def encode(self, vis_mask: NDArray[np.bool] | None = None) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
 
@@ -470,12 +476,12 @@ class Grid(Generic[WorldT, WorldObjT]):
                             array[i, j, 5] = 0
 
                     else:
-                        array[i, j, :] = v.encode(self.world)
+                        array[i, j, :] = v.encode()
 
         return array
 
     def encode_for_agents(
-        self, agent_pos: tuple[int, int], vis_mask: np.ndarray[bool] | None = None
+        self, agent_pos: tuple[int, int], vis_mask: NDArray[np.bool] | None = None
     ) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
@@ -493,7 +499,7 @@ class Grid(Generic[WorldT, WorldObjT]):
             compact numpy encoding of the grid
         """
         if vis_mask is None:
-            vis_mask = np.ones((self.width, self.height), dtype=bool)
+            vis_mask = np.ones((self.width, self.height), dtype=np.bool)
 
         array = np.zeros(
             (self.width, self.height, self.world.encode_dim), dtype="uint8"
@@ -520,7 +526,7 @@ class Grid(Generic[WorldT, WorldObjT]):
 
         return array
 
-    def process_vis(self, grid: "Grid", agent_pos: tuple[int, int]) -> np.ndarray[bool]:
+    def process_vis(self, agent_pos: tuple[int, int]) -> NDArray[np.bool]:
         """Returns a mask of the visible cells in the grid
 
         Parameters
@@ -535,16 +541,16 @@ class Grid(Generic[WorldT, WorldObjT]):
         np.ndarray[bool]
             mask of the visible cells in the grid
         """
-        mask = np.zeros(shape=(grid.width, grid.height), dtype=bool)
+        mask = np.zeros(shape=(self.width, self.height), dtype=bool)
 
         mask[agent_pos[0], agent_pos[1]] = True
 
-        for j in reversed(range(0, grid.height)):
-            for i in range(0, grid.width - 1):
+        for j in reversed(range(0, self.height)):
+            for i in range(0, self.width - 1):
                 if not mask[i, j]:
                     continue
 
-                cell = grid.get(i, j)
+                cell = self.get(i, j)
                 if cell and not cell.see_behind():
                     continue
 
@@ -553,11 +559,11 @@ class Grid(Generic[WorldT, WorldObjT]):
                     mask[i + 1, j - 1] = True
                     mask[i, j - 1] = True
 
-            for i in reversed(range(1, grid.width)):
+            for i in reversed(range(1, self.width)):
                 if not mask[i, j]:
                     continue
 
-                cell = grid.get(i, j)
+                cell = self.get(i, j)
                 if cell and not cell.see_behind():
                     continue
 
@@ -566,9 +572,9 @@ class Grid(Generic[WorldT, WorldObjT]):
                     mask[i - 1, j - 1] = True
                     mask[i, j - 1] = True
 
-        for j in range(0, grid.height):
-            for i in range(0, grid.width):
+        for j in range(0, self.height):
+            for i in range(0, self.width):
                 if not mask[i, j]:
-                    grid.set(i, j, None)
+                    self.set(i, j, None)
 
         return mask
