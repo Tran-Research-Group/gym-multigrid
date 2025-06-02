@@ -1,21 +1,15 @@
-from itertools import chain
-from typing import Final, Literal, TypeAlias, TypedDict
-from typing import Any, Iterable, SupportsFloat, TypeVar
+from typing import Literal, TypeAlias, TypedDict
 
-from gymnasium import spaces
-from gymnasium.core import ActType, ObsType
 import numpy as np
-import random
 from numpy.typing import NDArray
 
-from gym_multigrid.core.constants import *
-from gym_multigrid.utils.window import Window
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, FRActions
+from gym_multigrid.core.agent import Agent, FRActions
+
+# from gym_multigrid.core.constants import *
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal
 from gym_multigrid.core.world import FRWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.typing import Position
 
 
 class ObservationDict(TypedDict):
@@ -43,7 +37,7 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
-class FourRooms(MultiGridEnv):
+class FourRoomsEnv(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -53,8 +47,7 @@ class FourRooms(MultiGridEnv):
         grid_type: int = 0,
         grid_size: tuple = (13, 13),
         agent_view_size: int = 7,
-        max_steps: int = 100,
-        highlight_visible_cells: bool | None = True,
+        highlight_visible_cells: bool = False,
         tile_size: int = 20,
         partial_observability: bool = False,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -76,7 +69,6 @@ class FourRooms(MultiGridEnv):
         self.width = grid_size[0]
         self.height = grid_size[1]
         self.grid_size = grid_size
-        self.max_steps = max_steps
         self.world = FRWorld
         self.actions_set = FRActions
 
@@ -112,7 +104,6 @@ class FourRooms(MultiGridEnv):
         super().__init__(
             width=self.width,
             height=self.height,
-            max_steps=max_steps,
             see_through_walls=see_through_walls,
             agents=self.agents,
             agent_view_size=agent_view_size,
@@ -192,7 +183,7 @@ class FourRooms(MultiGridEnv):
             # Get the current agent position
             curr_pos = self.agents[i].pos
             done = False
-
+            fwd_pos: tuple[int, int]
             # Rotate left
             if actions[i] == self.actions.left:
                 # Get the contents of the cell in front of the agent
