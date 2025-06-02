@@ -89,11 +89,11 @@ class StepInfo(TypedDict):
 
 @dataclass
 class RewardConfig:
-    all_type_1_down_actions: float
+    coordinated_joint_action: float
 
 
 # Env config
-reward_config = RewardConfig(all_type_1_down_actions=1.0)
+reward_config = RewardConfig(coordinated_joint_action=1.0)
 
 
 Observation: TypeAlias = (
@@ -585,16 +585,19 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
         reward: float = 0.0
 
         num_down_actions = len(np.where(actions == self.actions.down)[0])
-        if self.num_type_1_agents == 0:
-            pass
-        else:
-            if (self.num_type_1_agents >= self.num_type_1_thres) and (
-                num_down_actions == self.num_type_1_agents
-            ):
-                reward += reward_config.all_type_1_down_actions
 
-            else:
-                reward += -1.0 * (num_down_actions / self.num_type_1_agents)
+        reward_condition_0: bool = (
+            self.num_type_1_agents >= self.num_type_1_thres
+        ) and (num_down_actions == self.num_type_1_agents)
+
+        reward_condition_1: bool = (
+            self.num_type_1_agents < self.num_type_1_thres
+        ) and (num_down_actions == 0)
+
+        if reward_condition_0 or reward_condition_1:
+            reward += reward_config.coordinated_joint_action
+        else:
+            reward += -1.0 * (num_down_actions / self.num_type_1_agents)
 
         return reward
 
@@ -614,7 +617,7 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
     # step info
     def _get_step_info(self, reward: float = 0.0) -> StepInfo:
         """get info to be returned in the step function"""
-        if reward == self.reward_config.all_type_1_down_actions:
+        if reward == self.reward_config.coordinated_joint_action:
             success = True
         else:
             success = False

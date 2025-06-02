@@ -482,7 +482,6 @@ class TeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
-        print(p_detect_visual_blue)
         self.p_detect_visual_blue = p_detect_visual_blue
         self.p_detect_visual_red = p_detect_visual_red
         self.zone_width = zone_width
