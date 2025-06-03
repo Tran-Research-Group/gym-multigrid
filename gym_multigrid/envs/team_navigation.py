@@ -325,12 +325,20 @@ class StepInfo(TypedDict):
 
 
 class RewardConfig:
-    def __init__(self, num_agents: int) -> None:
+    def __init__(self) -> None:
         self.movement_reward: float = 0.0
-        self.eps: float = 0.1
-        self.agent_reach_goal_reward: float = 1.0 / num_agents
-        self.agent_leave_goal_reward: float = -1.0 * (1.0 / num_agents + self.eps)
+        self.agent_reach_goal_reward: float = 0.9
+        self.agent_leave_goal_reward: float = -1.0
         self.all_agents_at_goal_reward: float = 1.0
+
+
+# class RewardConfig:
+#     def __init__(self, num_agents: int) -> None:
+#         self.movement_reward: float = 0.0
+#         self.eps: float = 0.1
+#         self.agent_reach_goal_reward: float = 1.0 / num_agents
+#         self.agent_leave_goal_reward: float = -1.0 * (1.0 / num_agents + self.eps)
+#         self.all_agents_at_goal_reward: float = 1.0
 
 
 Observation: TypeAlias = (
@@ -486,7 +494,7 @@ class TeamNavigationEnv(MultiGridEnv):
         self.p_detect_visual_red = p_detect_visual_red
         self.zone_width = zone_width
 
-        self.reward_config = RewardConfig(num_agents=self.num_agents)
+        self.reward_config = RewardConfig()
 
         # observation config
         self.observation_option: Literal["goal"] = observation_option
