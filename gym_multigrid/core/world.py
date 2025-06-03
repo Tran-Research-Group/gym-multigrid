@@ -18,7 +18,7 @@ class World:
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
-    COLORS: dict[str, NDArray[np.uint]] = Field(default=COLORS)
+    COLORS: dict[str, NDArray[np.uint8]] = Field(default=COLORS)
     COLOR_TO_IDX: dict[str, int] = Field(init=False)
     IDX_TO_COLOR: dict[int, str] = Field(init=False)
     IDX_TO_OBJECT: dict[int, str] = Field(init=False)

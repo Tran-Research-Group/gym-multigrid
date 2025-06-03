@@ -139,6 +139,6 @@ def highlight_img(img, color=(255, 255, 255), alpha=0.30):
     Add highlighting to an image
     """
 
-    blend_img = img + alpha * (np.array(color, dtype=np.uint) - img)
-    blend_img = blend_img.clip(0, 255).astype(np.uint)
+    blend_img = img + alpha * (np.array(color, dtype=np.uint8) - img)
+    blend_img = blend_img.clip(0, 255).astype(np.uint8)
     img[:, :, :] = blend_img

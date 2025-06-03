@@ -22,7 +22,7 @@ class Grid:
     """
 
     # Static cache of pre-renderer tiles
-    tile_cache: dict[tuple, NDArray[np.uint]] = {}
+    tile_cache: dict[tuple, NDArray[np.uint8]] = {}
 
     def __init__(self, width: int, height: int, world: World):
         """Create a grid of a given width and height in given world
@@ -292,8 +292,8 @@ class Grid:
         if key in cls.tile_cache:
             return cls.tile_cache[key]
 
-        img: NDArray[np.uint] = np.zeros(
-            shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint
+        img: NDArray[np.uint8] = np.zeros(
+            shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8
         )
 
         # render the object
@@ -373,7 +373,7 @@ class Grid:
         width_px = self.width * tile_size
         height_px = self.height * tile_size
 
-        img = np.zeros(shape=(height_px, width_px, 3), dtype=np.uint)
+        img = np.zeros(shape=(height_px, width_px, 3), dtype=np.uint8)
 
         # Render the grid
         for j in range(0, self.height):
