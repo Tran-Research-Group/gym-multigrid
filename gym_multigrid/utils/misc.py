@@ -1,12 +1,14 @@
-from matplotlib import animation
 import os
+
 import matplotlib.pyplot as plt
+from matplotlib import animation
 from numpy.typing import NDArray
-from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
-from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
+
 from gym_multigrid.core.agent import Agent
+from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.world import WorldT
+from gym_multigrid.core.world import World
+from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 
 
 def save_frames_as_gif(
@@ -47,7 +49,7 @@ def render_agent_tiles(
     img: NDArray,
     agent: Agent,
     helper_grid: Grid,
-    world: WorldT,
+    world: World,
     x_min: list[int] = None,
     y_min: list[int] = None,
     x_max: list[int] = None,
@@ -65,7 +67,7 @@ def render_agent_tiles(
         agent located in the tile to be re-rendered
     helper_grid : Grid
         grid containing only trees and no agents. Used to get the state of tree in the cell containing the agent
-    world : WorldT
+    world : World
         wildfire world
     x_min : list[int], optional
         list of x-coordinates of the left boundary of selfish regions

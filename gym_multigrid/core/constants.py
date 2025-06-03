@@ -22,7 +22,7 @@ COLORS = {
 }
 
 # Accessible colors for colorblind people from https://www.nature.com/articles/nmeth.1618
-ACCESSIBLE_COLORS: dict[str, NDArray[np.uint]] = {
+ACCESSIBLE_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([213, 94, 0]),
     "orange": np.array([230, 159, 0]),
     "yellow": np.array([240, 228, 66]),
@@ -36,7 +36,7 @@ ACCESSIBLE_COLORS: dict[str, NDArray[np.uint]] = {
     "light_grey": np.array([199, 199, 199]),
 }
 
-CTF_COLORS: dict[str, NDArray[np.uint]] = {
+CTF_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),
@@ -52,7 +52,7 @@ CTF_COLORS: dict[str, NDArray[np.uint]] = {
     "blue_grey": np.array([140, 146, 172]),
 }
 
-MAZE_COLORS: dict[str, NDArray[np.uint]] = {
+MAZE_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),
@@ -66,7 +66,7 @@ MAZE_COLORS: dict[str, NDArray[np.uint]] = {
     "white": np.array([255, 250, 250]),
 }
 
-LABYRINTH_COLORS: dict[str, NDArray[np.uint]] = {
+LABYRINTH_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),
@@ -81,7 +81,7 @@ LABYRINTH_COLORS: dict[str, NDArray[np.uint]] = {
     "light_grey": np.array([200, 200, 200]),
 }
 
-PREY_PRED_COLORS: dict[str, NDArray[np.uint]] = {
+PREY_PRED_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),

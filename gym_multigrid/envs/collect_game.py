@@ -1,11 +1,11 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.core.world import CollectWorld
-from gym_multigrid.core.agent import CollectActions, Agent
-from gym_multigrid.core.object import Ball, WorldObjT
+from gym_multigrid.core.agent import Agent, CollectActions
 from gym_multigrid.core.grid import Grid
+from gym_multigrid.core.object import Ball, WorldObj
+from gym_multigrid.core.world import CollectWorld
+from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 
 
@@ -136,7 +136,7 @@ class CollectGameEnv(MultiGridEnv):
         i,
         rewards: NDArray[np.float64],
         fwd_pos: Position,
-        fwd_cell: WorldObjT | None,
+        fwd_cell: WorldObj | None,
     ) -> None:
         if fwd_cell and fwd_cell.can_pickup():
             fwd_cell.pos = np.array([-1, -1])
@@ -152,7 +152,7 @@ class CollectGameEnv(MultiGridEnv):
         self,
         rewards: NDArray[np.float64],
         agent_index: int,
-        next_cell: WorldObjT | None,
+        next_cell: WorldObj | None,
         next_pos: Position,
     ) -> None:
         """
@@ -164,7 +164,7 @@ class CollectGameEnv(MultiGridEnv):
             array of rewards for each agent
         agent_index : int
             index of agent to move
-        next_cell : WorldObjT | None
+        next_cell : WorldObj | None
             object corresponding to next position
         next_pos : Position
             position coordinates to move agent to

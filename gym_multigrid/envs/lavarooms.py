@@ -1,22 +1,29 @@
+import random
 from itertools import chain
-from typing import Final, Literal, TypeAlias, TypedDict
-from typing import Any, Iterable, SupportsFloat, TypeVar
+from typing import (
+    Any,
+    Final,
+    Iterable,
+    Literal,
+    SupportsFloat,
+    TypeAlias,
+    TypedDict,
+    TypeVar,
+)
 
+import numpy as np
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
-import numpy as np
-import random
 from numpy.typing import NDArray
 
+from gym_multigrid.core.agent import Agent, AgentT, FRActions, PolicyAgent
 from gym_multigrid.core.constants import *
-from gym_multigrid.utils.window import Window
-from gym_multigrid.core.agent import Agent, PolicyAgent, AgentT, FRActions
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Goal
-from gym_multigrid.core.object import Lava
+from gym_multigrid.core.object import Goal, Lava
 from gym_multigrid.core.world import FRWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
+from gym_multigrid.utils.window import Window
 
 
 class ObservationDict(TypedDict):
@@ -226,7 +233,7 @@ class LavaRooms(MultiGridEnv):
             done = False
 
             # Rotate left
-            if actions[i] == self.actions.left:
+            if actions[i] == self.actions.LEFT:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, -1)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -250,7 +257,7 @@ class LavaRooms(MultiGridEnv):
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Rotate right
-            elif actions[i] == self.actions.right:
+            elif actions[i] == self.actions.RIGHT:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, +1)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -273,7 +280,7 @@ class LavaRooms(MultiGridEnv):
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Move forward
-            elif actions[i] == self.actions.up:
+            elif actions[i] == self.actions.UP:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (-1, 0)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -295,7 +302,7 @@ class LavaRooms(MultiGridEnv):
                     rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
-            elif actions[i] == self.actions.down:
+            elif actions[i] == self.actions.DOWN:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (+1, 0)))
                 fwd_cell = self.grid.get(*fwd_pos)

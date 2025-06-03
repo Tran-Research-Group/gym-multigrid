@@ -1,34 +1,35 @@
 from abc import ABC
-from typing import Any, Literal, TypeVar
 from dataclasses import dataclass
+from typing import Any, Generic, Literal, TypeVar
+
 import numpy as np
 from numpy.typing import NDArray
-import pdb
 
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.world import WorldT
-from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.object import AgentGoal, Door, Zone, Wall
+from gym_multigrid.core.object import AgentGoal, Door, Wall, WorldObj, Zone
+from gym_multigrid.core.world import World
+from gym_multigrid.typing import Position
 
 
 @dataclass
 class EnvObjectGroup:
     """configure a set of env objects
-        Parameters
-        ----------
-        obj_type : str
-            type of object
-        group_index : int
-            unique index for the group of objects
-        pos : tuple[tuple[int, int], ...]
-            object position
-        color : str
-            object color
-        spawned_subtask_indices : tuple[int, ...]
-            tuple of subtasks where the objects appear in the environment
-        fill_mode : Literal["empty", "filled"]] | None
-            empty places objects at the positions in the list, filled makes a filled-in square of the objects
+    Parameters
+    ----------
+    obj_type : str
+        type of object
+    group_index : int
+        unique index for the group of objects
+    pos : tuple[tuple[int, int], ...]
+        object position
+    color : str
+        object color
+    spawned_subtask_indices : tuple[int, ...]
+        tuple of subtasks where the objects appear in the environment
+    fill_mode : Literal["empty", "filled"]] | None
+        empty places objects at the positions in the list, filled makes a filled-in square of the objects
     """
+
     obj_type: str
     group_index: int
     pos: tuple[tuple[int, int], ...]
@@ -49,6 +50,7 @@ class PositionDist:
     probs : list[float]
         Probabilities of each state
     """
+
     states: tuple[tuple[int, int], ...]
     probs: tuple[float, ...]
 
@@ -59,16 +61,16 @@ class PositionDist:
 @dataclass
 class SubtaskData:
     """manages HLMDP subtask data
-        edge: tuple[int, int]
-            edge in the HLMDP that this subtask is associated with
-        idx: int
-            unique index for this subtask
-        final_state: tuple[tuple[int, int], ...]
-            final state the agents reach to complete the subtask
-        termination_condition: Literal["reach_assigned_final_state"]
-            possible conditions to end the subtask. "reach_assigned_final_state" is the only supported condition
-        init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None
-            initial state distribution for this subtask
+    edge: tuple[int, int]
+        edge in the HLMDP that this subtask is associated with
+    idx: int
+        unique index for this subtask
+    final_state: tuple[tuple[int, int], ...]
+        final state the agents reach to complete the subtask
+    termination_condition: Literal["reach_assigned_final_state"]
+        possible conditions to end the subtask. "reach_assigned_final_state" is the only supported condition
+    init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None
+        initial state distribution for this subtask
     """
 
     # directed edge, defines predecessor and successor state to this subtask
@@ -117,7 +119,9 @@ class HLMDPConfig:
 
     def _build_data_dicts(self) -> None:
         self.state_data = {state.idx: state for state in self.state_data_tuple}
-        self.subtask_data = {subtask.idx: subtask for subtask in self.subtask_data_tuple}
+        self.subtask_data = {
+            subtask.idx: subtask for subtask in self.subtask_data_tuple
+        }
 
     # def _add_edge_data(self):
     #     """adds outgoing and incoming edges to the state data
@@ -134,6 +138,8 @@ class HLMDPConfig:
 
     def _add_init_state_dist_data(self) -> None:
         # adds initial state distribution data to the subtask data based on its outgoing edge
+        if self.subtask_data is None or self.state_data is None:
+            raise ValueError("Subtask data is not initialized.")
         for _, data in self.subtask_data.items():
             outgoing_state_index = data.edge[0]
             data.init_state_dist = self.state_data[
@@ -150,7 +156,7 @@ class ObjectGroup(ABC):
         spawned_subtask_indices: tuple[int, ...],
         color: str,
         fill_mode: Literal["empty", "filled"] = "filled",
-        object_options: dict[str, WorldObjT] = {
+        object_options: dict[str, type[WorldObj]] = {
             "goal": AgentGoal,
             "door": Door,
             "zone": Zone,
@@ -182,7 +188,7 @@ class ObjectGroup(ABC):
         self.group_index: int = group_index
         self.spawned_subtask_indices = spawned_subtask_indices
         self.color: str = color
-        self.object_options: dict[str, WorldObjT] = object_options
+        self.object_options: dict[str, type[WorldObj]] = object_options
 
         pos_list: list[tuple[int, int]] = []
         for p in pos:
@@ -198,9 +204,9 @@ class ObjectGroup(ABC):
             else:
                 raise ValueError(f"Invalid position: {p}. The length should be 2 or 4.")
 
-        self.pos: tuple[tuple[int, int], ...] = tuple(pos_list)
+        self.pos: tuple[Position, ...] = tuple(pos_list)
 
-    def put_objects(self, grid: Grid, world: WorldT) -> None:
+    def put_objects(self, grid: Grid, world: World) -> None:
         """
         Places the objects on the grid.
 
@@ -208,14 +214,14 @@ class ObjectGroup(ABC):
         ----------
         grid : Grid
             Global grid from the env to place the objects.
-        world : WorldT
+        world : World
             World to place the objects.
         """
         for pos in self.pos:
-            obj: WorldObjT = self._init_obj(world)
+            obj: WorldObj = self._init_obj(world)
             self._put_obj(grid, pos, obj)
 
-    def _init_obj(self, world: WorldT) -> WorldObjT:
+    def _init_obj(self, world: World) -> WorldObj:
         """
         Defines the initialization of the object.
         """
@@ -223,7 +229,7 @@ class ObjectGroup(ABC):
             world, type=self.obj_type, color=self.color
         )
 
-    def _put_obj(self, grid: Grid, pos: tuple[int, int], obj: WorldObjT) -> None:
+    def _put_obj(self, grid: Grid, pos: tuple[int, int], obj: WorldObj) -> None:
         """
         Places the object on the grid.
 
@@ -233,7 +239,7 @@ class ObjectGroup(ABC):
             Global grid from the env to place the object.
         pos : tuple[int, int]
             Position to place the object.
-        obj : WorldObjT
+        obj : WorldObj
             Object to place.
         """
 
@@ -261,7 +267,7 @@ class ObjectGroup(ABC):
         """
         outputs: list[Any] = []
         for pos in self.pos:
-            obj: WorldObjT = grid.get(*pos)
+            obj: WorldObj | None = grid.get(*pos)
             outputs.append(getattr(obj, action)(**args))
 
         return outputs
