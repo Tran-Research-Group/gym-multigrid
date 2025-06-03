@@ -5,7 +5,7 @@ import numpy as np
 from gymnasium import Space, spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Actions, Agent, AgentT, MazeActions
+from gym_multigrid.core.agent import Actions, Agent, MazeActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Flag, Obstacle, WorldObj
@@ -34,7 +34,7 @@ class LayoutConfig(TypedDict):
     width: int
     height: int
     flag_positions: list[tuple[int, int]]
-    init_agent_positions: list[tuple[int, int] | None]
+    init_agent_positions: list[tuple[int, int]]
     wall_positions: list[tuple[int, int]]
 
 
@@ -49,7 +49,9 @@ class Layout:
     def generate_static_obs(
         self, obj_to_idx: dict[str, int] = MazeWorld.OBJECT_TO_IDX
     ) -> NDArray:
-        static_obs: NDArray[np.int64] = np.zeros((self.height, self.width))
+        static_obs: NDArray[np.int64] = np.zeros(
+            (self.height, self.width), dtype=np.int64
+        )
         for i, j in self.wall_positions:
             static_obs[i, j] = obj_to_idx["wall"]
 
@@ -290,7 +292,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         """
 
         world: Final[World] = MazeWorld
-        action_set: Actions = MazeActions
+        action_set: type[Actions] = MazeActions
 
         self.layout_config_dict: LayoutConfig = layout_config
         self.layout = Layout(**layout_config)
@@ -302,7 +304,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
 
         self.reward = Reward(**reward_config)
 
-        agents: list[AgentT] = [
+        agents: list[Agent] = [
             Agent(
                 world,
                 index=i,
@@ -407,7 +409,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         info = {}
         return info
 
-    def _move_agent(self, action: int, agent: AgentT) -> None:
+    def _move_agent(self, action: int, agent: Agent) -> None:
         next_pos: Position
 
         assert agent.pos is not None

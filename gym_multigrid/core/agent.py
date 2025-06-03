@@ -35,6 +35,13 @@ class DefaultActions(enum.IntEnum):
     DONE = 7
 
 
+class GridActions(enum.IntEnum):
+    LEFT = 0
+    UP = 1
+    RIGHT = 2
+    DOWN = 3
+
+
 class CollectActions(enum.IntEnum):
     """Set of actions available for the agents in Collect Game environment
 
@@ -95,9 +102,6 @@ class NavigationActions(enum.IntEnum):
     DOWN = 2
     RIGHT = 3
     UP = 4
-
-
-AgentT = TypeVar("AgentT", bound="Agent")
 
 
 class Agent(WorldObj):

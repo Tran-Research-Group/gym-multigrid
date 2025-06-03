@@ -11,7 +11,7 @@ from gymnasium.core import ActType, ObsType
 from gymnasium.spaces.space import Space
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
+from gym_multigrid.core.agent import Actions, Agent, DefaultActions
 from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Door, WorldObj
@@ -103,7 +103,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
     def __init__(
         self,
-        agents: list[AgentT],
+        agents: list[Agent],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
@@ -124,7 +124,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         Parameters
         ----------
-        agents : list[gym_multigrid.core.agent.AgentT]
+        agents : list[gym_multigrid.core.agent.Agent]
             List of agents in the environment
         grid_size : int | None = None
             Size of the grid (if square).
