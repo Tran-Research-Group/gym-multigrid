@@ -2,7 +2,16 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Callable, Generic, Literal, SupportsFloat, Type, TypedDict
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Literal,
+    SupportsFloat,
+    Type,
+    TypedDict,
+    TypeVar,
+)
 
 import gymnasium as gym
 import numpy as np
@@ -19,11 +28,13 @@ from gym_multigrid.core.world import DefaultWorld, World
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
 
+EnvType = TypeVar("EnvType", bound="MultiGridEnv")
 
-class ObservationMode(Generic[ObsType], ABC):
+
+class ObservationMode(Generic[EnvType, ObsType], ABC):
     @staticmethod
     @abstractmethod
-    def observation_space(env: "MultiGridEnv[ObsType]") -> Space: ...
+    def observation_space(env: EnvType) -> Space: ...
 
     """
     Define the observation space of the environment.
@@ -41,7 +52,7 @@ class ObservationMode(Generic[ObsType], ABC):
 
     @staticmethod
     @abstractmethod
-    def create_observation(env: "MultiGridEnv[ObsType]") -> ObsType: ...
+    def create_observation(env: EnvType) -> ObsType: ...
 
     """
     Create an observation from the environment.

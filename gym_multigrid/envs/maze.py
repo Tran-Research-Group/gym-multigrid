@@ -80,9 +80,9 @@ class ResetOptions(TypedDict):
     layout_config: LayoutConfig
 
 
-class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
+class TensorObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
     @staticmethod
-    def observation_space(env: MultiGridEnv[NDArray[np.int64]]) -> spaces.Box:
+    def observation_space(env: "MazeEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
             high=len(env.world.OBJECT_TO_IDX) - 1,
@@ -91,7 +91,7 @@ class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
         )
 
     @staticmethod
-    def create_observation(env: MultiGridEnv[NDArray[np.int64]]) -> NDArray[np.int64]:
+    def create_observation(env: "MazeEnv") -> NDArray[np.int64]:
         observation: NDArray[np.int64] = np.zeros(
             (2, env.height, env.width), dtype=np.int64
         )
@@ -108,9 +108,9 @@ class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
         return observation
 
 
-class MapObservationMode(ObservationMode[NDArray[np.int64]]):
+class MapObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
     @staticmethod
-    def observation_space(env: MultiGridEnv) -> spaces.Box:
+    def observation_space(env: "MazeEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
             high=len(MazeWorld.OBJECT_TO_IDX) - 1,
@@ -119,7 +119,7 @@ class MapObservationMode(ObservationMode[NDArray[np.int64]]):
         )
 
     @staticmethod
-    def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
+    def create_observation(env: "MazeEnv") -> NDArray[np.int64]:
         observation: NDArray[np.int64] = np.zeros(
             (env.height, env.width), dtype=np.int64
         )
