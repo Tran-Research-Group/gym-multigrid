@@ -2,24 +2,14 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Literal,
-    SupportsFloat,
-    Type,
-    TypedDict,
-    TypeVar,
-)
+from typing import Any, Callable, Generic, Literal, SupportsFloat, Type, TypedDict
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
-from gymnasium.spaces.space import Space, T_cov
+from gymnasium.spaces.space import Space
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
 
 from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
 from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
