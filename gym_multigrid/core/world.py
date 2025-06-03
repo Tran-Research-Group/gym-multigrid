@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
-
+import numpy as np
 from numpy.typing import NDArray
+from pydantic import Field, dataclasses
 
 from gym_multigrid.core.constants import (
     ACCESSIBLE_COLORS,
@@ -11,17 +11,17 @@ from gym_multigrid.core.constants import (
 )
 
 
-@dataclass
+@dataclasses.dataclass(config={"arbitrary_types_allowed": True})
 class World:
     """This class defines the world within which grid is situated."""
 
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
-    COLORS: dict[str, NDArray]  # Map of color names to RGB values
-    COLOR_TO_IDX: dict[str, int] = field(init=False)
-    IDX_TO_COLOR: dict[int, str] = field(init=False)
-    IDX_TO_OBJECT: dict[int, str] = field(init=False)
+    COLORS: dict[str, NDArray[np.uint]] = Field(default=COLORS)
+    COLOR_TO_IDX: dict[str, int] = Field(init=False)
+    IDX_TO_COLOR: dict[int, str] = Field(init=False)
+    IDX_TO_OBJECT: dict[int, str] = Field(init=False)
 
     def __post_init__(self):
         self.COLOR_TO_IDX = dict(

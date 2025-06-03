@@ -190,7 +190,7 @@ class WorldObj:
     def decode(type_idx: int, color_idx: int, state: int):
         assert False, "not implemented"
 
-    def render(self, img: NDArray[np.uint8]) -> None:
+    def render(self, img: NDArray[np.uint]) -> None:
         """Draw this object with the given renderer"""
         raise NotImplementedError
 
@@ -215,7 +215,7 @@ class ObjectGoal(WorldObj):
     def can_overlap(self):
         return False
 
-    def render(self, img: NDArray[np.uint8]):
+    def render(self, img: NDArray[np.uint]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -231,7 +231,7 @@ class Goal(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.uint8]):
+    def render(self, img: NDArray[np.uint]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -242,7 +242,7 @@ class Switch(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.uint8]):
+    def render(self, img: NDArray[np.uint]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -257,7 +257,7 @@ class Floor(WorldObj):
     def can_overlap(self) -> bool:
         return True
 
-    def render(self, img: NDArray[np.uint8]):
+    def render(self, img: NDArray[np.uint]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
@@ -277,7 +277,7 @@ class Lava(WorldObj):
     def can_overlap(self):
         return True
 
-    def render(self, img: NDArray[np.uint8]):
+    def render(self, img: NDArray[np.uint]):
         c = (255, 128, 0)
 
         # Background color
