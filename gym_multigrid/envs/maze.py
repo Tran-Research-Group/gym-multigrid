@@ -17,7 +17,6 @@ from gym_multigrid.multigrid import (
     ObservationMode,
     PartialObsConfig,
     RenderingConfig,
-    T_cov,
 )
 from gym_multigrid.typing import Position
 
@@ -297,9 +296,9 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         self.layout = Layout(**layout_config)
         self.layout.generate_static_obs()
 
-        self.observation_mode: ObservationMode = self.metadata["observation_modes"][
-            observation_mode
-        ]
+        self.observation_mode: ObservationMode[NDArray[np.int64]] = self.metadata[
+            "observation_modes"
+        ][observation_mode]
 
         self.reward = Reward(**reward_config)
 
@@ -401,7 +400,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
 
         return obs, info
 
-    def _get_obs(self) -> T_cov:
+    def _get_obs(self) -> NDArray[np.int64]:
         return self.observation_mode.create_observation(self)
 
     def _get_info(self) -> dict[str, float]:
@@ -418,13 +417,13 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
             case action_set.STAY:
                 next_pos = agent.pos
             case action_set.LEFT:
-                next_pos = agent.west_pos()
+                next_pos = agent.west_pos(in_tuple=True)
             case action_set.DOWN:
-                next_pos = agent.south_pos()
+                next_pos = agent.south_pos(in_tuple=True)
             case action_set.RIGHT:
-                next_pos = agent.east_pos()
+                next_pos = agent.east_pos(in_tuple=True)
             case action_set.UP:
-                next_pos = agent.north_pos()
+                next_pos = agent.north_pos(in_tuple=True)
             case _:
                 raise ValueError(f"Invalid action: {action}")
 

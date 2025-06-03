@@ -1,4 +1,4 @@
-from typing import Final
+from typing import Final, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -66,14 +66,18 @@ class WorldObj:
         return self.pos == (-1, -1)
 
     @property
-    def pos(self):
+    def pos(self) -> Position:
         return self._pos
 
     @pos.setter
     def pos(self, value):
         self._pos = value
 
-    def west_pos(self) -> NDArray[np.int_]:
+    @overload
+    def west_pos(self, in_tuple: Literal[True]) -> Position: ...
+    @overload
+    def west_pos(self, in_tuple: Literal[False] = False) -> NDArray[np.int_]: ...
+    def west_pos(self, in_tuple: bool = False) -> NDArray[np.int_] | Position:
         """
         Get the position of the cell to the left of the object
 
@@ -85,9 +89,20 @@ class WorldObj:
         if self.pos is None:
             raise ValueError("Agent position is not set")
         else:
-            return self.pos + np.array([-1, 0])
+            delta: NDArray[np.int_] = np.array([0, -1])  # Move left in the grid
+            next_pos: NDArray[np.int_] = np.array(self.pos) + delta
 
-    def east_pos(self) -> NDArray[np.int_]:
+            match in_tuple:
+                case True:
+                    return (next_pos[0], next_pos[1])
+                case False:
+                    return next_pos
+
+    @overload
+    def east_pos(self, in_tuple: Literal[True]) -> Position: ...
+    @overload
+    def east_pos(self, in_tuple: Literal[False] = False) -> NDArray[np.int_]: ...
+    def east_pos(self, in_tuple: bool = False) -> NDArray[np.int_] | Position:
         """
         Get the position of the cell to the right of the agent
 
@@ -99,9 +114,20 @@ class WorldObj:
         if self.pos is None:
             raise ValueError("Agent position is not set")
         else:
-            return self.pos + np.array([1, 0])
+            delta: NDArray[np.int_] = np.array([1, 0])  # Move right in the grid
+            next_pos: NDArray[np.int_] = np.array(self.pos) + delta
 
-    def north_pos(self) -> NDArray[np.int_]:
+            match in_tuple:
+                case True:
+                    return (next_pos[0], next_pos[1])
+                case False:
+                    return next_pos
+
+    @overload
+    def north_pos(self, in_tuple: Literal[True]) -> Position: ...
+    @overload
+    def north_pos(self, in_tuple: Literal[False] = False) -> NDArray[np.int_]: ...
+    def north_pos(self, in_tuple: bool = False) -> NDArray[np.int_] | Position:
         """
         Get the position of the cell above the agent
 
@@ -113,9 +139,20 @@ class WorldObj:
         if self.pos is None:
             raise ValueError("Agent position is not set")
         else:
-            return self.pos + np.array([0, -1])
+            delta: NDArray[np.int_] = np.array([0, -1])  # Move up in the grid
+            next_pos: NDArray[np.int_] = np.array(self.pos) + delta
 
-    def south_pos(self) -> NDArray[np.int_]:
+            match in_tuple:
+                case True:
+                    return (next_pos[0], next_pos[1])
+                case False:
+                    return next_pos
+
+    @overload
+    def south_pos(self, in_tuple: Literal[True]) -> Position: ...
+    @overload
+    def south_pos(self, in_tuple: Literal[False] = False) -> NDArray[np.int_]: ...
+    def south_pos(self, in_tuple: bool = False) -> NDArray[np.int_] | Position:
         """
         Get the position of the cell below the agent
 
@@ -127,7 +164,14 @@ class WorldObj:
         if self.pos is None:
             raise ValueError("Agent position is not set")
         else:
-            return self.pos + np.array([0, 1])
+            delta: NDArray[np.int_] = np.array([0, 1])  # Move down in the grid
+            next_pos: NDArray[np.int_] = np.array(self.pos) + delta
+
+            match in_tuple:
+                case True:
+                    return (next_pos[0], next_pos[1])
+                case False:
+                    return next_pos
 
     def get_all_neighbor_pos(self) -> dict[str, NDArray[np.int_]]:
         """get all of the neighboring positions"""

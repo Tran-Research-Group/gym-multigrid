@@ -849,15 +849,15 @@ class CtfMvNEnv(MultiGridEnv):
         assert agent.pos is not None
 
         match action:
-            case self.actions_set.stay:
+            case self.actions_set.STAY:
                 next_pos = agent.pos
-            case self.actions_set.left:
+            case self.actions_set.LEFT:
                 next_pos = agent.pos + np.array([0, -1])
-            case self.actions_set.down:
+            case self.actions_set.DOWN:
                 next_pos = agent.pos + np.array([-1, 0])
-            case self.actions_set.right:
+            case self.actions_set.RIGHT:
                 next_pos = agent.pos + np.array([0, 1])
-            case self.actions_set.up:
+            case self.actions_set.UP:
                 next_pos = agent.pos + np.array([1, 0])
             case _:
                 raise ValueError(f"Invalid action: {action}")

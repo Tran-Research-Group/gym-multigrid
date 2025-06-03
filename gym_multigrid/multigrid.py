@@ -548,13 +548,13 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         #     fwd_cell = self.grid.get(*fwd_pos)
 
         #     # Rotate left
-        #     if actions[i] == self.actions.left:
+        #     if actions[i] == self.actions.LEFT:
         #         self.agents[i].dir -= 1
         #         if self.agents[i].dir < 0:
         #             self.agents[i].dir += 4
 
         #     # Rotate right
-        #     elif actions[i] == self.actions.right:
+        #     elif actions[i] == self.actions.RIGHT:
         #         self.agents[i].dir = (self.agents[i].dir + 1) % 4
 
         #     # Move forward

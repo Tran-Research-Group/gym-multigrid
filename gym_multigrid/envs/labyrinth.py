@@ -645,7 +645,7 @@ class LabyrinthEnv(MultiGridEnv):
 
         reward = 0
         reward += self.reward_config.movement_reward * np.sum(
-            actions != self.actions.stay
+            actions != self.actions.STAY
         )
 
         return reward

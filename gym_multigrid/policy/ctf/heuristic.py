@@ -80,15 +80,15 @@ class CtfPolicy(AgentPolicy):
         action: int
 
         if np.array_equal(action_dir, np.array([0, 0])):
-            action = self.action_set.stay
+            action = self.action_set.STAY
         elif np.array_equal(action_dir, np.array([0, -1])):
-            action = self.action_set.left
+            action = self.action_set.LEFT
         elif np.array_equal(action_dir, np.array([-1, 0])):
-            action = self.action_set.down
+            action = self.action_set.DOWN
         elif np.array_equal(action_dir, np.array([0, 1])):
-            action = self.action_set.right
+            action = self.action_set.RIGHT
         elif np.array_equal(action_dir, np.array([1, 0])):
-            action = self.action_set.up
+            action = self.action_set.UP
         else:
             raise ValueError(f"Invalid direction {action_dir}")
 
@@ -111,15 +111,15 @@ class CtfPolicy(AgentPolicy):
 
         action_dir: NDArray[np.int_]
 
-        if action == self.action_set.stay:
+        if action == self.action_set.STAY:
             action_dir = np.array([0, 0])
-        elif action == self.action_set.left:
+        elif action == self.action_set.LEFT:
             action_dir = np.array([0, -1])
-        elif action == self.action_set.down:
+        elif action == self.action_set.DOWN:
             action_dir = np.array([-1, 0])
-        elif action == self.action_set.right:
+        elif action == self.action_set.RIGHT:
             action_dir = np.array([0, 1])
-        elif action == self.action_set.up:
+        elif action == self.action_set.UP:
             action_dir = np.array([1, 0])
         else:
             raise ValueError(f"Invalid action {action}")

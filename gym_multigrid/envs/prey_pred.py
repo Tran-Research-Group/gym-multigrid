@@ -904,22 +904,20 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def _get_next_pos(self, agent: Predator | Prey, action: int) -> tuple[int, int]:
-        next_pos: NDArray[np.int_]
+        next_pos: tuple[int, int]
         match action:
-            case self.actions.stay:
+            case self.actions.STAY:
                 next_pos = agent.pos
-            case self.actions.left:
-                next_pos = agent.west_pos()
-            case self.actions.right:
-                next_pos = agent.east_pos()
-            case self.actions.up:
-                next_pos = agent.north_pos()
-            case self.actions.down:
-                next_pos = agent.south_pos()
+            case self.actions.LEFT:
+                next_pos = agent.west_pos(in_tuple=True)
+            case self.actions.RIGHT:
+                next_pos = agent.east_pos(in_tuple=True)
+            case self.actions.UP:
+                next_pos = agent.north_pos(in_tuple=True)
+            case self.actions.DOWN:
+                next_pos = agent.south_pos(in_tuple=True)
             case _:
                 raise ValueError(f"Invalid action: {action}")
-
-        next_pos: tuple[int, int] = (next_pos[0], next_pos[1])
 
         return next_pos
 

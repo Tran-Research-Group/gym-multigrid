@@ -67,18 +67,18 @@ class WildfireActions(enum.IntEnum):
 
 
 class CtfActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
+    STAY = 0
+    LEFT = 1
+    DOWN = 2
+    RIGHT = 3
+    UP = 4
 
 
 class FRActions(enum.IntEnum):
-    left = 0
-    up = 1
-    right = 2
-    down = 3
+    LEFT = 0
+    UP = 1
+    RIGHT = 2
+    DOWN = 3
 
 
 class MazeActions(enum.IntEnum):
@@ -90,11 +90,11 @@ class MazeActions(enum.IntEnum):
 
 
 class NavigationActions(enum.IntEnum):
-    stay = 0
-    left = 1
-    down = 2
-    right = 3
-    up = 4
+    STAY = 0
+    LEFT = 1
+    DOWN = 2
+    RIGHT = 3
+    UP = 4
 
 
 AgentT = TypeVar("AgentT", bound="Agent")
