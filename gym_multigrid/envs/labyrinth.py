@@ -1,28 +1,27 @@
-from typing import Any, Literal, Optional, TypedDict, TypeAlias
+import pdb
 from dataclasses import asdict, dataclass
+from typing import Any, Literal, Optional, TypeAlias, TypedDict
 
 import numpy as np
-from numpy.typing import NDArray
 from gymnasium import spaces
-import pdb
+from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent, NAV_DIR_TO_VEC
+from gym_multigrid.core.agent import NAV_DIR_TO_VEC, Actions, Agent, NavigationActions
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import AgentGoal, Wall, WorldObj, Zone
 from gym_multigrid.core.object import SimpleDoor as Door
-from gym_multigrid.core.world import WorldT, LabyrinthWorld
+from gym_multigrid.core.world import LabyrinthWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.subtasks import (
     EnvObjectGroup,
-    PositionDist,
-    SubtaskData,
-    StateData,
     HLMDPConfig,
     ObjectGroup,
     ObjGroupT,
+    PositionDist,
+    StateData,
+    SubtaskData,
 )
-
 
 # HLMDP interface
 state_data_tuple = (
@@ -99,6 +98,7 @@ Observation: TypeAlias = dict[str, NDArray[np.int_]] | NDArray[np.int_]
 
 class LabyrinthEnv(MultiGridEnv):
     metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
+
     # setup and env properties
     def __init__(
         self,
@@ -106,9 +106,9 @@ class LabyrinthEnv(MultiGridEnv):
         width: int = 7,
         num_agents: int = 2,
         p_intended_movement: float = 0.95,
-        actions_set: type[ActionsT] = NavigationActions,
+        actions_set: type[Actions] = NavigationActions,
         subtask_idx: int = 0,
-        world: WorldT = LabyrinthWorld,
+        world: World = LabyrinthWorld,
         hlmdp_config: HLMDPConfig = hlmdp_config,
         observation_option: Literal["goal"] = "goal",
         obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
@@ -137,7 +137,7 @@ class LabyrinthEnv(MultiGridEnv):
         observation_option : Literal["goal"] = "goal"
             Observation option.
             - "goal": The observation includes agent positions and position of the assigned goal.
-        actions_set : type[ActionsT] = NavigationActions
+        actions_set : type[Actions] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
         agent_dir_to_vec : list[NDArray[np.int_]] = NAV_DIR_TO_VEC
@@ -145,7 +145,7 @@ class LabyrinthEnv(MultiGridEnv):
             The length of the list should be equal to the number of actions in the actions set.
         reward_config: RewardConfig
             Configuration for conditions that cause the reward function to output non-zero reward
-        world : WorldT = LabyrinthWorld
+        world : World = LabyrinthWorld
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
@@ -194,7 +194,7 @@ class LabyrinthEnv(MultiGridEnv):
         )
 
         # define available objects in this environment
-        self.object_options: dict[str, WorldObjT] = {
+        self.object_options: dict[str, WorldObj] = {
             "goal": AgentGoal,
             "door": Door,
             "zone": Zone,
@@ -230,7 +230,9 @@ class LabyrinthEnv(MultiGridEnv):
                 max_val = 1
 
             observation_space = spaces.Box(
-                low=np.zeros(obs_shape), high=max_val * np.ones(obs_shape), dtype=np.float32
+                low=np.zeros(obs_shape),
+                high=max_val * np.ones(obs_shape),
+                dtype=np.float32,
             )
 
         return observation_space
@@ -241,7 +243,6 @@ class LabyrinthEnv(MultiGridEnv):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ) -> tuple[NDArray[np.int_], StepInfo]:
-
         super().reset(seed=seed, options=options)
 
         obs: Observation = self.get_obs()
@@ -427,7 +428,9 @@ class LabyrinthEnv(MultiGridEnv):
 
             # set the values in avail_actions
             # you should be able to set the desired order of the neighbor positions here
-            neighbor_positions: dict[str, NDArray[np.int_]] = agent.get_all_neighbor_pos()
+            neighbor_positions: dict[str, NDArray[np.int_]] = (
+                agent.get_all_neighbor_pos()
+            )
 
             for direction, pos in neighbor_positions.items():
                 neighbor_cell = self.grid.get(*pos)
@@ -451,7 +454,6 @@ class LabyrinthEnv(MultiGridEnv):
         self,
         actions: NDArray[np.int_],
     ) -> tuple[Observation, float, bool, bool, StepInfo]:
-
         self.step_count += 1
 
         # transition from s_t to s_{t+1}
@@ -566,7 +568,7 @@ class LabyrinthEnv(MultiGridEnv):
             next_state = available_pos[next_state_idx]
 
             # make the agent move
-            next_cell: WorldObjT | None = self.grid.get(*next_state)
+            next_cell: WorldObj | None = self.grid.get(*next_state)
             if next_cell is None:
                 agent.move(next_state, self.grid, self.init_grid, bg_color=None)
             elif next_cell.can_overlap():
@@ -597,7 +599,7 @@ class LabyrinthEnv(MultiGridEnv):
             ):
                 pass
             else:
-                next_cell: WorldObjT | None = self.grid.get(*next_state)
+                next_cell: WorldObj | None = self.grid.get(*next_state)
 
                 if self.grid.get(*next_state) is None:
                     possible_pos.append(next_state)
@@ -643,7 +645,7 @@ class LabyrinthEnv(MultiGridEnv):
 
         reward = 0
         reward += self.reward_config.movement_reward * np.sum(
-            actions != self.actions.stay
+            actions != self.actions.STAY
         )
 
         return reward

@@ -1,16 +1,13 @@
 import enum
-from abc import abstractmethod, ABC
-from typing import Generic, TypeVar, Type
+from abc import ABC, abstractmethod
+from typing import Any, Generic, Type
 
 import numpy as np
+from gymnasium.core import ActType, ObsType
 from numpy.random import Generator
 
-from gymnasium.core import ObsType, ActType
 
-AgentPolicyT = TypeVar("AgentPolicyT", bound="BaseAgentPolicy")
-
-
-class BaseAgentPolicy(Generic[ObsType, ActType], ABC):
+class AgentPolicy(Generic[ObsType, ActType], ABC):
     """
     Abstract class for CTF enemy policy
     """
@@ -32,7 +29,7 @@ class BaseAgentPolicy(Generic[ObsType, ActType], ABC):
         """
         super().__init__()
         self.name: str = "base"
-        self.action_set: Type[enum.IntEnum] = action_set
+        self.action_set: Type[enum.IntEnum] | None = action_set
         self.random_generator: Generator = (
             random_generator
             if random_generator is not None
@@ -40,7 +37,7 @@ class BaseAgentPolicy(Generic[ObsType, ActType], ABC):
         )
 
     @abstractmethod
-    def act(self, observation: ObsType) -> ActType: ...
+    def act(self, observation: ObsType, options: dict[str, Any]) -> ActType: ...
 
     @abstractmethod
     def reset(self) -> None: ...

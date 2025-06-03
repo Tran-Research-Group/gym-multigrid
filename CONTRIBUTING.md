@@ -15,6 +15,14 @@ We highly recommend using [Black](https://black.readthedocs.io/en/stable/) forma
 The basic idea is to create feature branches (each associated with a related issue or contribution) for code modifications. Once the code changes are completed, you merge that branch back with the dev branch. The dev branch should always be functional. The dev branch will be merged with main when the codebase is ready for a release. See [this link](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) for more details.
 
 ### Branching
+1. Create a new branch from `dev` branch.
+Name the branch with the following format: `feat/<issue number>_<2-3 words describing the feature>` for features, `fix/<issue number>_<2-3 words describing the fix>` for bug fixes.
+2. Make your changes.
+3. Create a pull request to `dev` branch.
+4. After the pull request is approved, merge it to `dev` branch.
+5. After a few features are merged to `dev` branch, create a pull request to `main` branch.
+
+### Setting up the repository
 Always remember to pull so your local repo is up to date:
 ```
 git pull origin main

@@ -1,30 +1,29 @@
-from abc import ABC, abstractmethod
 import math
 import warnings
-from typing import Generic, Literal, Type, TypeVar, Callable, TypedDict, SupportsFloat
+from abc import ABC, abstractmethod
+from collections.abc import Iterable
+from typing import Any, Callable, Generic, Literal, SupportsFloat, Type, TypedDict
 
-import numpy as np
-from numpy.typing import NDArray
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
-from gymnasium.spaces.space import Space, T_cov
-from gymnasium.core import ObsType, ActType
+from gymnasium.core import ActType, ObsType
+from gymnasium.spaces.space import Space
+from numpy.typing import NDArray
 
+from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
+from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import WorldObjT
-from gym_multigrid.core.world import DefaultWorld, WorldT
-from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
+from gym_multigrid.core.object import Door, WorldObj
+from gym_multigrid.core.world import DefaultWorld, World
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
-from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
-
-MultiGridEnvT = TypeVar("MultiGridEnvT", bound="MultiGridEnv")
 
 
-class ObservationMode(Generic[T_cov], ABC):
+class ObservationMode(Generic[ObsType], ABC):
     @staticmethod
     @abstractmethod
-    def observation_space(env: gym.Env[ObsType, ActType]) -> Space[T_cov]: ...
+    def observation_space(env: "MultiGridEnv[ObsType]") -> Space: ...
 
     """
     Define the observation space of the environment.
@@ -42,7 +41,7 @@ class ObservationMode(Generic[T_cov], ABC):
 
     @staticmethod
     @abstractmethod
-    def create_observation(env: gym.Env[ObsType, ActType]) -> T_cov: ...
+    def create_observation(env: "MultiGridEnv[ObsType]") -> ObsType: ...
 
     """
     Create an observation from the environment.
@@ -54,7 +53,7 @@ class ObservationMode(Generic[T_cov], ABC):
 
     Returns
     -------
-    observation: T_cov
+    observation: ObsType
         The observation
     """
 
@@ -63,8 +62,8 @@ class GridConfig(TypedDict, total=False):
     grid_size: int | None
     width: int | None
     height: int | None
-    world: WorldT
-    actions_set: Type[ActionsT]
+    world: World
+    actions_set: Type[Actions]
 
 
 class RenderingConfig(TypedDict):
@@ -89,7 +88,7 @@ DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
 }
 
 
-class MultiGridEnv(gym.Env[ObsType, ActType]):
+class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
     """
     2D grid world game environment
     """
@@ -100,6 +99,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         "video.frames_per_second": 10,
         "observation_modes": {},  # type: dict[str, ObservationMode]
     }
+    grid: Grid
 
     def __init__(
         self,
@@ -107,8 +107,8 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
-        world: WorldT = DefaultWorld,
-        actions_set: Type[ActionsT] = DefaultActions,
+        world: World = DefaultWorld,
+        actions_set: Type[Actions] = DefaultActions,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         uncached_object_types: list[str] = [],
         close_window: bool = False,
@@ -133,9 +133,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             Width of the grid
         height : int | None = None
             Height of the grid
-        world : WorldT = DefaultWorld
+        world : World = DefaultWorld
             World object that defines the objects in the environment
-        actions_set : Type[ActionsT] = DefaultActions
+        actions_set : Type[Actions] = DefaultActions
             Actions available to the agents
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Rendering mode
@@ -160,7 +160,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         """
         self.agents = agents
         assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode: Literal["human", "rgb_array"] = render_mode
+        self.render_mode = render_mode
         self.uncached_object_types: list[str] = uncached_object_types
         self.close_window: bool = close_window
         self.tile_size: int = tile_size
@@ -192,14 +192,14 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         self.height: int = height
 
         # Action enumeration for this environment
-        self.actions: Type[ActionsT] = actions_set
+        self.actions: Type[Actions] = actions_set
 
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions))
 
         self.world = world
 
-        self.observation_space: spaces.Box | spaces.Dict = self._set_observation_space()
+        self.observation_space = self._set_observation_space()
 
         if self.observation_space is spaces.Box:
             self.ob_dim = np.prod(self.observation_space.shape)
@@ -231,8 +231,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
 
-    def _set_observation_space(self) -> spaces.Box | spaces.Dict:
+    def _set_observation_space(self) -> spaces.Space:
         if self.partial_obs:
+            assert self.agent_view_size is not None
             observation_space = spaces.Box(
                 low=0,
                 high=255,
@@ -241,7 +242,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
                     self.agent_view_size,
                     self.world.encode_dim,
                 ),
-                dtype="uint8",
+                dtype=np.int_,
             )
 
         else:
@@ -249,7 +250,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
                 low=0,
                 high=255,
                 shape=(self.width, self.height, self.world.encode_dim),
-                dtype="uint8",
+                dtype=np.int_,
             )
 
         return observation_space
@@ -275,7 +276,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ) -> tuple[ObsType, dict]:
+    ) -> tuple[ObsType, dict[str, Any]]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
         # If you only use this RNG, you do not need to worry much about seeding,
@@ -287,14 +288,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
         # if state is given in options, then use it to generate the grid with given state as the initial state
-        if options is not None:
-            state = options["state"]
-            if state is not None:
-                self._gen_grid(self.width, self.height, state)
-            else:
-                self._gen_grid(self.width, self.height)
-        else:
-            self._gen_grid(self.width, self.height)
+        self._gen_grid(self.width, self.height)
 
         # Agent status should be reset inside self._gen_grid
         self._reset_agents()
@@ -303,22 +297,34 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         self.step_count: int = 0
 
         # Return first observation
-        if self.partial_obs:
-            obs = self.gen_obs()
-        else:
-            obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-                for i in range(len(self.agents))
-            ]
-        obs = [self.world.normalize_obs * ob for ob in obs]
-        info = self._get_info()
-        return obs, info
+        # if self.partial_obs:
+        #     obs = self.gen_obs()
+        # else:
+        #     obs = [
+        #         self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
+        #         for i in range(len(self.agents))
+        #     ]
+        # obs = [self.world.normalize_obs * ob for ob in obs]
+        # info = self._get_info()
+        # return obs, info
+
+        return None, None  # type: ignore
+
+    def _get_obs(self) -> ObsType:
+        """
+        Get the current observation of the environment.
+        This method is used to get the observation after reset or step.
+        """
+        ...
 
     def _get_info(self):
         return {}
 
     @property
     def steps_remaining(self):
+        assert self.max_steps is not None, (
+            "steps_remaining is only available if max_steps is set"
+        )
         return self.max_steps - self.step_count
 
     def __str__(self):
@@ -342,7 +348,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
                     str += "  "
                     continue
 
-                if c.type == "door":
+                if isinstance(c, Door):
                     if c.is_open:
                         str += "__"
                     elif c.is_locked:
@@ -358,7 +364,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return str
 
-    def _gen_grid(self, width, height) -> None:
+    def _gen_grid(self, width: int, height: int) -> None:
         self.grid = Grid(width, height, self.world)
         assert False, "_gen_grid needs to be implemented by each environment"
 
@@ -382,15 +388,16 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         """
         Compute the reward to be given upon success
         """
+        assert isinstance(self.max_steps, int)
         rewards[current_agent] += reward - 0.9 * (self.step_count / self.max_steps)
         return rewards
 
     def place_obj(
         self,
-        obj: WorldObjT,
+        obj: WorldObj,
         top: Position | None = None,
         size: tuple[int, int] | None = None,
-        reject_fn: Callable[["MultiGridEnv", NDArray], bool] | None = None,
+        reject_fn: Callable[["MultiGridEnv", Position], bool] | None = None,
         max_tries: float = math.inf,
     ):
         """
@@ -419,11 +426,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
             num_tries += 1
 
-            pos = np.array(
-                (
-                    self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
-                    self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
-                )
+            pos: Position = (
+                self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
+                self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
             )
 
             # Don't place the object on top of another object
@@ -444,7 +449,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return pos
 
-    def put_obj(self, obj: WorldObjT, i: int, j: int):
+    def put_obj(self, obj: WorldObj, i: int, j: int):
         """
         Put an object at a specific position in the grid
         """
@@ -455,7 +460,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
     def place_agent(
         self,
-        agent: AgentT,
+        agent: Agent,
         pos: Position | None = None,
         top: Position | None = None,
         size: tuple[int, int] | None = None,
@@ -493,7 +498,10 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         """
         Check if a non-empty grid position is visible to the agent
         """
-
+        raise NotImplementedError(
+            "agent_sees is not implemented in the base class. "
+            "Please implement it in your own environment."
+        )
         coordinates = a.relative_coords(x, y)
         if coordinates is None:
             return False
@@ -507,96 +515,99 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         return obs_cell is not None and obs_cell.type == world_cell.type
 
     def step(
-        self, actions: list[int] | NDArray[np.int_]
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict]:
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """
         Example method showing potential implementation of the step method.
         Implement this method in your own environment.
         """
         self.step_count += 1
 
-        order = np.random.permutation(len(actions))
+        raise NotImplementedError(
+            "step is not implemented in the base class. "
+            "Please implement it in your own environment."
+        )
+        # order = np.random.permutation(len(actions))
 
-        rewards = np.zeros(len(actions))
-        terminated = False
-        truncated = False
+        # rewards = np.zeros(len(actions))
+        # terminated = False
+        # truncated = False
+        # for i in order:
+        #     if (
+        #         self.agents[i].terminated
+        #         or self.agents[i].paused
+        #         or not self.agents[i].started
+        #         or actions[i] == self.actions.still
+        #     ):
+        #         continue
 
-        for i in order:
-            if (
-                self.agents[i].terminated
-                or self.agents[i].paused
-                or not self.agents[i].started
-                or actions[i] == self.actions.still
-            ):
-                continue
+        #     # Get the position in front of the agent
+        #     fwd_pos = self.agents[i].front_pos
 
-            # Get the position in front of the agent
-            fwd_pos = self.agents[i].front_pos
+        #     # Get the contents of the cell in front of the agent
+        #     fwd_cell = self.grid.get(*fwd_pos)
 
-            # Get the contents of the cell in front of the agent
-            fwd_cell = self.grid.get(*fwd_pos)
+        #     # Rotate left
+        #     if actions[i] == self.actions.LEFT:
+        #         self.agents[i].dir -= 1
+        #         if self.agents[i].dir < 0:
+        #             self.agents[i].dir += 4
 
-            # Rotate left
-            if actions[i] == self.actions.left:
-                self.agents[i].dir -= 1
-                if self.agents[i].dir < 0:
-                    self.agents[i].dir += 4
+        #     # Rotate right
+        #     elif actions[i] == self.actions.RIGHT:
+        #         self.agents[i].dir = (self.agents[i].dir + 1) % 4
 
-            # Rotate right
-            elif actions[i] == self.actions.right:
-                self.agents[i].dir = (self.agents[i].dir + 1) % 4
+        #     # Move forward
+        #     elif actions[i] == self.actions.forward:
+        #         if fwd_cell is not None:
+        #             if fwd_cell.type == "goal":
+        #                 terminated = True
+        #                 rewards = self._reward(i, rewards, 1)
+        #             elif fwd_cell.type == "switch":
+        #                 self._handle_switch(i, rewards, fwd_pos, fwd_cell)
+        #         elif fwd_cell is None or fwd_cell.can_overlap():
+        #             self.grid.set(*fwd_pos, self.agents[i])
+        #             self.grid.set(*self.agents[i].pos, None)
+        #             self.agents[i].pos = fwd_pos
+        #         self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
-            # Move forward
-            elif actions[i] == self.actions.forward:
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        terminated = True
-                        rewards = self._reward(i, rewards, 1)
-                    elif fwd_cell.type == "switch":
-                        self._handle_switch(i, rewards, fwd_pos, fwd_cell)
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
+        #     elif "build" in self.actions.available and actions[i] == self.actions.build:
+        #         self._handle_build(i, rewards, fwd_pos, fwd_cell)
 
-            elif "build" in self.actions.available and actions[i] == self.actions.build:
-                self._handle_build(i, rewards, fwd_pos, fwd_cell)
+        #     # Pick up an object
+        #     elif actions[i] == self.actions.pickup:
+        #         self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
 
-            # Pick up an object
-            elif actions[i] == self.actions.pickup:
-                self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+        #     # Drop an object
+        #     elif actions[i] == self.actions.drop:
+        #         self._handle_drop(i, rewards, fwd_pos, fwd_cell)
 
-            # Drop an object
-            elif actions[i] == self.actions.drop:
-                self._handle_drop(i, rewards, fwd_pos, fwd_cell)
+        #     # Toggle/activate an object
+        #     elif actions[i] == self.actions.toggle:
+        #         if fwd_cell:
+        #             fwd_cell.toggle(self, fwd_pos)
 
-            # Toggle/activate an object
-            elif actions[i] == self.actions.toggle:
-                if fwd_cell:
-                    fwd_cell.toggle(self, fwd_pos)
+        #     # Done action (not used by default)
+        #     elif actions[i] == self.actions.done:
+        #         pass
 
-            # Done action (not used by default)
-            elif actions[i] == self.actions.done:
-                pass
+        #     else:
+        #         assert False, "unknown action"
 
-            else:
-                assert False, "unknown action"
+        # if self.max_steps is not None and self.step_count >= self.max_steps:
+        #     truncated = True
 
-        if self.max_steps is not None and self.step_count >= self.max_steps:
-            truncated = True
+        # if self.partial_obs:
+        #     obs = self.gen_obs()
+        # else:
+        #     obs = [
+        #         self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
+        #         for i in range(len(actions))
+        #     ]
 
-        if self.partial_obs:
-            obs = self.gen_obs()
-        else:
-            obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-                for i in range(len(actions))
-            ]
-
-        obs = [self.world.normalize_obs * ob for ob in obs]
-        info = self._get_info()
-        return obs, rewards, terminated, truncated, info
+        # obs = [self.world.normalize_obs * ob for ob in obs]
+        # info = self._get_info()
+        # return obs, rewards, terminated, truncated, info
 
     # Agent obs logic
     def gen_obs_grid(self):
@@ -620,6 +631,10 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             # Process occluders and visibility
             # Note that this incurs some performance cost
             if self.partial_obs and not self.see_through_walls:
+                if a.view_size is None:
+                    raise ValueError(
+                        "Agent view size must be set for partial observation"
+                    )
                 vis_mask = grid.process_vis(
                     agent_pos=(a.view_size // 2, a.view_size - 1)
                 )
@@ -652,6 +667,10 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         """
         Render an agent observation for visualization
         """
+        raise NotImplementedError(
+            "get_obs_render is not implemented in the base class. "
+            "Please implement it in your own environment."
+        )
 
         grid, vis_mask = self.grid.decode(obs)
 
@@ -661,28 +680,28 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         return img
 
     # Randomizing
-    def _rand_int(self, low, high):
+    def _rand_int(self, low: int, high: int) -> int:
         """
         Generate random integer in [low,high[
         """
 
         return self.np_random.integers(low, high, endpoint=True)
 
-    def _rand_float(self, low, high):
+    def _rand_float(self, low: float, high: float) -> float:
         """
         Generate random float in [low,high[
         """
 
         return self.np_random.uniform(low, high)
 
-    def _rand_bool(self):
+    def _rand_bool(self) -> bool:
         """
         Generate random boolean value
         """
 
-        return self.np_random.randint(0, 2) == 0
+        return self.np_random.choice([True, False])
 
-    def _rand_elem(self, iterable):
+    def _rand_elem(self, iterable: Iterable) -> object:
         """
         Pick a random element in a list
         """
@@ -691,7 +710,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         idx = self._rand_int(0, len(lst) - 1)
         return lst[idx]
 
-    def _rand_subset(self, iterable, num_elems):
+    def _rand_subset(self, iterable: Iterable, num_elems: int) -> list:
         """
         Sample a random subset of distinct elements of a list
         """
@@ -708,14 +727,14 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return out
 
-    def _rand_pos(self, xLow, xHigh, yLow, yHigh):
+    def _rand_pos(self, x_low: int, x_high: int, y_low: int, y_high: int) -> Position:
         """
         Generate a random (x,y) position tuple
         """
 
         return (
-            self.np_random.randint(xLow, xHigh),
-            self.np_random.randint(yLow, yHigh),
+            self.np_random.integers(x_low, x_high),
+            self.np_random.integers(y_low, y_high),
         )
 
     # Env rendering
@@ -733,6 +752,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             self.window = Window("gym_multigrid")
             self.window.show(block=False)
 
+        highlight_masks = {}
         if self.highlight_visible_cells:
             # Compute which cells are visible to the agent
             _, vis_masks = self.gen_obs_grid()
@@ -744,6 +764,10 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             for i, a in enumerate(self.agents):
                 # Compute the world coordinates of the bottom-left corner
                 # of the agent's view area
+                if a.view_size is None:
+                    raise ValueError(
+                        "Agent view size must be set for highlighting visible cells"
+                    )
                 f_vec = a.dir_vec
                 r_vec = a.right_vec
                 top_left = (
@@ -778,6 +802,9 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         )
 
         if self.render_mode == "human":
+            if self.window is None:
+                self.window = Window("gym_multigrid")
+                self.window.show(block=False)
             self.window.show_img(img)
 
         return img

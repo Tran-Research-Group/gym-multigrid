@@ -215,7 +215,7 @@ class LavaRoomsEnv(MultiGridEnv):
             done = False
 
             # Rotate left
-            if actions[i] == self.actions.left:
+            if actions[i] == self.actions.LEFT:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, -1)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -239,7 +239,7 @@ class LavaRoomsEnv(MultiGridEnv):
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Rotate right
-            elif actions[i] == self.actions.right:
+            elif actions[i] == self.actions.RIGHT:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, +1)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -262,7 +262,7 @@ class LavaRoomsEnv(MultiGridEnv):
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Move forward
-            elif actions[i] == self.actions.up:
+            elif actions[i] == self.actions.UP:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (-1, 0)))
                 fwd_cell = self.grid.get(*fwd_pos)
@@ -284,7 +284,7 @@ class LavaRoomsEnv(MultiGridEnv):
                     rewards = 0
                 self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
-            elif actions[i] == self.actions.down:
+            elif actions[i] == self.actions.DOWN:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = tuple(a + b for a, b in zip(curr_pos, (+1, 0)))
                 fwd_cell = self.grid.get(*fwd_pos)

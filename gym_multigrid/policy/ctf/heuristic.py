@@ -5,22 +5,22 @@ import numpy as np
 from numpy.random import Generator
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import ActionsT, CtfActions
-from gym_multigrid.core.world import WorldT, CtfWorld
-from gym_multigrid.policy.base import BaseAgentPolicy
+from gym_multigrid.core.agent import Actions, CtfActions
+from gym_multigrid.core.world import CtfWorld, World
+from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.policy.ctf.utils import a_star, get_unterminated_opponent_pos
+from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import (
+    closest_area_pos,
     distance_area_point,
     position_in_positions,
-    closest_area_pos,
 )
-from gym_multigrid.typing import Position
 
 CtfPolicyT = TypeVar("CtfPolicyT", bound="CtfPolicy")
 
 
-class CtfPolicy(BaseAgentPolicy):
+class CtfPolicy(AgentPolicy):
     """
     Abstract class for Capture the Flag agent policy
     """
@@ -80,15 +80,15 @@ class CtfPolicy(BaseAgentPolicy):
         action: int
 
         if np.array_equal(action_dir, np.array([0, 0])):
-            action = self.action_set.stay
+            action = self.action_set.STAY
         elif np.array_equal(action_dir, np.array([0, -1])):
-            action = self.action_set.left
+            action = self.action_set.LEFT
         elif np.array_equal(action_dir, np.array([-1, 0])):
-            action = self.action_set.down
+            action = self.action_set.DOWN
         elif np.array_equal(action_dir, np.array([0, 1])):
-            action = self.action_set.right
+            action = self.action_set.RIGHT
         elif np.array_equal(action_dir, np.array([1, 0])):
-            action = self.action_set.up
+            action = self.action_set.UP
         else:
             raise ValueError(f"Invalid direction {action_dir}")
 
@@ -111,15 +111,15 @@ class CtfPolicy(BaseAgentPolicy):
 
         action_dir: NDArray[np.int_]
 
-        if action == self.action_set.stay:
+        if action == self.action_set.STAY:
             action_dir = np.array([0, 0])
-        elif action == self.action_set.left:
+        elif action == self.action_set.LEFT:
             action_dir = np.array([0, -1])
-        elif action == self.action_set.down:
+        elif action == self.action_set.DOWN:
             action_dir = np.array([-1, 0])
-        elif action == self.action_set.right:
+        elif action == self.action_set.RIGHT:
             action_dir = np.array([0, 1])
-        elif action == self.action_set.up:
+        elif action == self.action_set.UP:
             action_dir = np.array([1, 0])
         else:
             raise ValueError(f"Invalid action {action}")
@@ -144,7 +144,7 @@ class RwPolicy(CtfPolicy):
 
     def __init__(
         self,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
     ) -> None:
         """
@@ -152,7 +152,7 @@ class RwPolicy(CtfPolicy):
 
         Parameters
         ----------
-        action_set : gym_multigrid.core.agent.ActionsT | None
+        action_set : gym_multigrid.core.agent.Actions | None
             Actions available to the agent.
         random_generator : numpy.random.Generator
             Random number generator.
@@ -181,10 +181,10 @@ class DestinationPolicy(CtfPolicy):
     def __init__(
         self,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.25,
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -195,13 +195,13 @@ class DestinationPolicy(CtfPolicy):
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
             Make sure to set it to the field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         random_generator : numpy.random.Generator | None = None
             Random number generator. Replace it with the environment's random number generator if needed.
         randomness : float
             Probability of taking an random action instead of an optimal action.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied, and it should be set to the environment's world object.
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
             List of objects to avoid in the path.
@@ -211,7 +211,7 @@ class DestinationPolicy(CtfPolicy):
         self.name = "destination"
         self.field_map: NDArray | None = field_map
         self.randomness: float = randomness
-        self.world: WorldT = world
+        self.world: World = world
         self.avoided_objects: list[str] = avoided_objects
 
     def get_target(self, observation: ObservationDict, curr_pos: Position) -> Position:
@@ -288,11 +288,11 @@ class FightPolicy(DestinationPolicy):
     def __init__(
         self,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -302,13 +302,13 @@ class FightPolicy(DestinationPolicy):
         ----------
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         randomness : float = 0.25
             Probability of taking an random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied.
             It should be set to the environment's world object.
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
@@ -347,11 +347,11 @@ class CapturePolicy(DestinationPolicy):
     def __init__(
         self,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -361,13 +361,13 @@ class CapturePolicy(DestinationPolicy):
         ----------
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         randomness : float = 0.25
             Probability of taking an random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied.
             It should be set to the environment's world object.
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
@@ -403,11 +403,11 @@ class PatrolPolicy(DestinationPolicy):
     def __init__(
         self,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -417,13 +417,13 @@ class PatrolPolicy(DestinationPolicy):
         ----------
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         randomness : float = 0.25
             Probability of taking an random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied.
             It should be set to the environment's world object.
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
@@ -436,7 +436,7 @@ class PatrolPolicy(DestinationPolicy):
         )
         self.name = "patrol"
         self.ego_agent: Literal["red", "blue"] = ego_agent
-        self.world: WorldT = world
+        self.world: World = world
 
         self.directions: list[Position] = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
@@ -467,7 +467,7 @@ class PatrolPolicy(DestinationPolicy):
         return target
 
     def locate_border(
-        self, world: WorldT, directions: list[Position]
+        self, world: World, directions: list[Position]
     ) -> tuple[list[Position], list[Position]]:
         """
         Locate the border between red and blue territories.
@@ -532,11 +532,11 @@ class PatrolFightPolicy(PatrolPolicy):
     def __init__(
         self,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.25,
         ego_agent: Literal["red", "blue"] = "red",
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -546,13 +546,13 @@ class PatrolFightPolicy(PatrolPolicy):
         ----------
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         randomness : float = 0.25
             Probability of taking an random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied.
             It should be set to the environment's world
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
@@ -642,11 +642,11 @@ class RoombaPolicy(CtfPolicy):
         enemy_range: int = 4,
         flag_range: int = 5,
         field_map: NDArray | None = None,
-        action_set: ActionsT = CtfActions,
+        action_set: Actions = CtfActions,
         random_generator: Generator | None = None,
         randomness: float = 0.15,
         ego_agent: Literal["red", "blue"] = "red",
-        world: WorldT = CtfWorld,
+        world: World = CtfWorld,
         avoided_objects: list[str] = ["obstacle", "red_agent", "blue_agent"],
     ) -> None:
         """
@@ -661,7 +661,7 @@ class RoombaPolicy(CtfPolicy):
         field_map : numpy.typing.NDArray | None = None
             Field map of the environment.
             Make sure to set it to the field map of the environment.
-        actions : gym_multigrid.core.agent.ActionsT = CtfActions
+        actions : gym_multigrid.core.agent.Actions = CtfActions
             Actions available to the agent.
         random_generator : numpy.random.Generator | None = None
             Random number generator.
@@ -670,7 +670,7 @@ class RoombaPolicy(CtfPolicy):
             Probability of taking a random action instead of an optimal action.
         ego_agent : Literal["red", "blue"] = "red"
             Controlled agent.
-        world : gym_multigrid.core.world.WorldT = CtfWorld
+        world : gym_multigrid.core.world.World = CtfWorld
             World object where the policy is applied.
             It should be set to the environment's world object.
         avoided_objects : list[str] = ["obstacle", "red_agent", "blue_agent"]
@@ -681,7 +681,7 @@ class RoombaPolicy(CtfPolicy):
         super().__init__(action_set, random_generator)
         self.field_map: NDArray | None = field_map
         self.randomness: float = randomness
-        self.world: WorldT = world
+        self.world: World = world
         self.avoided_objects: list[str] = avoided_objects
         self.name = "roomba"
         self.enemy_range: int = enemy_range

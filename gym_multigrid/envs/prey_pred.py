@@ -1,26 +1,27 @@
 import enum
-from typing import Any, Literal, TypedDict, Type
 import warnings
-import numpy as np
-from numpy.typing import NDArray
-from gymnasium import spaces
+from typing import Any, Literal, Type, TypedDict
 
-from gym_multigrid.core.constants import PREY_PRED_COLORS, NAV_DIR_TO_VEC
-from gym_multigrid.core.object import Floor, WorldObj, WorldObjT
-from gym_multigrid.core.world import World, WorldT
-from gym_multigrid.core.agent import NavigationActions, Agent
+import numpy as np
+from gymnasium import spaces
+from numpy.typing import NDArray
+
+from gym_multigrid.core.agent import Agent, NavigationActions
+from gym_multigrid.core.constants import NAV_DIR_TO_VEC, PREY_PRED_COLORS
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.policy import AgentPolicyT
-from gym_multigrid.policy.base import BaseAgentPolicy
+from gym_multigrid.core.object import Floor, WorldObj
+from gym_multigrid.core.world import World
+from gym_multigrid.multigrid import (
+    DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
+    GridConfig,
+    MultiGridEnv,
+    PartialObsConfig,
+    RenderingConfig,
+)
+from gym_multigrid.policy import AgentPolicy
+from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
 from gym_multigrid.policy.prey_pred.utils import a_star
-from gym_multigrid.multigrid import (
-    MultiGridEnv,
-    GridConfig,
-    RenderingConfig,
-    PartialObsConfig,
-    DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
-)
 
 PreyPredWorld = World(
     encode_dim=2,
@@ -102,14 +103,14 @@ class Prey(Agent):
         self,
         prey_config: PreyConfig,
         prey_type: PreyType,
-        world: WorldT,
+        world: World,
         index: int,
         view_size: int | None = None,
-        policy_dict: dict[str, Type[AgentPolicyT]] = PREY_PRED_POLICIES,
+        policy_dict: dict[str, Type[AgentPolicy]] = PREY_PRED_POLICIES,
     ):
         self.prey_config: PreyConfig = prey_config
         self.prey_type: PreyType = prey_type
-        self.policy_class: Type[AgentPolicyT] = policy_dict[prey_type["policy"]]
+        self.policy_class: Type[AgentPolicy] = policy_dict[prey_type["policy"]]
 
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -147,7 +148,7 @@ class Prey(Agent):
 
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
-        self.policy: AgentPolicyT = self.policy_class(
+        self.policy: AgentPolicy = self.policy_class(
             action_set=self.actions,
             random_generator=env_generator,
         )
@@ -219,7 +220,7 @@ class Prey(Agent):
         num_neighbor_preds: int = 0
 
         for neighbor_pos in self.neighbor_pos:
-            cell: None | WorldObjT = grid.get(*neighbor_pos)
+            cell: None | WorldObj = grid.get(*neighbor_pos)
             if cell is not None and cell.type == "predator":
                 num_neighbor_preds += 1
             else:
@@ -249,7 +250,7 @@ class Prey(Agent):
         pred_ids: list[int] = []
 
         for neighbor_pos in self.neighbor_pos:
-            cell: None | WorldObjT = grid.get(*neighbor_pos)
+            cell: None | WorldObj = grid.get(*neighbor_pos)
             if cell is not None and cell.type == "predator":
                 num_neighbor_preds += 1
                 pred_ids.append(cell.index)
@@ -285,7 +286,7 @@ class Prey(Agent):
 class Predator(Agent):
     def __init__(
         self,
-        world: WorldT,
+        world: World,
         index: int,
         pred_config: PredatorConfig,
         view_size: int | None = None,
@@ -370,7 +371,7 @@ DEFAULT_PREY_TYPES: list[PreyType] = [
 ]
 
 
-class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
+class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
     """
     Environment in which the predator must catch the prey.
 
@@ -528,7 +529,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         return success, error_messages
 
     def _check_prey_configs(
-        self, prey_configs: list[PreyConfig], prey_types: list[PreyType], world: WorldT
+        self, prey_configs: list[PreyConfig], prey_types: list[PreyType], world: World
     ) -> tuple[bool, list[str]]:
         """
         Check if the preys configuration and prey types are valid.
@@ -539,7 +540,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
             The configuration for the prey agents in the environment.
         prey_types : list[PreyType]
             The configuration for the prey types in the environment.
-        world : WorldT
+        world : World
             The world configuration.
 
         Returns
@@ -589,7 +590,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         pred_configs: list[PredatorConfig],
         prey_configs: list[PreyConfig],
         prey_types: list[PreyType],
-        world: WorldT,
+        world: World,
     ) -> list[Predator | Prey]:
         """
         Generate the agents for the environment.
@@ -743,7 +744,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         # Add static objects ids to the observation
         for i in range(self.width):
             for j in range(self.height):
-                cell: None | WorldObjT = self.grid.get(i, j)
+                cell: None | WorldObj = self.grid.get(i, j)
                 if cell is None:
                     static_obs[j, i] = self.world.OBJECT_TO_IDX["empty"]
                 elif (
@@ -830,7 +831,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                 continue
             else:
                 next_pos: tuple[int, int] = self._get_next_pos(agent, action)
-                next_cell: None | WorldObjT = self.grid.get(*next_pos)
+                next_cell: None | WorldObj = self.grid.get(*next_pos)
 
                 if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
                     continue
@@ -855,7 +856,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
                     agent.pos = next_pos
 
                     # Update the agent's bg_color
-                    init_grid_cell: WorldObjT | None = self.init_grid.get(*agent.pos)
+                    init_grid_cell: WorldObj | None = self.init_grid.get(*agent.pos)
                     if init_grid_cell is not None:
                         agent.bg_color = self.init_grid.get(*agent.pos).color
 
@@ -903,22 +904,20 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def _get_next_pos(self, agent: Predator | Prey, action: int) -> tuple[int, int]:
-        next_pos: NDArray[np.int_]
+        next_pos: tuple[int, int]
         match action:
-            case self.actions.stay:
+            case self.actions.STAY:
                 next_pos = agent.pos
-            case self.actions.left:
-                next_pos = agent.west_pos()
-            case self.actions.right:
-                next_pos = agent.east_pos()
-            case self.actions.up:
-                next_pos = agent.north_pos()
-            case self.actions.down:
-                next_pos = agent.south_pos()
+            case self.actions.LEFT:
+                next_pos = agent.west_pos(in_tuple=True)
+            case self.actions.RIGHT:
+                next_pos = agent.east_pos(in_tuple=True)
+            case self.actions.UP:
+                next_pos = agent.north_pos(in_tuple=True)
+            case self.actions.DOWN:
+                next_pos = agent.south_pos(in_tuple=True)
             case _:
                 raise ValueError(f"Invalid action: {action}")
-
-        next_pos: tuple[int, int] = (next_pos[0], next_pos[1])
 
         return next_pos
 
@@ -933,7 +932,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_], list[int] | NDArray[np.int_]]):
         next_pos : tuple[int, int]
             The next position to move the agent to.
         """
-        next_cell: None | WorldObjT = self.grid.get(*next_pos)
+        next_cell: None | WorldObj = self.grid.get(*next_pos)
 
         agent_moves: bool = False
 

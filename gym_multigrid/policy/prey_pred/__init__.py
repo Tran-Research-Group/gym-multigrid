@@ -1,13 +1,13 @@
 import enum
 from typing import Any, Type
 
-from gymnasium.core import ObsType
 import numpy as np
+from gymnasium.core import ObsType
 
-from gym_multigrid.policy.base import BaseAgentPolicy, AgentPolicyT
+from gym_multigrid.policy.base import AgentPolicy
 
 
-class GivenPolicy(BaseAgentPolicy[ObsType, int]):
+class GivenPolicy(AgentPolicy[ObsType, int]):
     def __init__(
         self,
         action_set: Type[enum.IntEnum] | None = None,
@@ -20,7 +20,7 @@ class GivenPolicy(BaseAgentPolicy[ObsType, int]):
         return options["action"]
 
 
-class RwPolicy(BaseAgentPolicy[ObsType, int]):
+class RwPolicy(AgentPolicy[ObsType, int]):
     def __init__(
         self,
         action_set: Type[enum.IntEnum] | None = None,
@@ -30,12 +30,15 @@ class RwPolicy(BaseAgentPolicy[ObsType, int]):
         self.name = "random"
 
     def act(self, observation: ObsType, options: dict[str, Any]) -> int:
-        return self.random_generator.choice(self.action_set)
+        if self.action_set is None:
+            raise ValueError("Action set must be provided for random policy.")
+
+        return self.random_generator.choice(list(map(int, self.action_set)))
 
     def reset(self) -> None:
         pass
 
 
-PREY_PRED_POLICIES: dict[str, Type[AgentPolicyT]] = {
+PREY_PRED_POLICIES: dict[str, Type[AgentPolicy]] = {
     "random": RwPolicy,
 }

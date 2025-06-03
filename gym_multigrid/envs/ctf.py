@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import Agent, AgentT, CtfActions, PolicyAgent
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObj
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicyT, RwPolicy
@@ -849,15 +849,15 @@ class CtfMvNEnv(MultiGridEnv):
         assert agent.pos is not None
 
         match action:
-            case self.actions_set.stay:
+            case self.actions_set.STAY:
                 next_pos = agent.pos
-            case self.actions_set.left:
+            case self.actions_set.LEFT:
                 next_pos = agent.pos + np.array([0, -1])
-            case self.actions_set.down:
+            case self.actions_set.DOWN:
                 next_pos = agent.pos + np.array([-1, 0])
-            case self.actions_set.right:
+            case self.actions_set.RIGHT:
                 next_pos = agent.pos + np.array([0, 1])
-            case self.actions_set.up:
+            case self.actions_set.UP:
                 next_pos = agent.pos + np.array([1, 0])
             case _:
                 raise ValueError(f"Invalid action: {action}")
@@ -870,7 +870,7 @@ class CtfMvNEnv(MultiGridEnv):
         ):
             pass
         else:
-            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+            next_cell: WorldObj | None = self.grid.get(*next_pos)
 
             is_agent_in_blue_territory: bool = self._is_agent_in_territory(
                 agent.type, "blue", next_pos

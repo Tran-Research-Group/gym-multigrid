@@ -1,14 +1,14 @@
 from dataclasses import dataclass
-from typing import Final, Literal, TypedDict, TypeAlias, cast
+from typing import Final, Literal, TypeAlias, TypedDict, cast
 
-from gymnasium import Space, spaces
 import numpy as np
+from gymnasium import Space, spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import ActionsT, Agent, AgentT, MazeActions
+from gym_multigrid.core.agent import Actions, Agent, AgentT, MazeActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Flag, Obstacle, WorldObjT
+from gym_multigrid.core.object import Flag, Obstacle, WorldObj
 from gym_multigrid.core.world import MazeWorld, World
 from gym_multigrid.multigrid import (
     DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
@@ -17,7 +17,6 @@ from gym_multigrid.multigrid import (
     ObservationMode,
     PartialObsConfig,
     RenderingConfig,
-    T_cov,
 )
 from gym_multigrid.typing import Position
 
@@ -81,19 +80,20 @@ class ResetOptions(TypedDict):
 
 class TensorObservationMode(ObservationMode[NDArray[np.int64]]):
     @staticmethod
-    def observation_space(env: MultiGridEnv) -> spaces.Box:
+    def observation_space(env: MultiGridEnv[NDArray[np.int64]]) -> spaces.Box:
         return spaces.Box(
             low=0,
-            high=len(MazeWorld.OBJECT_TO_IDX) - 1,
+            high=len(env.world.OBJECT_TO_IDX) - 1,
             shape=(2, env.height, env.width),
             dtype=np.int64,
         )
 
     @staticmethod
-    def create_observation(env: MultiGridEnv) -> NDArray[np.int64]:
+    def create_observation(env: MultiGridEnv[NDArray[np.int64]]) -> NDArray[np.int64]:
         observation: NDArray[np.int64] = np.zeros(
             (2, env.height, env.width), dtype=np.int64
         )
+
         observation[0, :, :] = env.layout.static_obs
         for agent in env.agents:
             if agent.pos is not None:
@@ -142,7 +142,7 @@ DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
 }
 
 
-class MazeEnv(MultiGridEnv):
+class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
     """
     Multi-agent grid world environment with a maze layout to navigate through to reach the flags.
 
@@ -290,15 +290,15 @@ class MazeEnv(MultiGridEnv):
         """
 
         world: Final[World] = MazeWorld
-        action_set: ActionsT = MazeActions
+        action_set: Actions = MazeActions
 
         self.layout_config_dict: LayoutConfig = layout_config
         self.layout = Layout(**layout_config)
         self.layout.generate_static_obs()
 
-        self.observation_mode: ObservationMode = self.metadata["observation_modes"][
-            observation_mode
-        ]
+        self.observation_mode: ObservationMode[NDArray[np.int64]] = self.metadata[
+            "observation_modes"
+        ][observation_mode]
 
         self.reward = Reward(**reward_config)
 
@@ -379,7 +379,6 @@ class MazeEnv(MultiGridEnv):
     def reset(
         self, seed: int | None = None, options: ResetOptions | None = None
     ) -> tuple[Observation, dict[str, float]]:
-
         if options is not None:
             if "layout_config" in options:
                 self.layout_config_dict.update(options["layout_config"])
@@ -401,7 +400,7 @@ class MazeEnv(MultiGridEnv):
 
         return obs, info
 
-    def _get_obs(self) -> T_cov:
+    def _get_obs(self) -> NDArray[np.int64]:
         return self.observation_mode.create_observation(self)
 
     def _get_info(self) -> dict[str, float]:
@@ -418,13 +417,13 @@ class MazeEnv(MultiGridEnv):
             case action_set.STAY:
                 next_pos = agent.pos
             case action_set.LEFT:
-                next_pos = agent.west_pos()
+                next_pos = agent.west_pos(in_tuple=True)
             case action_set.DOWN:
-                next_pos = agent.south_pos()
+                next_pos = agent.south_pos(in_tuple=True)
             case action_set.RIGHT:
-                next_pos = agent.east_pos()
+                next_pos = agent.east_pos(in_tuple=True)
             case action_set.UP:
-                next_pos = agent.north_pos()
+                next_pos = agent.north_pos(in_tuple=True)
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
@@ -436,7 +435,7 @@ class MazeEnv(MultiGridEnv):
         ):
             pass  # Do nothing
         else:
-            next_cell: WorldObjT | None = self.grid.get(*next_pos)
+            next_cell: WorldObj | None = self.grid.get(*next_pos)
 
             if next_cell is None:
                 agent.move(next_pos, self.grid, self.init_grid)
@@ -473,7 +472,6 @@ class MazeEnv(MultiGridEnv):
     def step(
         self, action: int | list[int]
     ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
-
         actions: list[int] = np.array([action]).flatten().tolist()
 
         self._move_agents(actions)
