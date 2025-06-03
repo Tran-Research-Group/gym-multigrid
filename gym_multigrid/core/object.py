@@ -1,4 +1,4 @@
-from typing import Final, Literal, overload
+from typing import Any, Final, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -182,7 +182,7 @@ class WorldObj:
             "down": self.south_pos(),
         }
 
-    def reset(self) -> None:
+    def reset(self, options: dict[str, Any] | None = None) -> None:
         """
         Reset the object to its initial state.
         This method can be called before the start of every episode.
@@ -518,7 +518,7 @@ class Flag(WorldObj):
         index: int,
         type: str = "flag",
         color: str = "blue",
-        bg_color: str = "light_blue",
+        bg_color: str | None = "light_blue",
     ):
         super().__init__(world, type, color, bg_color)
         self.index: int = index

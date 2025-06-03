@@ -1,10 +1,11 @@
 import enum
 import warnings
-from typing import Any, Literal, Type, TypedDict
+from typing import Any, Literal, Protocol, Type, TypedDict, TypeGuard
 
 import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 from gym_multigrid.core.agent import Agent, NavigationActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC, PREY_PRED_COLORS
@@ -19,9 +20,9 @@ from gym_multigrid.multigrid import (
     RenderingConfig,
 )
 from gym_multigrid.policy import AgentPolicy
-from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
 from gym_multigrid.policy.prey_pred.utils import a_star
+from gym_multigrid.typing import Position
 
 PreyPredWorld = World(
     encode_dim=2,
@@ -39,20 +40,18 @@ PreyPredWorld = World(
 )
 
 
-class ObservationConfig(TypedDict):
+class ObservationConfig(BaseModel):
     encode_prey_areas: bool
-    # remove_dead_preys: bool
-    # encode_dead_prey_as: Literal["wall", "dead", "status"]
 
 
-class PredatorConfig(TypedDict):
+class PredatorConfig(BaseModel):
     init_pos: tuple[int, int]
     policy_type: Literal["teammate", "ego"]
     target_preys: list[int]
     color: str
 
 
-class PreyType(TypedDict):
+class PreyType(BaseModel):
     """
     Configuration for a type of prey object in the environment.
 
@@ -79,7 +78,7 @@ class PreyType(TypedDict):
     num_required_preds_fix: int
 
 
-class PreyConfig(TypedDict):
+class PreyConfig(BaseModel):
     """
     Configuration for the prey agaent in the environment.
 
@@ -94,8 +93,8 @@ class PreyConfig(TypedDict):
     color: str
 
 
-class ResetOptions(TypedDict):
-    agent_pos_list: list[tuple[int, int]]
+class ResetOptions(BaseModel):
+    agent_pos_list: list[tuple[int, int]] | None = None
 
 
 class Prey(Agent):
@@ -110,7 +109,7 @@ class Prey(Agent):
     ):
         self.prey_config: PreyConfig = prey_config
         self.prey_type: PreyType = prey_type
-        self.policy_class: Type[AgentPolicy] = policy_dict[prey_type["policy"]]
+        self.policy_class: Type[AgentPolicy] = policy_dict[prey_type.policy]
 
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -121,19 +120,19 @@ class Prey(Agent):
             world=world,
             index=index,
             actions=NavigationActions,
-            color=prey_config["color"],
+            color=prey_config.color,
             bg_color="light_grey",
-            type=prey_type["name"],
+            type=prey_type.name,
             view_size=view_size,
             dir_to_vec=NAV_DIR_TO_VEC,
         )
 
     def get_init_pos(self) -> tuple[int, int]:
         # Randomly select a position within the prey territory
-        territory_dims: tuple[int, int] = self.prey_config["territory_dims"]
-        territory_left_top_corner: tuple[int, int] = self.prey_config[
-            "territory_left_top_corner"
-        ]
+        territory_dims: tuple[int, int] = self.prey_config.territory_dims
+        territory_left_top_corner: tuple[int, int] = (
+            self.prey_config.territory_left_top_corner
+        )
 
         x: int = self.policy.random_generator.integers(
             territory_left_top_corner[0],
@@ -163,11 +162,11 @@ class Prey(Agent):
         return self.policy.act(observation, options)
 
     @property
-    def pos(self) -> tuple[int, int]:
-        return (self._pos[0], self._pos[1]) if self._pos is not None else None
+    def pos(self) -> Position:
+        return (self._pos[0], self._pos[1])
 
     @pos.setter
-    def pos(self, pos: NDArray[np.int_]) -> None:
+    def pos(self, pos: Position) -> None:
         self._pos = pos
         if pos is not None:
             self.neighbor_pos = pos + self.neighbor_pos_offsets
@@ -186,10 +185,10 @@ class Prey(Agent):
         in_territory : bool
             True if the position is within the prey territory, False otherwise.
         """
-        territory_dims: tuple[int, int] = self.prey_config["territory_dims"]
-        territory_left_top_corner: tuple[int, int] = self.prey_config[
-            "territory_left_top_corner"
-        ]
+        territory_dims: tuple[int, int] = self.prey_config.territory_dims
+        territory_left_top_corner: tuple[int, int] = (
+            self.prey_config.territory_left_top_corner
+        )
 
         in_territory: bool = (
             territory_left_top_corner[0]
@@ -216,7 +215,7 @@ class Prey(Agent):
         fixable : bool
             True if the prey is in a fixable condition, False otherwise.
         """
-        num_required_preds_fix: int = self.prey_type["num_required_preds_fix"]
+        num_required_preds_fix: int = self.prey_type.num_required_preds_fix
         num_neighbor_preds: int = 0
 
         for neighbor_pos in self.neighbor_pos:
@@ -244,14 +243,14 @@ class Prey(Agent):
         capturable : bool
             True if the prey is in a capturable condition, False otherwise.
         """
-        num_required_preds_capture: int = self.prey_type["num_required_preds_capture"]
+        num_required_preds_capture: int = self.prey_type.num_required_preds_capture
         num_neighbor_preds: int = 0
 
         pred_ids: list[int] = []
 
         for neighbor_pos in self.neighbor_pos:
             cell: None | WorldObj = grid.get(*neighbor_pos)
-            if cell is not None and cell.type == "predator":
+            if isinstance(cell, Predator):
                 num_neighbor_preds += 1
                 pred_ids.append(cell.index)
             else:
@@ -297,7 +296,7 @@ class Predator(Agent):
             world=world,
             index=index,
             actions=NavigationActions,
-            color=pred_config["color"],
+            color=pred_config.color,
             bg_color="white",
             type="predator",
             view_size=view_size,
@@ -305,69 +304,73 @@ class Predator(Agent):
         )
 
     def get_init_pos(self) -> tuple[int, int]:
-        return self.pred_config["init_pos"]
+        return self.pred_config.init_pos
 
     def reset(self, env_generator: np.random.Generator) -> None:
         super().reset()
 
     @property
     def target_preys(self) -> list[int]:
-        return self.pred_config["target_preys"]
+        return self.pred_config.target_preys
 
 
-DEFAULT_OBSERVATION_CONFIG: ObservationConfig = {
-    "encode_prey_areas": True,
-    # "remove_dead_agents": True,
-    # "encode_dead_agents_as": "wall",
-}
+DEFAULT_OBSERVATION_CONFIG: ObservationConfig = ObservationConfig(
+    encode_prey_areas=True,
+    # remove_dead_agents=True,
+    # encode_dead_agents_as="wall",
+)
 
 DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
-    {"init_pos": (6, 6), "policy_type": "ego", "color": "red"},
-    {"init_pos": (7, 7), "policy_type": "teammate", "color": "orange"},
-    {"init_pos": (8, 8), "policy_type": "teammate", "color": "yellow"},
+    PredatorConfig(init_pos=(6, 6), policy_type="ego", color="red", target_preys=[]),
+    PredatorConfig(
+        init_pos=(7, 7), policy_type="teammate", color="orange", target_preys=[]
+    ),
+    PredatorConfig(
+        init_pos=(8, 8), policy_type="teammate", color="yellow", target_preys=[]
+    ),
 ]
 
 DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
-    {
-        "type": "easy_prey",
-        "territory_dims": (4, 4),
-        "territory_left_top_corner": (2, 2),
-        "color": "yellow",
-    },
-    {
-        "type": "easy_prey",
-        "territory_dims": (4, 4),
-        "territory_left_top_corner": (9, 2),
-        "color": "yellow",
-    },
-    {
-        "type": "hard_prey",
-        "territory_dims": (4, 4),
-        "territory_left_top_corner": (2, 9),
-        "color": "red",
-    },
-    {
-        "type": "hard_prey",
-        "territory_dims": (4, 4),
-        "territory_left_top_corner": (9, 9),
-        "color": "red",
-    },
+    PreyConfig(
+        type="easy_prey",
+        territory_dims=(4, 4),
+        territory_left_top_corner=(2, 2),
+        color="yellow",
+    ),
+    PreyConfig(
+        type="easy_prey",
+        territory_dims=(4, 4),
+        territory_left_top_corner=(9, 2),
+        color="yellow",
+    ),
+    PreyConfig(
+        type="hard_prey",
+        territory_dims=(4, 4),
+        territory_left_top_corner=(2, 9),
+        color="red",
+    ),
+    PreyConfig(
+        type="hard_prey",
+        territory_dims=(4, 4),
+        territory_left_top_corner=(9, 9),
+        color="red",
+    ),
 ]
 DEFAULT_PREY_TYPES: list[PreyType] = [
-    {
-        "name": "easy_prey",
-        "policy": "random",
-        "capture_reward": 1.0,
-        "num_required_preds_capture": 1,
-        "num_required_preds_fix": 1,
-    },
-    {
-        "name": "hard_prey",
-        "policy": "random",
-        "capture_reward": 1.0,
-        "num_required_preds_capture": 2,
-        "num_required_preds_fix": 1,
-    },
+    PreyType(
+        name="easy_prey",
+        policy="random",
+        capture_reward=1.0,
+        num_required_preds_capture=1,
+        num_required_preds_fix=1,
+    ),
+    PreyType(
+        name="hard_prey",
+        policy="random",
+        capture_reward=1.0,
+        num_required_preds_capture=2,
+        num_required_preds_fix=1,
+    ),
 ]
 
 
@@ -408,6 +411,8 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
 
     """
 
+    agents: list[Prey | Predator]  # List of agents in the environment
+
     def __init__(
         self,
         max_episode_steps: int = 300,
@@ -442,27 +447,27 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         self.num_preys: int = len(prey_configs)
         self.num_preds: int = len(pred_configs)
 
-        grid_config: GridConfig = {
-            "grid_size": 15,
-            "actions_set": NavigationActions,
-            "world": world,
-        }
-        rendering_config: RenderingConfig = {
-            "render_mode": render_mode,
-            "uncached_object_types": ["predator"]
-            + [prey_type["name"] for prey_type in prey_types],
-        }
-        partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
+        grid_config: GridConfig = GridConfig(
+            grid_size=15,
+            actions_set=NavigationActions,
+            world=world,
+        )
 
+        rendering_config: RenderingConfig = RenderingConfig(
+            render_mode=render_mode,
+            uncached_object_types=["predator"]
+            + [prey_type.name for prey_type in prey_types],
+        )
+
+        partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
         agents: list[Predator | Prey] = self._gen_agents(
             pred_configs, prey_configs, prey_types, world
         )
-
         super().__init__(
             agents=agents,
-            **grid_config,
-            **rendering_config,
-            **partial_obs_config,
+            **grid_config.model_dump(),
+            **rendering_config.model_dump(),
+            **partial_obs_config.model_dump(),
         )
 
     def _check_pred_configs(
@@ -496,19 +501,19 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         init_positions: list[tuple[int, int]] = []
 
         for pred_config in pred_configs:
-            if pred_config["policy_type"] == "ego":
+            if pred_config.policy_type == "ego":
                 ego_predator_count += 1
                 ego_predator_index = pred_configs.index(pred_config)
             else:
                 pass
 
-            if pred_config["init_pos"] in init_positions:
+            if pred_config.init_pos in init_positions:
                 success = False
                 error_messages.append(
-                    f"Invalid predator config: {pred_config['init_pos']} is already occupied."
+                    f"Invalid predator config: {pred_config.init_pos} is already occupied."
                 )
             else:
-                init_positions.append(pred_config["init_pos"])
+                init_positions.append(pred_config.init_pos)
 
         if ego_predator_count != 1:
             success = False
@@ -555,32 +560,28 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         error_messages: list[str] = []
 
         for prey_type in prey_types:
-            if prey_type["name"] not in world.OBJECT_TO_IDX:
+            if prey_type.name not in world.OBJECT_TO_IDX:
                 success = False
                 error_messages.append(
-                    f"Invalid prey type: {prey_type['name']} not in world object to index mapping."
+                    f"Invalid prey type: {prey_type.name} not in world object to index mapping."
                 )
             else:
                 pass
 
-            if (
-                prey_type["num_required_preds_fix"]
-                > prey_type["num_required_preds_capture"]
-            ):
+            if prey_type.num_required_preds_fix > prey_type.num_required_preds_capture:
                 success = False
                 error_messages.append(
-                    f"Invalid prey type: {prey_type['name']} has num_required_preds_fix greater than num_required_preds_capture."
+                    f"Invalid prey type: {prey_type.name} has num_required_preds_fix greater than num_required_preds_capture."
                 )
             else:
                 pass
 
-        prey_type_names = [prey_type["name"] for prey_type in prey_types]
-
+        prey_type_names = [prey_type.name for prey_type in prey_types]
         for prey_config in prey_configs:
-            if prey_config["type"] not in prey_type_names:
+            if prey_config.type not in prey_type_names:
                 success = False
                 error_messages.append(
-                    f"Invalid prey config: {prey_config['type']} not in prey types."
+                    f"Invalid prey config: {prey_config.type} not in prey types."
                 )
 
         return success, error_messages
@@ -604,7 +605,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         prey_types : list[PreyType]
             The configuration for the prey types in the environment.
         """
-        agents: list[Agent] = []
+        agents: list[Predator | Prey] = []
 
         for i, pred_config in enumerate(pred_configs):
             predator: Predator = Predator(
@@ -619,7 +620,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
             prey_type: PreyType = next(
                 prey_type
                 for prey_type in prey_types
-                if prey_type["name"] == prey_config["type"]
+                if prey_type.name == prey_config.type
             )
             prey: Prey = Prey(
                 prey_config=prey_config,
@@ -642,7 +643,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         return observation_space
 
     def reset(
-        self, seed: int | None = None, options: ResetOptions | None = None
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         self.step_count: int = 0
 
@@ -652,7 +653,8 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         # Reset the agents. If agent_pos_list is provided, use it to reset the agents
         agent_pos_list: list[tuple[int, int]] | None = None
         if options is not None:
-            agent_pos_list = options.get("agent_pos_list", None)
+            reset_options: ResetOptions = ResetOptions.model_validate(options)
+            agent_pos_list = reset_options.agent_pos_list
         else:
             pass
         self._reset_agents(agent_pos_list=agent_pos_list)
@@ -732,8 +734,8 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         )
         # Place prey territories
         for prey_config in self.prey_configs:
-            left_top_corner: tuple[int, int] = prey_config["territory_left_top_corner"]
-            territory_dims: tuple[int, int] = prey_config["territory_dims"]
+            left_top_corner: tuple[int, int] = prey_config.territory_left_top_corner
+            territory_dims: tuple[int, int] = prey_config.territory_dims
 
             self.grid.rect_filled(
                 *left_top_corner,
@@ -749,7 +751,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                     static_obs[j, i] = self.world.OBJECT_TO_IDX["empty"]
                 elif (
                     cell.type == "prey_area"
-                    and not self.observation_config["encode_prey_areas"]
+                    and not self.observation_config.encode_prey_areas
                 ):
                     static_obs[j, i] = self.world.OBJECT_TO_IDX["empty"]
                 else:
@@ -781,6 +783,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                 pass
 
         for agent in self.agents:
+            assert isinstance(agent_pos_list, list)
             agent_pos: tuple[int, int] = (
                 agent.get_init_pos()
                 if not use_agent_pos_list
@@ -789,7 +792,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
             self.place_agent(agent, agent_pos)
 
     def step(
-        self, actions: list[int] | NDArray[np.int_]
+        self, action: NDArray[np.int_] | np.int_
     ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
         """
         Take a step in the environment.
@@ -815,22 +818,24 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         terminated: bool = False
         reward: float = 0
 
-        actions = np.array(actions)
+        actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
         prey_actions = [
-            agent.act(self._get_obs(), {}) for agent in self.agents[self.num_preds :]
+            agent.act(self._get_obs(), {})
+            for agent in self.agents[self.num_preds :]
+            if isinstance(agent, Prey)
         ]
-        all_actions = np.concatenate((actions, prey_actions))
+        all_actions: list[int] = actions + prey_actions
         # Order to apply the actions to the agents
         order: NDArray[np.int_] = self.np_random.permutation(len(self.agents))
 
         for i in order:
             agent: Prey | Predator = self.agents[i]
-            action: int = all_actions[i]
+            act: int = all_actions[i]
 
             if agent.terminated:
                 continue
             else:
-                next_pos: tuple[int, int] = self._get_next_pos(agent, action)
+                next_pos: tuple[int, int] = self._get_next_pos(agent, act)
                 next_cell: None | WorldObj = self.grid.get(*next_pos)
 
                 if isinstance(next_cell, WorldObj) and not next_cell.can_overlap():
@@ -858,10 +863,11 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                     # Update the agent's bg_color
                     init_grid_cell: WorldObj | None = self.init_grid.get(*agent.pos)
                     if init_grid_cell is not None:
-                        agent.bg_color = self.init_grid.get(*agent.pos).color
+                        agent.bg_color = init_grid_cell.color
 
                     # Determine rewards and remove captured preys from the grid
                     for prey in self.agents[self.num_preds :]:
+                        assert isinstance(prey, Prey)
                         if prey.terminated:
                             continue
                         else:
@@ -874,10 +880,9 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                                 captured_by_designated_preds: bool = True
 
                                 for pred_id in pred_ids:
-                                    if (
-                                        self.agents[pred_id].target_preys[prey.index]
-                                        == 1
-                                    ):
+                                    pred = self.agents[pred_id]
+                                    assert isinstance(pred, Predator)
+                                    if pred.target_preys[prey.index] == 1:
                                         continue
                                     else:
                                         captured_by_designated_preds = False
@@ -886,7 +891,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                                 if captured_by_designated_preds:
                                     prey.terminated = True
                                     prey.captured_by = pred_ids
-                                    reward += prey.prey_type["capture_reward"]
+                                    reward += prey.prey_type.capture_reward
                                     self.grid.set(
                                         *prey.pos, self.init_grid.get(*prey.pos)
                                     )
@@ -904,7 +909,10 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def _get_next_pos(self, agent: Predator | Prey, action: int) -> tuple[int, int]:
-        next_pos: tuple[int, int]
+        # Check that self.actions has the required enum variables
+
+        self.actions: Type[NavigationActions]
+
         match action:
             case self.actions.STAY:
                 next_pos = agent.pos
@@ -952,21 +960,29 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         reward : float
             The reward for the action.
         """
-        pass
+        raise NotImplementedError(
+            "Predator movement logic is not implemented. Use `step()` to move the predator agents."
+        )
 
     @property
     def prey_agents(self) -> list[Prey]:
-        return self.agents[self.num_preds :]
+        return [
+            agent for agent in self.agents[self.num_preds :] if isinstance(agent, Prey)
+        ]
 
     @property
     def pred_agents(self) -> list[Predator]:
-        return self.agents[: self.num_preds]
+        return [
+            agent
+            for agent in self.agents[: self.num_preds]
+            if isinstance(agent, Predator)
+        ]
 
 
 class BasePolicy:
     def __init__(
         self,
-        action_set: Type[enum.IntEnum] | None = NavigationActions,
+        action_set: Type[enum.IntEnum] = NavigationActions,
         dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
@@ -1016,7 +1032,7 @@ class BasePolicy:
         raise ValueError(f"Invalid vector: {vec}")
 
 
-class GreedyPredatorActionOption(TypedDict):
+class GreedyPredatorActionOption(BaseModel):
     current_pos: tuple[int, int]
     preys: list[Prey]
     grid: Grid
@@ -1027,7 +1043,7 @@ class GreedyPredatorPolicy(BasePolicy):
         self,
         target_list: list[Literal[0, 1]],
         random_prob: float = 0.1,
-        action_set: Type[enum.IntEnum] | None = NavigationActions,
+        action_set: Type[enum.IntEnum] = NavigationActions,
         dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
@@ -1039,7 +1055,7 @@ class GreedyPredatorPolicy(BasePolicy):
             random_generator=random_generator,
         )
 
-    def act(self, action_option: GreedyPredatorActionOption) -> int:
+    def act(self, action_option: dict[str, Any]) -> int:
         """
         Choose an action for the predator agent.
 
@@ -1055,9 +1071,12 @@ class GreedyPredatorPolicy(BasePolicy):
         action : int
             The action to take.
         """
-        current_pos: tuple[int, int] = action_option["current_pos"]
-        preys: list[Prey] = action_option["preys"]
-        grid: Grid = action_option["grid"]
+        checked_action_option: GreedyPredatorActionOption = (
+            GreedyPredatorActionOption.model_validate(action_option)
+        )
+        current_pos: tuple[int, int] = checked_action_option.current_pos
+        preys: list[Prey] = checked_action_option.preys
+        grid: Grid = checked_action_option.grid
 
         target_prey: None | Prey = None
 
@@ -1086,6 +1105,7 @@ class GreedyPredatorPolicy(BasePolicy):
             case True:
                 action = self.random_generator.integers(0, len(self.action_set))
             case False:
+                assert target_prey is not None, "Target prey should not be None"
                 path: list[tuple[int, int]] = a_star(current_pos, target_prey.pos, grid)
                 next_pos: tuple[int, int] = path[1] if len(path) > 1 else current_pos
                 dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(current_pos)

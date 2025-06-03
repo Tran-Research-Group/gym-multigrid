@@ -19,8 +19,9 @@ from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces.space import Space
 from numpy.typing import NDArray
+from pydantic import BaseModel, Field
 
-from gym_multigrid.core.agent import Actions, Agent, DefaultActions
+from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
 from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Door, WorldObj
@@ -69,34 +70,47 @@ class ObservationMode(Generic[EnvType, ObsType], ABC):
     """
 
 
-class GridConfig(TypedDict, total=False):
-    grid_size: int | None
-    width: int | None
-    height: int | None
-    world: World
-    actions_set: Type[Actions]
+class GridConfig(BaseModel):
+    grid_size: int | None = None
+    width: int | None = None
+    height: int | None = None
+    world: World = Field(default=DefaultWorld)
+    actions_set: Type[Actions] = Field(default=DefaultActions)
 
 
-class RenderingConfig(TypedDict):
-    render_mode: Literal["human", "rgb_array"]
-    close_window: bool
-    uncached_object_types: list[str]
-    tile_size: int
+class RenderingConfig(BaseModel):
+    """
+    Attributes
+    ----------
+    render_mode : Literal["human", "rgb_array"] = "rgb_array"
+        Rendering mode
+    uncached_object_types : list[str] = []
+        List of object types that should not be cached in the rendering cache
+    close_window : bool = False
+        Whether to close the rendering window
+    tile_size : int = TILE_PIXELS
+        Size of the tiles in the rendering
+    """
+
+    render_mode: Literal["human", "rgb_array"] = "rgb_array"
+    uncached_object_types: list[str] = []
+    close_window: bool = False
+    tile_size: int = TILE_PIXELS
 
 
-class PartialObsConfig(TypedDict):
+class PartialObsConfig(BaseModel):
     partial_obs: bool
     agent_view_size: int | None
     see_through_walls: bool
     highlight_visible_cells: bool
 
 
-DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
-    "partial_obs": False,
-    "agent_view_size": None,
-    "see_through_walls": False,
-    "highlight_visible_cells": False,
-}
+DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = PartialObsConfig(
+    partial_obs=False,
+    agent_view_size=None,
+    see_through_walls=False,
+    highlight_visible_cells=False,
+)
 
 
 class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
@@ -114,7 +128,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
     def __init__(
         self,
-        agents: list[Agent],
+        agents: list[AgentT],
         grid_size: int | None = None,
         width: int | None = None,
         height: int | None = None,
@@ -286,7 +300,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self,
         *,
         seed: int | None = None,
-        options: dict | None = None,
+        options: dict[str, Any] | None = None,
     ) -> tuple[ObsType, dict[str, Any]]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
@@ -487,7 +501,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         else:
             pass
 
-        if pos is not None:
+        if pos is not None and pos != (-1, -1):
             agent.pos = pos
             self.put_obj(agent, i=pos[0], j=pos[1])
         else:
@@ -525,9 +539,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return obs_cell is not None and obs_cell.type == world_cell.type
 
-    def step(
-        self, action: ActType
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    def step(self, action) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """
         Example method showing potential implementation of the step method.
         Implement this method in your own environment.

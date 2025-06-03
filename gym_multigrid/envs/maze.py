@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import Final, Literal, TypeAlias, TypedDict, cast
+from typing import Any, Final, Literal, TypeAlias, TypedDict, cast
 
 import numpy as np
 from gymnasium import Space, spaces
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 from gym_multigrid.core.agent import Actions, Agent, MazeActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC
@@ -21,30 +22,21 @@ from gym_multigrid.multigrid import (
 from gym_multigrid.typing import Position
 
 
-class ObservationDict(TypedDict):
-    agent: NDArray
-    flag: NDArray
-    wall: NDArray
-
-
-Observation: TypeAlias = ObservationDict | NDArray
-
-
-class LayoutConfig(TypedDict):
+class LayoutConfig(BaseModel):
     width: int
     height: int
-    flag_positions: list[tuple[int, int]]
-    init_agent_positions: list[tuple[int, int]]
-    wall_positions: list[tuple[int, int]]
+    flag_positions: list[Position]
+    init_agent_positions: list[Position]
+    wall_positions: list[Position]
 
 
 @dataclass
 class Layout:
     width: int
     height: int
-    flag_positions: list[tuple[int, int]]
-    init_agent_positions: list[tuple[int, int]]
-    wall_positions: list[tuple[int, int]]
+    flag_positions: list[Position]
+    init_agent_positions: list[Position]
+    wall_positions: list[Position]
 
     def generate_static_obs(
         self, obj_to_idx: dict[str, int] = MazeWorld.OBJECT_TO_IDX
@@ -63,7 +55,7 @@ class Layout:
         return static_obs
 
 
-class RewardConfig(TypedDict):
+class RewardConfig(BaseModel):
     flag_reward: float
     wall_penalty_ratio: float
     step_penalty_ratio: float
@@ -76,7 +68,7 @@ class Reward:
     step_penalty_ratio: float
 
 
-class ResetOptions(TypedDict):
+class ResetOptions(BaseModel):
     layout_config: LayoutConfig
 
 
@@ -135,13 +127,13 @@ class MapObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
         return observation
 
 
-DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
-    "width": 10,
-    "height": 10,
-    "flag_positions": [(9, 9)],
-    "init_agent_positions": [(5, 5)],
-    "wall_positions": [],
-}
+DEFAULT_LAYOUT_CONFIG: LayoutConfig = LayoutConfig(
+    width=10,
+    height=10,
+    flag_positions=[(9, 9)],
+    init_agent_positions=[(5, 5)],
+    wall_positions=[],
+)
 
 
 class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
@@ -217,8 +209,9 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
     """
 
     # Update metadata of the parent class
-    metadata = MultiGridEnv.metadata.copy()
-    metadata["observation_modes"] = {
+    observation_modes: dict[
+        str, type[ObservationMode["MazeEnv", NDArray[np.int64]]]
+    ] = {
         "tensor": TensorObservationMode,
         "map": MapObservationMode,
     }
@@ -227,11 +220,11 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         self,
         num_agents: int = 1,
         layout_config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
-        reward_config: RewardConfig = {
-            "flag_reward": 1.0,
-            "wall_penalty_ratio": 0.0,
-            "step_penalty_ratio": 0.01,
-        },
+        reward_config: RewardConfig = RewardConfig(
+            flag_reward=1.0,
+            wall_penalty_ratio=0.0,
+            step_penalty_ratio=0.01,
+        ),
         observation_mode: Literal["tensor"] = "tensor",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
@@ -295,14 +288,12 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         action_set: type[Actions] = MazeActions
 
         self.layout_config_dict: LayoutConfig = layout_config
-        self.layout = Layout(**layout_config)
+        self.layout = Layout(**layout_config.model_dump())
         self.layout.generate_static_obs()
 
-        self.observation_mode: ObservationMode[NDArray[np.int64]] = self.metadata[
-            "observation_modes"
-        ][observation_mode]
+        self.observation_mode = self.observation_modes[observation_mode]
 
-        self.reward = Reward(**reward_config)
+        self.reward = Reward(**reward_config.model_dump())
 
         agents: list[Agent] = [
             Agent(
@@ -317,25 +308,24 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
             for i in range(num_agents)
         ]
 
-        grid_config: GridConfig = {
-            "height": self.layout.height,
-            "width": self.layout.width,
-            "actions_set": action_set,
-            "world": world,
-        }
+        grid_config: Final[GridConfig] = GridConfig(
+            height=self.layout.height,
+            width=self.layout.width,
+            actions_set=action_set,
+            world=world,
+        )
 
-        rendering_config: RenderingConfig = {
-            "render_mode": render_mode,
-            "uncached_object_types": ["agent"],
-        }
+        rendering_config: RenderingConfig = RenderingConfig(
+            render_mode=render_mode, uncached_object_types=["agent"]
+        )
 
         partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
 
         super().__init__(
             agents=agents,
-            **grid_config,
-            **rendering_config,
-            **partial_obs_config,
+            **grid_config.model_dump(),
+            **rendering_config.model_dump(),
+            **partial_obs_config.model_dump(),
         )
 
     def _set_observation_space(self) -> Space:
@@ -361,30 +351,29 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
 
         self.init_grid: Grid = self.grid.copy()
 
-        agents_init_pos: list[tuple[int, int] | None] = self.layout.init_agent_positions
-        match len(agents_init_pos):
-            case 0:
-                agents_init_pos = [None] * len(self.agents)
-            case 1:
-                agents_init_pos = agents_init_pos * len(self.agents)
-            case len(self.agents):
-                pass
-            case _:
-                raise ValueError(
-                    f"Number of agents {len(self.agents)} and number of initial agent positions {len(agents_init_pos)} do not match: {len(self.agents)} != {len(agents_init_pos)}"
-                )
+        agents_init_pos: list[Position] = self.layout.init_agent_positions
+        if len(agents_init_pos) == 0:
+            agents_init_pos = [(-1, -1)] * len(self.agents)
+        elif len(agents_init_pos) == 1:
+            agents_init_pos = agents_init_pos * len(self.agents)
+        elif len(agents_init_pos) == len(self.agents):
+            pass
+        else:
+            raise ValueError(
+                f"Number of agents {len(self.agents)} and number of initial agent positions {len(agents_init_pos)} do not match: {len(self.agents)} != {len(agents_init_pos)}"
+            )
 
         for agent, init_pos in zip(self.agents, agents_init_pos):
             agent.reset()
             self.place_agent(agent, pos=init_pos)
 
-    def reset(
-        self, seed: int | None = None, options: ResetOptions | None = None
-    ) -> tuple[Observation, dict[str, float]]:
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         if options is not None:
             if "layout_config" in options:
-                self.layout_config_dict.update(options["layout_config"])
-                self.layout = Layout(**self.layout_config_dict)
+                self.layout_config_dict = self.layout_config_dict.model_copy(
+                    update=options["layout_config"]
+                )
+                self.layout = Layout(**self.layout_config_dict.model_dump())
                 self.layout.generate_static_obs()
         else:
             pass
@@ -392,12 +381,10 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         self._reset_gym(seed=seed)
         self._gen_grid(self.width, self.height)
 
-        self.agent_traj: list[list[tuple[int, int]]] = [
-            agent.pos for agent in self.agents
-        ]
+        self.agent_traj: list[list[Position]] = [[agent.pos for agent in self.agents]]
         self.rewards: list[float] = []
 
-        obs: Observation = self._get_obs()
+        obs = self._get_obs()
         info: dict[str, float] = self._get_info()
 
         return obs, info
@@ -457,9 +444,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         for i in order:
             self._move_agent(actions[i], self.agents[i])
 
-    def _is_agent_on_obj(
-        self, agent_loc: tuple[int, int], obj: list[tuple[int, int]]
-    ) -> bool:
+    def _is_agent_on_obj(self, agent_loc: Position, obj: list[Position]) -> bool:
         on_obj: bool = False
 
         for obj_loc in obj:
@@ -472,8 +457,8 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         return on_obj
 
     def step(
-        self, action: int | list[int]
-    ) -> tuple[Observation, float, bool, bool, dict[str, float]]:
+        self, action: NDArray[np.int64] | np.int64
+    ) -> tuple[NDArray[np.int64], float, bool, bool, dict[str, Any]]:
         actions: list[int] = np.array([action]).flatten().tolist()
 
         self._move_agents(actions)
@@ -514,7 +499,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         self.agent_traj.append([agent.pos for agent in self.agents])
         self.rewards.append(reward)
 
-        observation: Observation = self._get_obs()
+        observation = self._get_obs()
         info: dict[str, float] = self._get_info()
 
         return observation, reward, terminated, truncated, info
