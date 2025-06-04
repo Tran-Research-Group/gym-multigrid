@@ -440,8 +440,7 @@ class TeamNavigationEnv(MultiGridEnv):
         width: int = 7,
         num_agents: int = 2,
         p_intended_movement: float = 0.95,
-        p_detect_visual_blue: float = 0.005,
-        p_detect_visual_red: float = 0.005,
+        p_detect_visual: float = 0.005,
         zone_width: int = 1,
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
@@ -490,8 +489,7 @@ class TeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
-        self.p_detect_visual_blue = p_detect_visual_blue
-        self.p_detect_visual_red = p_detect_visual_red
+        self.p_detect_visual = p_detect_visual
         self.zone_width = zone_width
 
         self.reward_config = RewardConfig()
@@ -643,13 +641,13 @@ class TeamNavigationEnv(MultiGridEnv):
             Detector(
                 obj_type="zone",
                 group_index=0,
-                visual_detect_prob=self.p_detect_visual_blue,
+                visual_detect_prob=self.p_detect_visual,
                 radio_detect_prob=0.0,
             ),
             Detector(
                 obj_type="zone",
                 group_index=1,
-                visual_detect_prob=self.p_detect_visual_red,
+                visual_detect_prob=self.p_detect_visual,
                 radio_detect_prob=0.0,
             ),
         ]
