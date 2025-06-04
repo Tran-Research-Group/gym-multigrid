@@ -490,7 +490,7 @@ class TeamNavigationEnv(MultiGridEnv):
         self.subtask_idx: int = subtask_idx
         self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
         self.p_detect_visual = p_detect_visual
-        self.zone_width = zone_width
+        self.zone_width = int(zone_width)
 
         self.reward_config = RewardConfig()
 
