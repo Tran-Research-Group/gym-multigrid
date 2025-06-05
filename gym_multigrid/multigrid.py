@@ -33,9 +33,10 @@ EnvType = TypeVar("EnvType", bound="MultiGridEnv")
 
 
 class ObservationMode(Generic[EnvType, ObsType], ABC):
-    @staticmethod
+    static_obs: ObsType
+
     @abstractmethod
-    def observation_space(env: EnvType) -> Space: ...
+    def observation_space(self, env: EnvType) -> Space: ...
 
     """
     Define the observation space of the environment.
@@ -51,9 +52,8 @@ class ObservationMode(Generic[EnvType, ObsType], ABC):
         The observation space of the environment
     """
 
-    @staticmethod
     @abstractmethod
-    def create_observation(env: EnvType) -> ObsType: ...
+    def create_observation(self, env: EnvType) -> ObsType: ...
 
     """
     Create an observation from the environment.
@@ -68,6 +68,13 @@ class ObservationMode(Generic[EnvType, ObsType], ABC):
     observation: ObsType
         The observation
     """
+
+    def save_static_obs(self, options: dict[str, Any]) -> None:
+        """
+        Save the static observation of the environment.
+        This is used to save the observation for later use.
+        """
+        ...
 
 
 class GridConfig(BaseModel):
