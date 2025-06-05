@@ -72,7 +72,7 @@ class ResetOptions(BaseModel):
     layout_config: LayoutConfig
 
 
-class TensorObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
+class TensorObservationMode(ObservationMode["MazeEnv", spaces.Box, NDArray[np.int64]]):
     def observation_space(self, env: "MazeEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
@@ -98,7 +98,7 @@ class TensorObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
         return observation
 
 
-class MapObservationMode(ObservationMode["MazeEnv", NDArray[np.int64]]):
+class MapObservationMode(ObservationMode["MazeEnv", spaces.Box, NDArray[np.int64]]):
     def observation_space(self, env: "MazeEnv") -> spaces.Box:
         return spaces.Box(
             low=0,

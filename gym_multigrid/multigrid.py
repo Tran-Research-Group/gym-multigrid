@@ -30,13 +30,14 @@ from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
 
 EnvType = TypeVar("EnvType", bound="MultiGridEnv")
+SpaceType = TypeVar("SpaceType", bound=Space)
 
 
-class ObservationMode(Generic[EnvType, ObsType], ABC):
+class ObservationMode(Generic[EnvType, SpaceType, ObsType], ABC):
     static_obs: ObsType
 
     @abstractmethod
-    def observation_space(self, env: EnvType) -> Space: ...
+    def observation_space(self, env: EnvType) -> SpaceType: ...
 
     """
     Define the observation space of the environment.
@@ -69,15 +70,14 @@ class ObservationMode(Generic[EnvType, ObsType], ABC):
         The observation
     """
 
-    def save_static_obs(self, options: dict[str, Any]) -> None:
+    def save_static_obs(
+        self, env: EnvType, options: dict[str, Any] | None = None
+    ) -> None:
         """
         Save the static observation of the environment.
         This is used to save the observation for later use.
         """
-        raise NotImplementedError(
-            "save_static_obs is not implemented in the base class. "
-            "Please implement it in your own environment."
-        )
+        pass
 
 
 class GridConfig(BaseModel):
@@ -109,10 +109,10 @@ class RenderingConfig(BaseModel):
 
 
 class PartialObsConfig(BaseModel):
-    partial_obs: bool
-    agent_view_size: int | None
-    see_through_walls: bool
-    highlight_visible_cells: bool
+    partial_obs: bool = False
+    agent_view_size: int | None = None
+    see_through_walls: bool = False
+    highlight_visible_cells: bool = False
 
 
 DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = PartialObsConfig(
@@ -230,7 +230,15 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self.actions: Type[Actions] = actions_set
 
         # Actions are discrete integer values
-        self.action_space = spaces.Discrete(len(self.actions))
+        self.ac_dim: int | np.integer
+        if len(agents) == 1:
+            self.action_space = spaces.Discrete(len(self.actions))
+            self.ac_dim = self.action_space.n
+        else:
+            self.action_space = spaces.Box(
+                low=0, high=len(self.actions) - 1, shape=(len(agents),), dtype=np.int64
+            )
+            self.ac_dim = self.action_space.shape[0]
 
         self.world = world
 
@@ -240,8 +248,6 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             self.ob_dim = np.prod(self.observation_space.shape)
         else:
             pass
-
-        self.ac_dim: np.int64 = self.action_space.n
 
         # Range of possible rewards
         self.reward_range: tuple[int, int] = (0, 1)

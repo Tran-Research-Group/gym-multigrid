@@ -4,8 +4,8 @@ from typing import Any, Literal, TypeAlias, TypedDict
 import numpy as np
 import torch
 from gymnasium import spaces
-from gymnasium.core import ActType, ObsType
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 from gym_multigrid.core.agent import Agent, GridActions
 from gym_multigrid.core.grid import Grid
@@ -47,7 +47,7 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
-class PositionalObs(ObservationMode["RoomsEnv", NDArray[np.float32]]):
+class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=np.array([0, 0, 0, 0], dtype=np.float32),
@@ -63,16 +63,16 @@ class PositionalObs(ObservationMode["RoomsEnv", NDArray[np.float32]]):
             [
                 env.agents[0].pos[0],
                 env.agents[0].pos[1],
-                env.goal_positions[env.grid_type][0],
-                env.goal_positions[env.grid_type][1],
+                env.layout_config.spawn_configs[env.spawn_type].goal_pos[0],
+                env.layout_config.spawn_configs[env.spawn_type].goal_pos[1],
             ]
         )
-        obs = obs / np.maximum(env.grid_size[0], env.grid_size[1])
+        obs = obs / np.maximum(env.width, env.height)
 
         return obs
 
 
-class TensorObs(ObservationMode["RoomsEnv", NDArray[np.int64]]):
+class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
@@ -83,14 +83,74 @@ class TensorObs(ObservationMode["RoomsEnv", NDArray[np.int64]]):
 
     def create_observation(self, env: "RoomsEnv") -> NDArray[np.int64]:
         obs = np.zeros((env.width, env.height), dtype=np.int64)
-        obs[:, :] = env.static_obs
+        obs[:, :] = self.static_obs
         for agent in env.agents:
             obs[agent.pos[0], agent.pos[1]] = env.world.OBJECT_TO_IDX["agent"]
 
         return obs
 
-    def save_static_obs(self, options: dict[str, Any]) -> None:
-        return super().save_static_obs(options)
+    def save_static_obs(
+        self, env: "RoomsEnv", options: dict[str, Any] | None = None
+    ) -> None:
+        static_obs: NDArray[np.int64] = (
+            np.ones((env.width, env.height), dtype=np.int64)
+            * env.world.OBJECT_TO_IDX["empty"]
+        )
+        for x, row in enumerate(env.layout_config.field_map):
+            for y, cell in enumerate(row):
+                if cell == "#":
+                    static_obs[x, y] = env.world.OBJECT_TO_IDX["wall"]
+                else:
+                    pass
+        self.static_obs = static_obs
+
+
+class VectorizedTensorObs(TensorObs):
+    def observation_space(self, env: "RoomsEnv") -> spaces.Box:
+        return spaces.Box(
+            low=0,
+            high=10,
+            shape=(env.width * env.height,),
+            dtype=np.int64,
+        )
+
+    def create_observation(self, env: "RoomsEnv") -> NDArray[np.int64]:
+        obs = super().create_observation(env)
+        return obs.flatten()
+
+
+class SpawnConfig(BaseModel):
+    agent_pos: Position
+    goal_pos: Position
+
+
+class LayoutConfig(BaseModel):
+    field_map: list[str]
+    spawn_configs: list[SpawnConfig]
+
+
+DEFAULT_LAYOUT_CONFIG = LayoutConfig(
+    field_map=[
+        "#############",
+        "#    #      #",
+        "#    #      #",
+        "#           #",
+        "#    #      #",
+        "#    #      #",
+        "## ###### ###",
+        "#     #     #",
+        "#     #     #",
+        "#     #     #",
+        "#           #",
+        "#     #     #",
+        "#############",
+    ],
+    spawn_configs=[
+        SpawnConfig(agent_pos=(9, 3), goal_pos=(3, 9)),
+        SpawnConfig(agent_pos=(11, 1), goal_pos=(7, 9)),
+        SpawnConfig(agent_pos=(9, 3), goal_pos=(9, 9)),
+    ],
+)
 
 
 class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
@@ -98,16 +158,21 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
 
-    metadata = MultiGridEnv.metadata.copy()
-    # metadata["observation_modes"] = {
-    #     "vectorized_tensor":
-    #     "tensor": TensorObservationMode,
-    #     "positional": MapObservationMode,
-    # }
+    observation_modes: dict[
+        str,
+        type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]]
+        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]],
+    ] = {
+        "positional": PositionalObs,
+        "tensor": TensorObs,
+        "vectorized_tensor": VectorizedTensorObs,
+    }
+    layout_config: LayoutConfig
 
     def __init__(
         self,
-        grid_type: int = 0,
+        spawn_type: int = 0,
+        layout_config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
         tile_size: int = 10,
         state_representation: str = "tensor",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -120,23 +185,19 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         """
         ### fundamental parameters
-        self.grid_size = (13, 13)
-        self.state_representation = state_representation
+        self.layut_config = layout_config
+        self.spawn_type: int = spawn_type
+        grid_size: tuple[int, int] = (
+            len(self.layut_config.field_map[0]),
+            len(self.layut_config.field_map),
+        )
+        self.state_representation = self.observation_modes[state_representation]()
 
-        if grid_type < 0 or grid_type >= 3:
-            raise ValueError(
-                f"The Fourroom only accepts grid_type of 0 and 1, given {grid_type}"
-            )
-        else:
-            self.grid_type = grid_type
-
-        width = self.grid_size[0]
-        height = self.grid_size[1]
+        width, height = grid_size
         world = GridWorld
         actions_set = GridActions
 
-        see_through_walls: bool = False
-
+        # NOTE: currently only one agent is supported
         agents = [
             Agent(
                 self.world,
@@ -147,73 +208,25 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             )
         ]
 
-        self.goal_positions: list[Position] = [
-            (3, 9),
-            (7, 9),
-            (9, 9),
-        ]
-        self.agent_positions: list[Position] = [
-            (9, 3),
-            (11, 1),
-            (9, 3),
-        ]
-
-        self.map: list[str] = [
-            "#############",
-            "#    #      #",
-            "#    #      #",
-            "#           #",
-            "#    #      #",
-            "#    #      #",
-            "## ###### ###",
-            "#     #     #",
-            "#     #     #",
-            "#     #     #",
-            "#           #",
-            "#     #     #",
-            "#############",
-        ]
-
-        super().__init__(
+        grid_config = GridConfig(
+            grid_size=None,
             width=width,
             height=height,
-            see_through_walls=see_through_walls,
-            agents=agents,
-            actions_set=actions_set,
             world=world,
-            render_mode=render_mode,
-            tile_size=tile_size,
+            actions_set=actions_set,
+        )
+        render_config = RenderingConfig(tile_size=tile_size, render_mode=render_mode)
+        partial_obs_config = PartialObsConfig()
+
+        super().__init__(
+            agents=agents,
+            **grid_config.model_dump(),
+            **render_config.model_dump(),
+            **partial_obs_config.model_dump(),
         )
 
-    def _set_observation_space(self) -> spaces.Dict | spaces.Box:
-        match self.state_representation:
-            case "positional":
-                observation_space = spaces.Box(
-                    low=np.array([0, 0, 0, 0], dtype=np.float32),
-                    high=np.array(
-                        [self.width, self.height, self.width, self.height],
-                        dtype=np.float32,
-                    ),
-                    dtype=np.float32,
-                )
-            case "tensor":
-                observation_space = spaces.Box(
-                    low=0,
-                    high=10,
-                    shape=(self.width, self.height, self.world.encode_dim),
-                    dtype=np.int64,
-                )
-            case "vectorized_tensor":
-                observation_space = spaces.Box(
-                    low=0,
-                    high=10,
-                    shape=(self.width * self.height * self.world.encode_dim,),
-                    dtype=np.int64,
-                )
-            case _:
-                raise ValueError(
-                    f"Invalid state representation: {self.state_representation}"
-                )
+    def _set_observation_space(self) -> spaces.Box:
+        observation_space = self.state_representation.observation_space(self)
 
         return observation_space
 
@@ -222,196 +235,123 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         self.grid = Grid(width, height, self.world)
 
         # Translate the maze structure into the grid
-        self.static_obs: NDArray[np.int64] = np.zeros(
-            (self.width, self.height), dtype=np.int64
-        )
-        for x, row in enumerate(self.map):
+        for x, row in enumerate(self.layout_config.field_map):
             for y, cell in enumerate(row):
                 if cell == "#":
                     self.grid.set(x, y, Wall(self.world))
-                    self.static_obs[x, y] = self.world.OBJECT_TO_IDX["wall"]
-                elif cell == " ":
-                    self.grid.set(x, y, None)
+                else:
+                    pass
 
         # place goal
         goal = Goal(self.world, 0)
-        self.put_obj(goal, *self.goal_positions[self.grid_type])
-        goal.init_pos, goal.pos = self.goal_positions[self.grid_type]
+        self.put_obj(goal, *self.layut_config.spawn_configs[self.spawn_type].goal_pos)
 
-        # place agent
-        if options.get("random_init_pos"):
-            coords = self.find_obj_coordinates(None)
-            agent_positions = random.sample(coords, 1)[0]
-        else:
-            agent_positions = self.agent_positions[self.grid_type]
+        self.state_representation.save_static_obs(self, {})
 
+    def _reset_agents(self, random_init_pos: bool = False):
+        """
+        Reset the agents' positions in the grid.
+        If random_init_pos is True, randomly select a position from the grid.
+        """
         for agent in self.agents:
-            self.place_agent(agent, pos=agent_positions)
-
-    def find_obj_coordinates(self, obj) -> tuple[int, int] | None:
-        """
-        Finds the coordinates (i, j) of the first occurrence of None in the grid.
-        Returns None if no None value is found.
-        """
-        coord_list = []
-        for index, value in enumerate(self.grid.grid):
-            if value is obj:
-                # Calculate the (i, j) coordinates from the 1D index
-                i = index % self.width
-                j = index // self.width
-                coord_list.append((i, j))
-        return coord_list
+            if random_init_pos:
+                self.place_agent(agent)
+            else:
+                agent_positions = self.layut_config.spawn_configs[
+                    self.spawn_type
+                ].agent_pos
+                self.place_agent(agent, pos=agent_positions)
 
     def reset(
         self,
         *,
         seed: int | None = None,
-        options: dict = {},
+        options: dict[str, Any] | None = None,
     ):
         # obs, info = super().reset(seed=seed, options=options)
         super().reset(seed=seed, options=options)
+        self.state_representation.save_static_obs(self)
 
         ### NOTE: NOT MULTIAGENT SETTING
-        observations = self.get_obs()
+        observations = self._get_obs()
         info = {"success": False}
 
         return observations, info
 
-    def step(self, actions):
+    def step(self, action: np.int64 | NDArray[np.int64]):
         self.step_count += 1
 
         ### NOTE: MULTIAGENT SETTING NOT IMPLEMENTED
-        actions = np.argmax(actions)
-        actions = [actions]
+        assert action.size == 1, "Only one agent is supported in this environment."
+        actions: list[int] = np.array([action], dtype=np.int64).flatten().tolist()
         order = np.random.permutation(len(actions))
 
         rewards = np.zeros(len(actions))
         info = {"success": False}
+        terminated: bool = False
         for i in order:
-            if (
-                self.agents[i].terminated
-                or self.agents[i].paused
-                or not self.agents[i].started
-            ):
+            agent: Agent = self.agents[i]
+            assert isinstance(agent, Agent)
+            if agent.terminated or agent.paused or not agent.started:
                 continue
 
             # Get the current agent position
-            curr_pos = self.agents[i].pos
-            done = False
+            curr_pos: Position = agent.pos
 
             # Rotate left
-            if actions[i] == self.actions.left:
+            self.actions: type[GridActions]
+            if actions[i] == self.actions.LEFT:
                 # Get the contents of the cell in front of the agent
-                fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, -1)))
+                fwd_pos = agent.west_pos(in_tuple=True)
                 fwd_cell = self.grid.get(*fwd_pos)
-
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        done = True
-                        rewards = self._reward(i, rewards, 1)
-                        info["success"] = True
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Rotate right
-            elif actions[i] == self.actions.right:
+            elif actions[i] == self.actions.RIGHT:
                 # Get the contents of the cell in front of the agent
-                fwd_pos = tuple(a + b for a, b in zip(curr_pos, (0, +1)))
+                fwd_pos = agent.east_pos(in_tuple=True)
                 fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        done = True
-                        rewards = self._reward(i, rewards, 1)
-                        info["success"] = True
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
             # Move forward
-            elif actions[i] == self.actions.up:
+            elif actions[i] == self.actions.UP:
                 # Get the contents of the cell in front of the agent
-                fwd_pos = tuple(a + b for a, b in zip(curr_pos, (-1, 0)))
+                fwd_pos = agent.north_pos(in_tuple=True)
                 fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        done = True
-                        rewards = self._reward(i, rewards, 1)
-                        info["success"] = True
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
 
-            elif actions[i] == self.actions.down:
+            elif actions[i] == self.actions.DOWN:
                 # Get the contents of the cell in front of the agent
-                fwd_pos = tuple(a + b for a, b in zip(curr_pos, (+1, 0)))
+                fwd_pos = agent.south_pos(in_tuple=True)
                 fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell is not None:
-                    if fwd_cell.type == "goal":
-                        done = True
-                        rewards = self._reward(i, rewards, 1)
-                        info["success"] = True
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*self.agents[i].pos, None)
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
-            elif actions[i] == self.actions.stay:
+            elif actions[i] == self.actions.STAY:
                 # Get the contents of the cell in front of the agent
                 fwd_pos = curr_pos
                 fwd_cell = self.grid.get(*fwd_pos)
-                self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
             else:
                 assert False, "unknown action"
 
-        ### NOTE: not multiagent setting
-        terminated = done
-        truncated = False
+            if fwd_cell is not None:
+                if fwd_cell.type == "goal":
+                    terminated = True
+                    rewards = self._reward(i, rewards, 1)
+                    info["success"] = True
+                else:
+                    pass
+            elif fwd_cell is None or fwd_cell.can_overlap():
+                self.grid.set(*agent.pos, None)
+                self.grid.set(*fwd_pos, agent)
+                agent.pos = fwd_pos
+            else:
+                # If the cell in front of the agent is not empty, do nothing
+                pass
 
-        observations = self.get_obs()
+        ### NOTE: not multiagent setting
+        truncated: bool = False
+
+        observations = self._get_obs()
 
         return observations, rewards, terminated, truncated, info
 
-    def get_obs(
-        self,
-    ):
-        if self.state_representation == "positional":
-            obs = np.array(
-                [
-                    self.agents[0].pos[0],
-                    self.agents[0].pos[1],
-                    self.goal_positions[self.grid_type][0],
-                    self.goal_positions[self.grid_type][1],
-                ]
-            )
-            obs = obs / np.maximum(self.grid_size[0], self.grid_size[1])
-        elif self.state_representation == "tensor":
-            obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-                for i in range(len(self.agents))
-            ]
-            obs = [self.world.normalize_obs * ob for ob in obs]
-            obs = obs[0][:, :, 0:1]
-        elif self.state_representation == "vectorized_tensor":
-            obs = [
-                self.grid.encode_for_agents(agent_pos=self.agents[i].pos)
-                for i in range(len(self.agents))
-            ]
-            obs = [self.world.normalize_obs * ob for ob in obs]
-            obs = obs[0][:, :, 0:1].flatten()
-        else:
-            raise ValueError(
-                f"Unknown state representation {self.state_representation}. "
-                "Please use 'positional' or 'tensor'."
-            )
-        return obs
+    def _get_obs(self):
+        return self.state_representation.create_observation(self)
 
     def get_rewards_heatmap(self, extractor: torch.nn.Module, eigenvectors: np.ndarray):
         assert self.state_representation in [
