@@ -1,5 +1,5 @@
 import random
-from typing import Literal, TypeAlias, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import numpy as np
 import torch
@@ -47,8 +47,8 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
-class PositionalObs(ObservationMode["FourRoomsEnv", NDArray[np.float32]]):
-    def observation_space(self, env: "FourRoomsEnv") -> spaces.Box:
+class PositionalObs(ObservationMode["RoomsEnv", NDArray[np.float32]]):
+    def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=np.array([0, 0, 0, 0], dtype=np.float32),
             high=np.array(
@@ -58,7 +58,7 @@ class PositionalObs(ObservationMode["FourRoomsEnv", NDArray[np.float32]]):
             dtype=np.float32,
         )
 
-    def create_observation(self, env: "FourRoomsEnv") -> NDArray[np.float32]:
+    def create_observation(self, env: "RoomsEnv") -> NDArray[np.float32]:
         obs = np.array(
             [
                 env.agents[0].pos[0],
@@ -72,8 +72,8 @@ class PositionalObs(ObservationMode["FourRoomsEnv", NDArray[np.float32]]):
         return obs
 
 
-class TensorObs(ObservationMode["FourRoomsEnv", NDArray[np.int64]]):
-    def observation_space(self, env: "FourRoomsEnv") -> spaces.Box:
+class TensorObs(ObservationMode["RoomsEnv", NDArray[np.int64]]):
+    def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
             high=10,
@@ -81,7 +81,7 @@ class TensorObs(ObservationMode["FourRoomsEnv", NDArray[np.int64]]):
             dtype=np.int64,
         )
 
-    def create_observation(self, env: "FourRoomsEnv") -> NDArray[np.int64]:
+    def create_observation(self, env: "RoomsEnv") -> NDArray[np.int64]:
         obs = np.zeros((env.width, env.height), dtype=np.int64)
         obs[:, :] = env.static_obs
         for agent in env.agents:
@@ -89,8 +89,11 @@ class TensorObs(ObservationMode["FourRoomsEnv", NDArray[np.int64]]):
 
         return obs
 
+    def save_static_obs(self, options: dict[str, Any]) -> None:
+        return super().save_static_obs(options)
 
-class FourRoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
+
+class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """

@@ -74,7 +74,10 @@ class ObservationMode(Generic[EnvType, ObsType], ABC):
         Save the static observation of the environment.
         This is used to save the observation for later use.
         """
-        ...
+        raise NotImplementedError(
+            "save_static_obs is not implemented in the base class. "
+            "Please implement it in your own environment."
+        )
 
 
 class GridConfig(BaseModel):
