@@ -1,4 +1,3 @@
-import random
 from typing import Any, Literal, TypeAlias, TypedDict
 
 import numpy as np
@@ -12,7 +11,6 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall
 from gym_multigrid.core.world import GridWorld
 from gym_multigrid.multigrid import (
-    DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG,
     GridConfig,
     MultiGridEnv,
     ObservationMode,
@@ -20,31 +18,6 @@ from gym_multigrid.multigrid import (
     RenderingConfig,
 )
 from gym_multigrid.typing import Position
-
-
-class ObservationDict(TypedDict):
-    blue_agent: NDArray[np.int_]
-    red_agent: NDArray[np.int_]
-    blue_flag: NDArray[np.int_]
-    red_flag: NDArray[np.int_]
-    blue_territory: NDArray[np.int_]
-    red_territory: NDArray[np.int_]
-    obstacle: NDArray[np.int_]
-    is_red_agent_defeated: int
-
-
-class MultiAgentObservationDict(TypedDict):
-    blue_agent: NDArray[np.int_]
-    red_agent: NDArray[np.int_]
-    blue_flag: NDArray[np.int_]
-    red_flag: NDArray[np.int_]
-    blue_territory: NDArray[np.int_]
-    red_territory: NDArray[np.int_]
-    obstacle: NDArray[np.int_]
-    terminated_agents: NDArray[np.int_]
-
-
-Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
 class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
