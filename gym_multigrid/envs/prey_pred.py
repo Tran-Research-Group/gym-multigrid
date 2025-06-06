@@ -1,11 +1,11 @@
 import enum
 import warnings
-from typing import Any, Literal, Protocol, Type, TypedDict, TypeGuard
+from typing import Any, Literal, Type, TypedDict
 
 import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from gym_multigrid.core.agent import Agent, NavigationActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC, PREY_PRED_COLORS
@@ -41,10 +41,48 @@ PreyPredWorld = World(
 
 
 class ObservationConfig(BaseModel):
+    """
+    Configuration for the observation of the environment.
+
+    Attributes
+    ----------
+    encode_prey_areas : bool
+        Whether to encode prey areas in the observation.
+        If True, prey areas are encoded as a separate layer in the observation.
+        If False, prey areas are not encoded in the observation.
+    """
+
+    encode_prey_areas: bool = True
+
+
+class ObservationConfigDict(TypedDict):
     encode_prey_areas: bool
 
 
 class PredatorConfig(BaseModel):
+    """
+    Configuration for the predator agent in the environment.
+
+    Attributes
+    ----------
+    init_pos : tuple[int, int]
+        The initial position of the predator agent.
+    policy_type : Literal["teammate", "ego"]
+        The type of policy used by the predator agent.
+        "ego" means the predator is controlled by the user, while "teammate" means it is controlled by the environment.
+    target_preys : list[int]
+        The list of prey indices that this predator is targeting.
+    color : str
+        The color of the predator agent.
+    """
+
+    init_pos: tuple[int, int]
+    policy_type: Literal["teammate", "ego"]
+    target_preys: list[int]
+    color: str
+
+
+class PredatorConfigDict(TypedDict):
     init_pos: tuple[int, int]
     policy_type: Literal["teammate", "ego"]
     target_preys: list[int]
@@ -78,7 +116,56 @@ class PreyType(BaseModel):
     num_required_preds_fix: int
 
 
+class PreyTypeDict(TypedDict):
+    """
+    Configuration for a type of prey object in the environment.
+
+    Attributes
+    ----------
+    name : str
+        The name of the prey type.
+    policy : str
+        The policy used by the prey agent.
+    capture_reward : float
+        The reward ego to the predator for capturing a prey of this type.
+    num_required_preds_capture : int
+        The number of neighboring predators required to capture a prey of this type.
+    num_required_preds_fix : int
+        The number of neighboring predators required to fix a prey of this type (up to a maximum of 4).
+        The value should be less than or equal to `num_required_preds_capture`.
+        When `num_required_preds_fix` is 1, the prey is fixed immediately after being captured.
+    """
+
+    name: str
+    policy: Literal["random"]
+    capture_reward: float
+    num_required_preds_capture: int
+    num_required_preds_fix: int
+
+
 class PreyConfig(BaseModel):
+    """
+    Configuration for the prey agent in the environment.
+
+    Attributes
+    ----------
+    type : str
+        The type of the prey agent.
+    territory_dims : tuple[int, int]
+        The dimensions of the prey's territory.
+    territory_left_top_corner : tuple[int, int]
+        The left top corner of the prey's territory.
+    color : str
+        The color of the prey agent.
+    """
+
+    type: str
+    territory_dims: tuple[int, int]
+    territory_left_top_corner: tuple[int, int]
+    color: str
+
+
+class PreyConfigDict(TypedDict):
     """
     Configuration for the prey agaent in the environment.
 
@@ -93,8 +180,8 @@ class PreyConfig(BaseModel):
     color: str
 
 
-class ResetOptions(BaseModel):
-    agent_pos_list: list[tuple[int, int]] | None = None
+class ResetOptions(TypedDict, total=False):
+    agent_pos_list: list[tuple[int, int]]
 
 
 class Prey(Agent):
@@ -109,7 +196,7 @@ class Prey(Agent):
     ):
         self.prey_config: PreyConfig = prey_config
         self.prey_type: PreyType = prey_type
-        self.policy_class: Type[AgentPolicy] = policy_dict[prey_type.policy]
+        self.policy_class: Type[AgentPolicy] = policy_dict[self.prey_type.policy]
 
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -314,63 +401,74 @@ class Predator(Agent):
         return self.pred_config.target_preys
 
 
-DEFAULT_OBSERVATION_CONFIG: ObservationConfig = ObservationConfig(
-    encode_prey_areas=True,
+DEFAULT_OBSERVATION_CONFIG: ObservationConfigDict = {
+    "encode_prey_areas": True,
     # remove_dead_agents=True,
     # encode_dead_agents_as="wall",
-)
+}
 
-DEFAULT_PREDATOR_CONFIGS: list[PredatorConfig] = [
-    PredatorConfig(init_pos=(6, 6), policy_type="ego", color="red", target_preys=[]),
-    PredatorConfig(
-        init_pos=(7, 7), policy_type="teammate", color="orange", target_preys=[]
-    ),
-    PredatorConfig(
-        init_pos=(8, 8), policy_type="teammate", color="yellow", target_preys=[]
-    ),
+DEFAULT_PREDATOR_CONFIGS: list[PredatorConfigDict] = [
+    {
+        "init_pos": (6, 6),
+        "policy_type": "ego",
+        "color": "red",
+        "target_preys": [],
+    },
+    {
+        "init_pos": (7, 7),
+        "policy_type": "teammate",
+        "color": "orange",
+        "target_preys": [],
+    },
+    {
+        "init_pos": (8, 8),
+        "policy_type": "teammate",
+        "color": "yellow",
+        "target_preys": [],
+    },
 ]
 
-DEFAULT_PREY_CONFIGS: list[PreyConfig] = [
-    PreyConfig(
-        type="easy_prey",
-        territory_dims=(4, 4),
-        territory_left_top_corner=(2, 2),
-        color="yellow",
-    ),
-    PreyConfig(
-        type="easy_prey",
-        territory_dims=(4, 4),
-        territory_left_top_corner=(9, 2),
-        color="yellow",
-    ),
-    PreyConfig(
-        type="hard_prey",
-        territory_dims=(4, 4),
-        territory_left_top_corner=(2, 9),
-        color="red",
-    ),
-    PreyConfig(
-        type="hard_prey",
-        territory_dims=(4, 4),
-        territory_left_top_corner=(9, 9),
-        color="red",
-    ),
+DEFAULT_PREY_CONFIGS: list[PreyConfigDict] = [
+    {
+        "type": "easy_prey",
+        "territory_dims": (4, 4),
+        "territory_left_top_corner": (2, 2),
+        "color": "yellow",
+    },
+    {
+        "type": "easy_prey",
+        "territory_dims": (4, 4),
+        "territory_left_top_corner": (9, 2),
+        "color": "yellow",
+    },
+    {
+        "type": "hard_prey",
+        "territory_dims": (4, 4),
+        "territory_left_top_corner": (2, 9),
+        "color": "red",
+    },
+    {
+        "type": "hard_prey",
+        "territory_dims": (4, 4),
+        "territory_left_top_corner": (9, 9),
+        "color": "red",
+    },
 ]
-DEFAULT_PREY_TYPES: list[PreyType] = [
-    PreyType(
-        name="easy_prey",
-        policy="random",
-        capture_reward=1.0,
-        num_required_preds_capture=1,
-        num_required_preds_fix=1,
-    ),
-    PreyType(
-        name="hard_prey",
-        policy="random",
-        capture_reward=1.0,
-        num_required_preds_capture=2,
-        num_required_preds_fix=1,
-    ),
+DEFAULT_PREY_TYPES: list[PreyTypeDict] = [
+    {
+        "name": "easy_prey",
+        "policy": "random",
+        "capture_reward": 1.0,
+        "num_required_preds_capture": 1,
+        "num_required_preds_fix": 1,
+    },
+    {
+        "name": "hard_prey",
+        "policy": "random",
+        "capture_reward": 1.0,
+        "num_required_preds_capture": 2,
+        "num_required_preds_fix": 1,
+    },
 ]
 
 
@@ -416,10 +514,10 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
     def __init__(
         self,
         max_episode_steps: int = 300,
-        observation_config: ObservationConfig = DEFAULT_OBSERVATION_CONFIG,
-        pred_configs: list[PredatorConfig] = DEFAULT_PREDATOR_CONFIGS,
-        prey_configs: list[PreyConfig] = DEFAULT_PREY_CONFIGS,
-        prey_types: list[PreyType] = DEFAULT_PREY_TYPES,
+        observation_config: ObservationConfigDict = DEFAULT_OBSERVATION_CONFIG,
+        pred_configs: list[PredatorConfigDict] = DEFAULT_PREDATOR_CONFIGS,
+        prey_configs: list[PreyConfigDict] = DEFAULT_PREY_CONFIGS,
+        prey_types: list[PreyTypeDict] = DEFAULT_PREY_TYPES,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         verbose: bool = False,
     ):
@@ -428,21 +526,18 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
 
         world = PreyPredWorld
 
-        # Check if the pred & prey configurations and prey types are valid
-        pred_configs_valid, pred_error_messages = self._check_pred_configs(pred_configs)
-        prey_configs_valid, prey_error_messages = self._check_prey_configs(
-            prey_configs, prey_types, world
+        self.observation_config: ObservationConfig = ObservationConfig(
+            **observation_config
         )
-        if not pred_configs_valid or not prey_configs_valid:
-            error_messages = pred_error_messages + prey_error_messages
-            raise ValueError("\n".join(error_messages))
-        else:
-            pass
-
-        self.observation_config: ObservationConfig = observation_config
-        self.pred_configs: list[PredatorConfig] = pred_configs
-        self.prey_configs: list[PreyConfig] = prey_configs
-        self.prey_types: list[PreyType] = prey_types
+        self.pred_configs: list[PredatorConfig] = [
+            PredatorConfig(**pred_config) for pred_config in pred_configs
+        ]
+        self.prey_configs: list[PreyConfig] = [
+            PreyConfig(**prey_config) for prey_config in prey_configs
+        ]
+        self.prey_types: list[PreyType] = [
+            PreyType(**prey_type) for prey_type in prey_types
+        ]
 
         self.num_preys: int = len(prey_configs)
         self.num_preds: int = len(pred_configs)
@@ -456,135 +551,19 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         rendering_config: RenderingConfig = RenderingConfig(
             render_mode=render_mode,
             uncached_object_types=["predator"]
-            + [prey_type.name for prey_type in prey_types],
+            + [prey_type.name for prey_type in self.prey_types],
         )
 
         partial_obs_config: PartialObsConfig = DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG
         agents: list[Predator | Prey] = self._gen_agents(
-            pred_configs, prey_configs, prey_types, world
+            self.pred_configs, self.prey_configs, self.prey_types, world
         )
         super().__init__(
             agents=agents,
-            **grid_config.model_dump(),
-            **rendering_config.model_dump(),
-            **partial_obs_config.model_dump(),
+            **dict(grid_config),
+            **dict(rendering_config),
+            **dict(partial_obs_config),
         )
-
-    def _check_pred_configs(
-        self, pred_configs: list[PredatorConfig]
-    ) -> tuple[bool, list[str]]:
-        """
-        Check if the predator configurations are valid.
-
-        Parameters
-        ----------
-        pred_configs : list[PredatorConfig]
-            The configuration for the predator agents in the environment.
-
-        Returns
-        -------
-        success : bool
-            True if the configuration is valid, False otherwise.
-        error_messages : list[str]
-            A list of error messages if the configuration is invalid.
-        """
-
-        success: bool = True
-        error_messages: list[str] = []
-
-        # 1. the first predator must have a `ego` policy whose action is ego by step()
-        # 2. there should be only one predator with a `ego` policy
-        # 3. the initial positions of the predators should not overlap
-
-        ego_predator_count: int = 0
-        ego_predator_index: int | None = None
-        init_positions: list[tuple[int, int]] = []
-
-        for pred_config in pred_configs:
-            if pred_config.policy_type == "ego":
-                ego_predator_count += 1
-                ego_predator_index = pred_configs.index(pred_config)
-            else:
-                pass
-
-            if pred_config.init_pos in init_positions:
-                success = False
-                error_messages.append(
-                    f"Invalid predator config: {pred_config.init_pos} is already occupied."
-                )
-            else:
-                init_positions.append(pred_config.init_pos)
-
-        if ego_predator_count != 1:
-            success = False
-            error_messages.append(
-                "Invalid predator config: There should be exactly one predator with a `ego` policy."
-            )
-        else:
-            pass
-
-        if ego_predator_index != 0:
-            success = False
-            error_messages.append(
-                "Invalid predator config: The first predator must have a `ego` policy."
-            )
-        else:
-            pass
-
-        return success, error_messages
-
-    def _check_prey_configs(
-        self, prey_configs: list[PreyConfig], prey_types: list[PreyType], world: World
-    ) -> tuple[bool, list[str]]:
-        """
-        Check if the preys configuration and prey types are valid.
-
-        Parameters
-        ----------
-        prey_configs : list[PreyConfig]
-            The configuration for the prey agents in the environment.
-        prey_types : list[PreyType]
-            The configuration for the prey types in the environment.
-        world : World
-            The world configuration.
-
-        Returns
-        -------
-        success : bool
-            True if the configuration is valid, False otherwise.
-        error_messages : list[str]
-            A list of error messages if the configuration is invalid.
-        """
-
-        success: bool = True
-        error_messages: list[str] = []
-
-        for prey_type in prey_types:
-            if prey_type.name not in world.OBJECT_TO_IDX:
-                success = False
-                error_messages.append(
-                    f"Invalid prey type: {prey_type.name} not in world object to index mapping."
-                )
-            else:
-                pass
-
-            if prey_type.num_required_preds_fix > prey_type.num_required_preds_capture:
-                success = False
-                error_messages.append(
-                    f"Invalid prey type: {prey_type.name} has num_required_preds_fix greater than num_required_preds_capture."
-                )
-            else:
-                pass
-
-        prey_type_names = [prey_type.name for prey_type in prey_types]
-        for prey_config in prey_configs:
-            if prey_config.type not in prey_type_names:
-                success = False
-                error_messages.append(
-                    f"Invalid prey config: {prey_config.type} not in prey types."
-                )
-
-        return success, error_messages
 
     def _gen_agents(
         self,
@@ -633,6 +612,22 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
 
         return agents
 
+    def _set_action_space(self) -> tuple[spaces.Space, int | np.integer]:
+        self.ac_dim: int | np.integer
+        if self.num_preds == 1:
+            action_space = spaces.Discrete(len(self.actions))
+            ac_dim = action_space.n
+        else:
+            action_space = spaces.Box(
+                low=0,
+                high=len(self.actions) - 1,
+                shape=(self.num_preds,),
+                dtype=np.int64,
+            )
+            ac_dim = action_space.shape[0]
+
+        return action_space, ac_dim
+
     def _set_observation_space(self) -> spaces.Box:
         observation_space = spaces.Box(
             low=0,
@@ -653,8 +648,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
         # Reset the agents. If agent_pos_list is provided, use it to reset the agents
         agent_pos_list: list[tuple[int, int]] | None = None
         if options is not None:
-            reset_options: ResetOptions = ResetOptions.model_validate(options)
-            agent_pos_list = reset_options.agent_pos_list
+            agent_pos_list = options.get("agent_pos_list", None)
         else:
             pass
         self._reset_agents(agent_pos_list=agent_pos_list)
@@ -783,10 +777,9 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
                 pass
 
         for agent in self.agents:
-            assert isinstance(agent_pos_list, list)
             agent_pos: tuple[int, int] = (
                 agent.get_init_pos()
-                if not use_agent_pos_list
+                if not use_agent_pos_list or not isinstance(agent_pos_list, list)
                 else agent_pos_list.pop(0)
             )
             self.place_agent(agent, agent_pos)
@@ -830,6 +823,7 @@ class PreyPredEnv(MultiGridEnv[NDArray[np.int_]]):
 
         for i in order:
             agent: Prey | Predator = self.agents[i]
+            assert isinstance(agent, (Prey, Predator))
             act: int = all_actions[i]
 
             if agent.terminated:
@@ -1032,10 +1026,17 @@ class BasePolicy:
         raise ValueError(f"Invalid vector: {vec}")
 
 
+class GreedyPredatorActionOptionDict(TypedDict):
+    current_pos: tuple[int, int]
+    preys: list[Prey]
+    grid: Grid
+
+
 class GreedyPredatorActionOption(BaseModel):
     current_pos: tuple[int, int]
     preys: list[Prey]
     grid: Grid
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class GreedyPredatorPolicy(BasePolicy):
@@ -1071,8 +1072,8 @@ class GreedyPredatorPolicy(BasePolicy):
         action : int
             The action to take.
         """
-        checked_action_option: GreedyPredatorActionOption = (
-            GreedyPredatorActionOption.model_validate(action_option)
+        checked_action_option: GreedyPredatorActionOption = GreedyPredatorActionOption(
+            **action_option
         )
         current_pos: tuple[int, int] = checked_action_option.current_pos
         preys: list[Prey] = checked_action_option.preys

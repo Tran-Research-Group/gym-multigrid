@@ -230,18 +230,10 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self.actions: Type[Actions] = actions_set
 
         # Actions are discrete integer values
-        self.ac_dim: int | np.integer
-        if len(agents) == 1:
-            self.action_space = spaces.Discrete(len(self.actions))
-            self.ac_dim = self.action_space.n
-        else:
-            self.action_space = spaces.Box(
-                low=0, high=len(self.actions) - 1, shape=(len(agents),), dtype=np.int64
-            )
-            self.ac_dim = self.action_space.shape[0]
 
         self.world = world
 
+        self.action_space, self.ac_dim = self._set_action_space()
         self.observation_space = self._set_observation_space()
 
         if self.observation_space is spaces.Box:
@@ -271,6 +263,22 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
+
+    def _set_action_space(self) -> tuple[spaces.Space, int | np.integer]:
+        self.ac_dim: int | np.integer
+        if len(self.agents) == 1:
+            action_space = spaces.Discrete(len(self.actions))
+            ac_dim = action_space.n
+        else:
+            action_space = spaces.Box(
+                low=0,
+                high=len(self.actions) - 1,
+                shape=(len(self.agents),),
+                dtype=np.int64,
+            )
+            ac_dim = action_space.shape[0]
+
+        return action_space, ac_dim
 
     def _set_observation_space(self) -> spaces.Space:
         if self.partial_obs:

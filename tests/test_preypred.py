@@ -2,11 +2,9 @@ import os
 
 import gymnasium as gym
 import imageio
+import numpy as np
 
-from gym_multigrid.envs.prey_pred import (
-    GreedyPredatorActionOption,
-    GreedyPredatorPolicy,
-)
+from gym_multigrid.envs.prey_pred import GreedyPredatorPolicy
 
 
 def test_preypred_init() -> None:
@@ -72,24 +70,26 @@ def test_preypred_policy() -> None:
     greedy_policy_1 = GreedyPredatorPolicy([1, 1, 1, 0], random_generator=env.np_random)
     greedy_policy_2 = GreedyPredatorPolicy([0, 0, 1, 1], random_generator=env.np_random)
 
+    truncated: bool = False
+
     for _ in range(300):
         agent_1_pos = env.unwrapped.agents[1].pos
         agent_2_pos = env.unwrapped.agents[2].pos
         prey_agents = env.unwrapped.prey_agents
         grid = env.unwrapped.grid
 
-        agent_1_option: GreedyPredatorActionOption = {
+        agent_1_option = {
             "current_pos": agent_1_pos,
             "preys": prey_agents,
             "grid": grid,
         }
-        agent_2_option: GreedyPredatorActionOption = {
+        agent_2_option = {
             "current_pos": agent_2_pos,
             "preys": prey_agents,
             "grid": grid,
         }
 
-        actions = [env.action_space.sample()] + [
+        actions = np.array([env.action_space.sample()]).flatten().tolist() + [
             greedy_policy_1.act(agent_1_option),
             greedy_policy_2.act(agent_2_option),
         ]

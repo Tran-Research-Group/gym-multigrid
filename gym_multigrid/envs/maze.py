@@ -1,10 +1,9 @@
 from dataclasses import dataclass
-from typing import Any, Final, Literal, TypeAlias, TypedDict, cast
+from typing import Any, Final, Literal, TypedDict, cast
 
 import numpy as np
 from gymnasium import Space, spaces
 from numpy.typing import NDArray
-from pydantic import BaseModel
 
 from gym_multigrid.core.agent import Actions, Agent, MazeActions
 from gym_multigrid.core.constants import NAV_DIR_TO_VEC
@@ -22,7 +21,7 @@ from gym_multigrid.multigrid import (
 from gym_multigrid.typing import Position
 
 
-class LayoutConfig(BaseModel):
+class LayoutConfig(TypedDict):
     width: int
     height: int
     flag_positions: list[Position]
@@ -55,7 +54,7 @@ class Layout:
         return static_obs
 
 
-class RewardConfig(BaseModel):
+class RewardConfig(TypedDict):
     flag_reward: float
     wall_penalty_ratio: float
     step_penalty_ratio: float
@@ -68,7 +67,7 @@ class Reward:
     step_penalty_ratio: float
 
 
-class ResetOptions(BaseModel):
+class ResetOptions(TypedDict):
     layout_config: LayoutConfig
 
 
@@ -123,13 +122,19 @@ class MapObservationMode(ObservationMode["MazeEnv", spaces.Box, NDArray[np.int64
         return observation
 
 
-DEFAULT_LAYOUT_CONFIG: LayoutConfig = LayoutConfig(
-    width=10,
-    height=10,
-    flag_positions=[(9, 9)],
-    init_agent_positions=[(5, 5)],
-    wall_positions=[],
-)
+DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
+    "width": 10,
+    "height": 10,
+    "flag_positions": [(9, 9)],
+    "init_agent_positions": [(5, 5)],
+    "wall_positions": [],
+}
+
+DEFAULT_REWARD_CONFIG: RewardConfig = {
+    "flag_reward": 1.0,
+    "wall_penalty_ratio": 0.0,
+    "step_penalty_ratio": 0.01,
+}
 
 
 class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
@@ -206,7 +211,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
 
     # Update metadata of the parent class
     observation_modes: dict[
-        str, type[ObservationMode["MazeEnv", NDArray[np.int64]]]
+        str, type[ObservationMode["MazeEnv", spaces.Box, NDArray[np.int64]]]
     ] = {
         "tensor": TensorObservationMode,
         "map": MapObservationMode,
@@ -216,11 +221,7 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         self,
         num_agents: int = 1,
         layout_config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
-        reward_config: RewardConfig = RewardConfig(
-            flag_reward=1.0,
-            wall_penalty_ratio=0.0,
-            step_penalty_ratio=0.01,
-        ),
+        reward_config: RewardConfig = DEFAULT_REWARD_CONFIG,
         observation_mode: Literal["tensor"] = "tensor",
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ):
@@ -284,12 +285,12 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
         action_set: type[Actions] = MazeActions
 
         self.layout_config_dict: LayoutConfig = layout_config
-        self.layout = Layout(**layout_config.model_dump())
+        self.layout = Layout(**self.layout_config_dict)
         self.layout.generate_static_obs()
 
         self.observation_mode = self.observation_modes[observation_mode]()
 
-        self.reward = Reward(**reward_config.model_dump())
+        self.reward = Reward(**reward_config)
 
         agents: list[Agent] = [
             Agent(
@@ -319,9 +320,9 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
 
         super().__init__(
             agents=agents,
-            **grid_config.model_dump(),
-            **rendering_config.model_dump(),
-            **partial_obs_config.model_dump(),
+            **dict(grid_config),
+            **dict(rendering_config),
+            **dict(partial_obs_config),
         )
 
     def _set_observation_space(self) -> Space:
@@ -366,10 +367,9 @@ class MazeEnv(MultiGridEnv[NDArray[np.int64]]):
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         if options is not None:
             if "layout_config" in options:
-                self.layout_config_dict = self.layout_config_dict.model_copy(
-                    update=options["layout_config"]
-                )
-                self.layout = Layout(**self.layout_config_dict.model_dump())
+                self.layout_config_dict = self.layout_config_dict.copy()
+                self.layout_config_dict.update(options["layout_config"])
+                self.layout = Layout(**self.layout_config_dict)
                 self.layout.generate_static_obs()
         else:
             pass

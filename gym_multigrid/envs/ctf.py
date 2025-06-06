@@ -9,7 +9,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObj
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, RwPolicy
+from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicy, RwPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map

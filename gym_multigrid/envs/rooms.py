@@ -193,9 +193,9 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         super().__init__(
             agents=agents,
-            **grid_config.model_dump(),
+            **dict(grid_config),
             **render_config.model_dump(),
-            **partial_obs_config.model_dump(),
+            **dict(partial_obs_config),
         )
 
     def _set_observation_space(self) -> spaces.Box:
