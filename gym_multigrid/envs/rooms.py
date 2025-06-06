@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 import numpy as np
 import torch
@@ -97,33 +97,31 @@ class SpawnConfig(BaseModel):
     goal_pos: Position
 
 
+class SpawnConfigDict(TypedDict):
+    agent_pos: Position
+    goal_pos: Position
+
+
 class LayoutConfig(BaseModel):
     field_map: list[str]
     spawn_configs: list[SpawnConfig]
 
 
-DEFAULT_LAYOUT_CONFIG = LayoutConfig(
-    field_map=[
-        "#############",
-        "#    #      #",
-        "#    #      #",
-        "#           #",
-        "#    #      #",
-        "#    #      #",
-        "## ###### ###",
-        "#     #     #",
-        "#     #     #",
-        "#     #     #",
-        "#           #",
-        "#     #     #",
-        "#############",
-    ],
-    spawn_configs=[
-        SpawnConfig(agent_pos=(9, 3), goal_pos=(3, 9)),
-        SpawnConfig(agent_pos=(11, 1), goal_pos=(7, 9)),
-        SpawnConfig(agent_pos=(9, 3), goal_pos=(9, 9)),
-    ],
-)
+class LayoutConfigDict(TypedDict):
+    field_map: list[str]
+    spawn_configs: list[SpawnConfigDict]
+
+
+class RewardConfig(BaseModel):
+    goal_reward: float = 1.0
+    step_penalty: float = 0.01
+    sum_reward: bool = True
+
+
+class RewardConfigDict(TypedDict):
+    goal_reward: float
+    step_penalty: float
+    sum_reward: bool
 
 
 class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
@@ -145,9 +143,35 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
     def __init__(
         self,
         spawn_type: int = 0,
-        layout_config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
-        tile_size: int = 10,
+        layout_config: LayoutConfigDict = {
+            "field_map": [
+                "#############",
+                "#    #      #",
+                "#    #      #",
+                "#           #",
+                "#    #      #",
+                "#    #      #",
+                "## ###### ###",
+                "#     #     #",
+                "#     #     #",
+                "#     #     #",
+                "#           #",
+                "#     #     #",
+                "#############",
+            ],
+            "spawn_configs": [
+                {"agent_pos": (9, 3), "goal_pos": (3, 9)},
+                {"agent_pos": (11, 1), "goal_pos": (7, 9)},
+                {"agent_pos": (9, 3), "goal_pos": (9, 9)},
+            ],
+        },
         state_representation: str = "tensor",
+        reward_config: RewardConfigDict = {
+            "goal_reward": 1.0,
+            "step_penalty": 0.0,
+            "sum_reward": True,
+        },
+        tile_size: int = 32,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
         """
@@ -158,11 +182,13 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         """
         ### fundamental parameters
-        self.layut_config = layout_config
         self.spawn_type: int = spawn_type
+        self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
+        self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
+
         grid_size: tuple[int, int] = (
-            len(self.layut_config.field_map[0]),
-            len(self.layut_config.field_map),
+            len(self.layout_config.field_map[0]),
+            len(self.layout_config.field_map),
         )
         self.state_representation = self.observation_modes[state_representation]()
 
@@ -173,9 +199,9 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         # NOTE: currently only one agent is supported
         agents = [
             Agent(
-                self.world,
+                world,
                 color="blue",
-                bg_color="light_blue",
+                bg_color=None,
                 actions=actions_set,
                 type="agent",
             )
@@ -217,7 +243,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         # place goal
         goal = Goal(self.world, 0)
-        self.put_obj(goal, *self.layut_config.spawn_configs[self.spawn_type].goal_pos)
+        self.put_obj(goal, *self.layout_config.spawn_configs[self.spawn_type].goal_pos)
 
         self.state_representation.save_static_obs(self, {})
 
@@ -230,7 +256,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             if random_init_pos:
                 self.place_agent(agent)
             else:
-                agent_positions = self.layut_config.spawn_configs[
+                agent_positions = self.layout_config.spawn_configs[
                     self.spawn_type
                 ].agent_pos
                 self.place_agent(agent, pos=agent_positions)
@@ -241,7 +267,19 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ):
-        # obs, info = super().reset(seed=seed, options=options)
+        if isinstance(options, dict):
+            self.spawn_type = options.get("spawn_type", self.spawn_type)
+            self.layout_config.spawn_configs = [
+                SpawnConfig(**conf)
+                for conf in options.get(
+                    "spawn_configs",
+                    [
+                        config.model_dump()
+                        for config in self.layout_config.spawn_configs
+                    ],
+                )
+            ]
+
         super().reset(seed=seed, options=options)
         self.state_representation.save_static_obs(self)
 
@@ -251,7 +289,15 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         return observations, info
 
-    def step(self, action: np.int64 | NDArray[np.int64]):
+    def step(
+        self, action: np.int64 | NDArray[np.int64]
+    ) -> tuple[
+        NDArray[np.int64] | NDArray[np.float32],
+        NDArray[np.float64] | float,
+        bool,
+        bool,
+        dict[str, Any],
+    ]:
         self.step_count += 1
 
         ### NOTE: MULTIAGENT SETTING NOT IMPLEMENTED
@@ -273,38 +319,28 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
             # Rotate left
             self.actions: type[GridActions]
-            if actions[i] == self.actions.LEFT:
-                # Get the contents of the cell in front of the agent
-                fwd_pos = agent.west_pos(in_tuple=True)
-                fwd_cell = self.grid.get(*fwd_pos)
+            fwd_pos: Position
+            match actions[i]:
+                case self.actions.LEFT:
+                    fwd_pos = agent.west_pos(in_tuple=True)
+                case self.actions.RIGHT:
+                    fwd_pos = agent.east_pos(in_tuple=True)
+                case self.actions.UP:
+                    fwd_pos = agent.north_pos(in_tuple=True)
+                case self.actions.DOWN:
+                    fwd_pos = agent.south_pos(in_tuple=True)
+                case self.actions.STAY:
+                    fwd_pos = curr_pos
+                case _:
+                    raise ValueError(
+                        f"Unknown action: {actions[i]}. Expected one of {self.actions}"
+                    )
 
-            # Rotate right
-            elif actions[i] == self.actions.RIGHT:
-                # Get the contents of the cell in front of the agent
-                fwd_pos = agent.east_pos(in_tuple=True)
-                fwd_cell = self.grid.get(*fwd_pos)
-
-            # Move forward
-            elif actions[i] == self.actions.UP:
-                # Get the contents of the cell in front of the agent
-                fwd_pos = agent.north_pos(in_tuple=True)
-                fwd_cell = self.grid.get(*fwd_pos)
-
-            elif actions[i] == self.actions.DOWN:
-                # Get the contents of the cell in front of the agent
-                fwd_pos = agent.south_pos(in_tuple=True)
-                fwd_cell = self.grid.get(*fwd_pos)
-            elif actions[i] == self.actions.STAY:
-                # Get the contents of the cell in front of the agent
-                fwd_pos = curr_pos
-                fwd_cell = self.grid.get(*fwd_pos)
-            else:
-                assert False, "unknown action"
-
+            fwd_cell = self.grid.get(*fwd_pos)
             if fwd_cell is not None:
                 if fwd_cell.type == "goal":
                     terminated = True
-                    rewards = self._reward(i, rewards, 1)
+                    rewards[i] = self.reward_config.goal_reward
                     info["success"] = True
                 else:
                     pass
@@ -315,6 +351,12 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             else:
                 # If the cell in front of the agent is not empty, do nothing
                 pass
+
+        if self.reward_config.sum_reward:
+            rewards = np.sum(rewards)
+        else:
+            pass
+        rewards -= self.reward_config.step_penalty
 
         ### NOTE: not multiagent setting
         truncated: bool = False

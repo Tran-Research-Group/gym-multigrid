@@ -258,3 +258,44 @@ register(
         "render_mode": "rgb_array",
     },
 )
+
+# Rooms environment
+# ----------------------------------------
+register(
+    id="multigrid-rooms-v0",
+    entry_point="gym_multigrid.envs:RoomsEnv",
+    max_episode_steps=100,
+    kwargs={
+        "spawn_type": 0,
+        "layout_config": {
+            "field_map": [
+                "#############",
+                "#    #      #",
+                "#    #      #",
+                "#           #",
+                "#    #      #",
+                "#    #      #",
+                "## ###### ###",
+                "#     #     #",
+                "#     #     #",
+                "#     #     #",
+                "#           #",
+                "#     #     #",
+                "#############",
+            ],
+            "spawn_configs": [
+                {"agent_pos": (9, 3), "goal_pos": (3, 9)},
+                {"agent_pos": (11, 1), "goal_pos": (7, 9)},
+                {"agent_pos": (9, 3), "goal_pos": (9, 9)},
+            ],
+        },
+        "state_representation": "vectorized_tensor",
+        "reward_config": {
+            "goal_reward": 1.0,
+            "step_penalty": 0.0,
+            "sum_reward": True,
+        },
+        "tile_size": 32,
+        "render_mode": "rgb_array",
+    },
+)
