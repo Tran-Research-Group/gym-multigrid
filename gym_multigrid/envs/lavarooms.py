@@ -1,29 +1,14 @@
 import random
-from itertools import chain
-from typing import (
-    Any,
-    Final,
-    Iterable,
-    Literal,
-    SupportsFloat,
-    TypeAlias,
-    TypedDict,
-    TypeVar,
-)
+from typing import Literal, TypeAlias, TypedDict
 
 import numpy as np
-from gymnasium import spaces
-from gymnasium.core import ActType, ObsType
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, AgentT, FRActions, PolicyAgent
-from gym_multigrid.core.constants import *
+from gym_multigrid.core.agent import Agent, FRActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Lava
 from gym_multigrid.core.world import FRWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.typing import Position
-from gym_multigrid.utils.window import Window
 
 
 class ObservationDict(TypedDict):
@@ -51,7 +36,7 @@ class MultiAgentObservationDict(TypedDict):
 Observation: TypeAlias = ObservationDict | MultiAgentObservationDict | NDArray[np.int_]
 
 
-class LavaRooms(MultiGridEnv):
+class LavaRoomsEnv(MultiGridEnv):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -61,9 +46,8 @@ class LavaRooms(MultiGridEnv):
         grid_type: int = 0,
         grid_size: tuple = (13, 13),
         agent_view_size: int = 7,
-        max_steps: int = 100,
         tile_size: int = 20,
-        highlight_visible_cells: bool | None = True,
+        highlight_visible_cells: bool = False,
         partial_observability: bool = False,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -84,7 +68,6 @@ class LavaRooms(MultiGridEnv):
         self.width = grid_size[0]
         self.height = grid_size[1]
         self.grid_size = grid_size
-        self.max_steps = max_steps
         self.world = FRWorld
         self.actions_set = FRActions
 
@@ -147,7 +130,6 @@ class LavaRooms(MultiGridEnv):
         super().__init__(
             width=self.width,
             height=self.height,
-            max_steps=max_steps,
             see_through_walls=see_through_walls,
             agents=self.agents,
             agent_view_size=agent_view_size,

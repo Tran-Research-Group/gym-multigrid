@@ -17,8 +17,6 @@ from gym_multigrid.utils.map import (
     position_in_positions,
 )
 
-CtfPolicyT = TypeVar("CtfPolicyT", bound="CtfPolicy")
-
 
 class CtfPolicy(AgentPolicy):
     """
@@ -829,7 +827,7 @@ class RoombaPolicy(CtfPolicy):
         return action
 
 
-HEURISTIC_POLICIES: dict[str, Type[CtfPolicyT]] = {
+HEURISTIC_POLICIES: dict[str, Type[CtfPolicy]] = {
     "rw": RwPolicy,
     "fight": FightPolicy,
     "capture": CapturePolicy,

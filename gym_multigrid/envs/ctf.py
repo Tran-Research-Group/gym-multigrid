@@ -4,12 +4,12 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, AgentT, CtfActions, PolicyAgent
+from gym_multigrid.core.agent import Agent, CtfActions, PolicyAgent
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Flag, Floor, Obstacle, WorldObj
 from gym_multigrid.core.world import CtfWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicyT, RwPolicy
+from gym_multigrid.policy.ctf.heuristic import HEURISTIC_POLICIES, CtfPolicy, RwPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.map import distance_area_point, distance_points, load_text_map
@@ -54,7 +54,7 @@ class CtfMvNEnv(MultiGridEnv):
         num_blue_agents: int = 2,
         num_red_agents: int = 2,
         enemy_policies: (
-            list[Type[CtfPolicyT]] | Type[CtfPolicyT] | list[str] | str
+            list[Type[CtfPolicy]] | Type[CtfPolicy] | list[str] | str
         ) = RwPolicy,
         enemy_policy_kwargs: list[dict[str, Any]] | dict[str, Any] = {},
         battle_range: float = 1,
@@ -80,7 +80,7 @@ class CtfMvNEnv(MultiGridEnv):
             Number of blue (friendly) agents.
         num_red_agents : int = 2
             Number of red (enemy) agents.
-        enemy_policies : list[CtfPolicyT] | CtfPolicyT | list[str] | str = RwPolicy()
+        enemy_policies : list[CtfPolicy] | CtfPolicy | list[str] | str = RwPolicy()
             Policies of the enemy agents.
             If there is only one policy, it will be used for all enemy agents.
             If there is a list of policies, the number of policies should be equal to the number of enemy agents.
@@ -172,7 +172,7 @@ class CtfMvNEnv(MultiGridEnv):
             zip(*np.where(self._field_map == self.world.OBJECT_TO_IDX["red_territory"]))
         ) + [self.red_flag]
 
-        blue_agents: list[AgentT] = [
+        blue_agents: list[Agent] = [
             Agent(
                 self.world,
                 index=i,
@@ -200,13 +200,13 @@ class CtfMvNEnv(MultiGridEnv):
         # Initialize the enemy policies and set the random generator and field map.
         match enemy_policies[0]:
             case str():
-                enemy_policies: list[CtfPolicyT] = [
+                enemy_policies: list[CtfPolicy] = [
                     HEURISTIC_POLICIES[policy](**kwargs)
                     for policy, kwargs in zip(enemy_policies, enemy_policy_kwargs)
                 ]
 
             case _:
-                enemy_policies: list[CtfPolicyT] = [
+                enemy_policies: list[CtfPolicy] = [
                     policy(**kwargs)
                     for policy, kwargs in zip(enemy_policies, enemy_policy_kwargs)
                 ]
@@ -228,7 +228,7 @@ class CtfMvNEnv(MultiGridEnv):
             else:
                 pass
 
-        red_agents: list[AgentT] = [
+        red_agents: list[Agent] = [
             PolicyAgent(
                 enemy_policies[i],
                 self.world,
@@ -242,7 +242,7 @@ class CtfMvNEnv(MultiGridEnv):
             for i in range(num_red_agents)
         ]
 
-        agents: list[AgentT] = blue_agents + red_agents
+        agents: list[Agent] = blue_agents + red_agents
 
         # Set the random generator and action set of the red agent from the env.
         for agent in agents:
@@ -843,7 +843,7 @@ class CtfMvNEnv(MultiGridEnv):
         } | self.ep_game_stats
         return info
 
-    def _move_agent(self, action: int, agent: AgentT) -> None:
+    def _move_agent(self, action: int, agent: Agent) -> None:
         next_pos: Position
 
         assert agent.pos is not None
@@ -1117,7 +1117,7 @@ class Ctf1v1Env(CtfMvNEnv):
     def __init__(
         self,
         map_path: str,
-        enemy_policy: Type[CtfPolicyT] | str = RwPolicy,
+        enemy_policy: Type[CtfPolicy] | str = RwPolicy,
         enemy_policy_kwarg: dict[str, Any] = {},
         battle_range: float = 1,
         territory_adv_rate: float = 0.75,
@@ -1138,7 +1138,7 @@ class Ctf1v1Env(CtfMvNEnv):
         ----------
         map_path : str
             Path to the map file.
-        enemy_policies : CtfPolicyT = RwPolicy()
+        enemy_policies : CtfPolicy = RwPolicy()
             Policy of the enemy agent.
         enemy_policy_avoided_objects : list[str] = ["obstacle", "blue_agent", "red_agent"]
             Types of objects that the enemy agent should avoid in the path.

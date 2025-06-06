@@ -11,7 +11,7 @@ def test_collect_game(env_id) -> None:
 
     obs, info = env.reset()
     while True:
-        actions = [env.action_space.sample() for a in env.unwrapped.agents]
+        actions = env.action_space.sample()  # for a in env.unwrapped.agents]
         obs, reward, terminated, truncated, info = env.step(actions)
         if terminated or truncated:
             print(f"episode ended after {env.unwrapped.step_count} steps")

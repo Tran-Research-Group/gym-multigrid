@@ -1,6 +1,6 @@
 import enum
 import math
-from typing import Type, TypeAlias, TypeVar
+from typing import Any, Type, TypeAlias, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,6 +14,7 @@ from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
 
 Actions: TypeAlias = enum.IntEnum
+AgentT = TypeVar("AgentT", bound="Agent", covariant=True)
 
 
 class DefaultActions(enum.IntEnum):
@@ -33,6 +34,13 @@ class DefaultActions(enum.IntEnum):
     DROP = 5
     TOGGLE = 6
     DONE = 7
+
+
+class GridActions(enum.IntEnum):
+    LEFT = 0
+    UP = 1
+    RIGHT = 2
+    DOWN = 3
 
 
 class CollectActions(enum.IntEnum):
@@ -97,9 +105,6 @@ class NavigationActions(enum.IntEnum):
     UP = 4
 
 
-AgentT = TypeVar("AgentT", bound="Agent")
-
-
 class Agent(WorldObj):
     """Defines the class for an agent in the environment"""
 
@@ -154,7 +159,7 @@ class Agent(WorldObj):
         self.world = world
         self.dir_to_vec = dir_to_vec
 
-    def reset(self) -> None:
+    def reset(self, options: dict[str, Any] | None = None) -> None:
         """
         Reset the agent to its initial state
         The reset attributes of the agent are:
@@ -545,6 +550,6 @@ class PolicyAgent(Agent):
         )
         self.policy: AgentPolicy = policy
 
-    def reset(self) -> None:
+    def reset(self, options: dict[str, Any] | None = None) -> None:
         super().reset()
         self.policy.reset()

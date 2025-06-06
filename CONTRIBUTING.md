@@ -50,3 +50,12 @@ Create a pull request for your feature branch to the dev branch and include a su
 
 ## Gymnasium
 The multigrid environments in this repo inherit [Gymnasium](https://gymnasium.farama.org/). Please see their documentation to understand how best to implement functionality for this repo while adhering to Gymnasium guidelines as well. This [tutorial](https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/#) is a good starting point.
+
+## Testing
+We use [pytest](https://docs.pytest.org/en/stable/) for testing.
+Each environment should have its own test file in the `tests` directory, and the test file should be named `test_<environment_name>.py`.
+There should be the following tests in each test file:
+- `test_<environment_name>_init`: Test the environment initialization.
+- `test_<environment_name>_reset`: Test the environment reset. Should return the initial observation and the initial info.
+- `test_<environment_name>_step`: Test the environment step. Should return the next observation, reward, terminated, truncated, and info.
+- `test_<environment_name>_render`: Test the environment render. Should return the rendered image.

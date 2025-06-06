@@ -2,7 +2,16 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Callable, Generic, Literal, SupportsFloat, Type, TypedDict
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Literal,
+    SupportsFloat,
+    Type,
+    TypedDict,
+    TypeVar,
+)
 
 import gymnasium as gym
 import numpy as np
@@ -10,6 +19,7 @@ from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces.space import Space
 from numpy.typing import NDArray
+from pydantic import BaseModel, Field
 
 from gym_multigrid.core.agent import Actions, Agent, AgentT, DefaultActions
 from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
@@ -19,11 +29,15 @@ from gym_multigrid.core.world import DefaultWorld, World
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
 
+EnvType = TypeVar("EnvType", bound="MultiGridEnv")
+SpaceType = TypeVar("SpaceType", bound=Space)
 
-class ObservationMode(Generic[ObsType], ABC):
-    @staticmethod
+
+class ObservationMode(Generic[EnvType, SpaceType, ObsType], ABC):
+    static_obs: ObsType
+
     @abstractmethod
-    def observation_space(env: "MultiGridEnv[ObsType]") -> Space: ...
+    def observation_space(self, env: EnvType) -> SpaceType: ...
 
     """
     Define the observation space of the environment.
@@ -39,9 +53,8 @@ class ObservationMode(Generic[ObsType], ABC):
         The observation space of the environment
     """
 
-    @staticmethod
     @abstractmethod
-    def create_observation(env: "MultiGridEnv[ObsType]") -> ObsType: ...
+    def create_observation(self, env: EnvType) -> ObsType: ...
 
     """
     Create an observation from the environment.
@@ -57,35 +70,57 @@ class ObservationMode(Generic[ObsType], ABC):
         The observation
     """
 
-
-class GridConfig(TypedDict, total=False):
-    grid_size: int | None
-    width: int | None
-    height: int | None
-    world: World
-    actions_set: Type[Actions]
-
-
-class RenderingConfig(TypedDict):
-    render_mode: Literal["human", "rgb_array"]
-    close_window: bool
-    uncached_object_types: list[str]
-    tile_size: int
+    def save_static_obs(
+        self, env: EnvType, options: dict[str, Any] | None = None
+    ) -> None:
+        """
+        Save the static observation of the environment.
+        This is used to save the observation for later use.
+        """
+        pass
 
 
-class PartialObsConfig(TypedDict):
-    partial_obs: bool
-    agent_view_size: int | None
-    see_through_walls: bool
-    highlight_visible_cells: bool
+class GridConfig(BaseModel):
+    grid_size: int | None = None
+    width: int | None = None
+    height: int | None = None
+    world: World = Field(default=DefaultWorld)
+    actions_set: Type[Actions] = Field(default=DefaultActions)
 
 
-DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = {
-    "partial_obs": False,
-    "agent_view_size": None,
-    "see_through_walls": False,
-    "highlight_visible_cells": False,
-}
+class RenderingConfig(BaseModel):
+    """
+    Attributes
+    ----------
+    render_mode : Literal["human", "rgb_array"] = "rgb_array"
+        Rendering mode
+    uncached_object_types : list[str] = []
+        List of object types that should not be cached in the rendering cache
+    close_window : bool = False
+        Whether to close the rendering window
+    tile_size : int = TILE_PIXELS
+        Size of the tiles in the rendering
+    """
+
+    render_mode: Literal["human", "rgb_array"] = "rgb_array"
+    uncached_object_types: list[str] = []
+    close_window: bool = False
+    tile_size: int = TILE_PIXELS
+
+
+class PartialObsConfig(BaseModel):
+    partial_obs: bool = False
+    agent_view_size: int | None = None
+    see_through_walls: bool = False
+    highlight_visible_cells: bool = False
+
+
+DEFAULT_FULL_OBS_ENV_PARTIAL_OBS_CONFIG: PartialObsConfig = PartialObsConfig(
+    partial_obs=False,
+    agent_view_size=None,
+    see_through_walls=False,
+    highlight_visible_cells=False,
+)
 
 
 class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
@@ -124,7 +159,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         Parameters
         ----------
-        agents : list[gym_multigrid.core.agent.AgentT]
+        agents : list[gym_multigrid.core.agent.Agent]
             List of agents in the environment
         grid_size : int | None = None
             Size of the grid (if square).
@@ -195,18 +230,16 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self.actions: Type[Actions] = actions_set
 
         # Actions are discrete integer values
-        self.action_space = spaces.Discrete(len(self.actions))
 
         self.world = world
 
+        self.action_space, self.ac_dim = self._set_action_space()
         self.observation_space = self._set_observation_space()
 
         if self.observation_space is spaces.Box:
             self.ob_dim = np.prod(self.observation_space.shape)
         else:
             pass
-
-        self.ac_dim: np.int64 = self.action_space.n
 
         # Range of possible rewards
         self.reward_range: tuple[int, int] = (0, 1)
@@ -230,6 +263,22 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         # Define the empty grid. _gen_grid is supposed to fill this up
         self.grid = Grid(width, height, world)
+
+    def _set_action_space(self) -> tuple[spaces.Space, int | np.integer]:
+        self.ac_dim: int | np.integer
+        if len(self.agents) == 1:
+            action_space = spaces.Discrete(len(self.actions))
+            ac_dim = action_space.n
+        else:
+            action_space = spaces.Box(
+                low=0,
+                high=len(self.actions) - 1,
+                shape=(len(self.agents),),
+                dtype=np.int64,
+            )
+            ac_dim = action_space.shape[0]
+
+        return action_space, ac_dim
 
     def _set_observation_space(self) -> spaces.Space:
         if self.partial_obs:
@@ -275,7 +324,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         self,
         *,
         seed: int | None = None,
-        options: dict | None = None,
+        options: dict[str, Any] | None = None,
     ) -> tuple[ObsType, dict[str, Any]]:
         # It is recommended to use the random number generator self.np_random
         # that is provided by the environment’s base class, gymnasium.Env.
@@ -476,7 +525,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         else:
             pass
 
-        if pos is not None:
+        if pos is not None and pos != (-1, -1):
             agent.pos = pos
             self.put_obj(agent, i=pos[0], j=pos[1])
         else:
@@ -514,9 +563,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return obs_cell is not None and obs_cell.type == world_cell.type
 
-    def step(
-        self, action: ActType
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    def step(self, action) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """
         Example method showing potential implementation of the step method.
         Implement this method in your own environment.
