@@ -28,8 +28,8 @@ def get_hlmdp_config(num_subtasks) -> HLMDPConfig:
         # final_state
         # termination_condition
 
-        # 2 subtasks
-        case 2:
+        # 3 subtasks
+        case 3:
             state_data_tuple = (
                 StateData(
                     idx=0,
@@ -39,6 +39,12 @@ def get_hlmdp_config(num_subtasks) -> HLMDPConfig:
                 ),
                 StateData(
                     idx=1,
+                    outgoing_init_state_dist=PositionDist(
+                        probs=(1.0,), states=((0, 0),)
+                    ),
+                ),
+                StateData(
+                    idx=2,
                     outgoing_init_state_dist=PositionDist(
                         probs=(1.0,), states=((0, 0),)
                     ),
@@ -58,11 +64,17 @@ def get_hlmdp_config(num_subtasks) -> HLMDPConfig:
                     final_state=((0, 0),),
                     termination_condition="0",
                 ),
+                SubtaskData(
+                    edge=(2, 3),
+                    idx=2,
+                    final_state=((0, 0),),
+                    termination_condition="0",
+                ),
             )
 
         case _:
             raise ValueError(
-                "Chosen number of agents not implemented in the environment."
+                "Chosen number of subtasks not implemented in the environment."
             )
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
