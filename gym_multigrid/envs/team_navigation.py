@@ -560,7 +560,6 @@ class TeamNavigationEnv(MultiGridEnv):
         max_y: int = self.height - 1
 
         obs_shape = self.reset()[0].shape
-        pdb.set_trace()
 
         if self.obs_type in ["array", "array_scaled"]:
             if self.obs_type == "array":
