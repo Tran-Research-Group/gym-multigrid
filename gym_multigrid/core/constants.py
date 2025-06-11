@@ -67,26 +67,6 @@ MAZE_COLORS: dict[str, NDArray[np.uint]] = {
 }
 
 TEAM_NAVIGATION_COLORS: dict[str, NDArray[np.uint]] = {
-    # "grey_0": np.array([100, 100, 100]),
-    # "grey_1": np.array([150, 150, 150]),
-    # "grey_2": np.array([200, 200, 200]),
-    "white": np.array([255, 255, 255]),
-    # "red_0": np.array([205, 0, 0]),
-    # "red_1": np.array([155, 0, 0]),
-    # "red_2": np.array([255, 0, 0]),
-    # "red_3": np.array([255, 100, 100]),
-    # "red_4": np.array([255, 150, 150]),
-    # "red_5": np.array([255, 200, 200]),
-    # "blue_0": np.array([0, 0, 205]),
-    # "blue_1": np.array([0, 0, 255]),
-    # "blue_2": np.array([100, 100, 255]),
-    # "blue_3": np.array([150, 150, 255]),
-    # "blue_4": np.array([200, 200, 255]),
-    # "green_0": np.array([0, 205, 0]),
-    # "green_1": np.array([0, 255, 0]),
-    # "green_2": np.array([100, 255, 100]),
-    # "green_3": np.array([150, 255, 150]),
-    # "green_4": np.array([200, 255, 200]),
     "red": np.array([228, 3, 3]),
     "orange": np.array([255, 140, 0]),
     "yellow": np.array([255, 237, 0]),
@@ -97,6 +77,7 @@ TEAM_NAVIGATION_COLORS: dict[str, NDArray[np.uint]] = {
     "grey": np.array([100, 100, 100]),
     "light_red": np.array([255, 228, 225]),
     "light_blue": np.array([240, 248, 255]),
+    "white": np.array([255, 250, 250]),
     "light_grey": np.array([200, 200, 200]),
 }
 
