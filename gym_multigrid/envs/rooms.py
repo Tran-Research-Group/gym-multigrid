@@ -8,8 +8,8 @@ from pydantic import BaseModel
 
 from gym_multigrid.core.agent import Agent, GridActions
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Goal, Wall
-from gym_multigrid.core.world import GridWorld
+from gym_multigrid.core.object import Goal, Hole, Lava, Wall
+from gym_multigrid.core.world import RoomsWorld
 from gym_multigrid.multigrid import (
     GridConfig,
     MultiGridEnv,
@@ -36,8 +36,8 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
             [
                 env.agents[0].pos[0],
                 env.agents[0].pos[1],
-                env.layout_config.spawn_configs[env.spawn_type].goal_pos[0],
-                env.layout_config.spawn_configs[env.spawn_type].goal_pos[1],
+                env.layout_config.spawn_configs[env.spawn_type].goal.pos[0],
+                env.layout_config.spawn_configs[env.spawn_type].goal.pos[1],
             ]
         )
         obs = obs / np.maximum(env.width, env.height)
@@ -92,14 +92,30 @@ class VectorizedTensorObs(TensorObs):
         return obs.flatten()
 
 
+class ObjConfig(BaseModel):
+    pos: Position
+    reward: float = 0.0
+
+
+class ObjConfigDict(TypedDict):
+    pos: Position
+    reward: float
+
+
 class SpawnConfig(BaseModel):
-    agent_pos: Position
-    goal_pos: Position
+    agent: Position
+    goal: ObjConfig  # List of goal objects, if any
+    lavas: list[ObjConfig] = []  # List of lava objects, if any
+    holes: list[ObjConfig] = []  # List of hole objects, if any
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class SpawnConfigDict(TypedDict):
-    agent_pos: Position
-    goal_pos: Position
+    agent: Position
+    goal: ObjConfigDict
+    lavas: list[ObjConfigDict]
+    holes: list[ObjConfigDict]
 
 
 class LayoutConfig(BaseModel):
@@ -113,13 +129,11 @@ class LayoutConfigDict(TypedDict):
 
 
 class RewardConfig(BaseModel):
-    goal_reward: float = 1.0
     step_penalty: float = 0.01
     sum_reward: bool = True
 
 
 class RewardConfigDict(TypedDict):
-    goal_reward: float
     step_penalty: float
     sum_reward: bool
 
@@ -160,14 +174,44 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 "#############",
             ],
             "spawn_configs": [
-                {"agent_pos": (9, 3), "goal_pos": (3, 9)},
-                {"agent_pos": (11, 1), "goal_pos": (7, 9)},
-                {"agent_pos": (9, 3), "goal_pos": (9, 9)},
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (11, 1),
+                    "goal": {"pos": (7, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (9, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "lavas": [
+                        {"pos": (7, 4), "reward": -1},
+                        {"pos": (4, 3), "reward": 0},
+                        {"pos": (2, 7), "reward": 0},
+                        {"pos": (10, 8), "reward": -1},
+                    ],
+                    "holes": [
+                        {"pos": (10, 2), "reward": 0},
+                        {"pos": (2, 2), "reward": -1},
+                        {"pos": (4, 10), "reward": 0},
+                        {"pos": (8, 9), "reward": -1},
+                    ],
+                },
             ],
         },
         state_representation: str = "tensor",
         reward_config: RewardConfigDict = {
-            "goal_reward": 1.0,
             "step_penalty": 0.0,
             "sum_reward": True,
         },
@@ -183,6 +227,9 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         """
         ### fundamental parameters
         self.spawn_type: int = spawn_type
+        # spawn_configs: list[SpawnConfig] = [
+        #     SpawnConfig(**conf) for conf in layout_config["spawn_configs"]
+        # ]
         self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
         self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
 
@@ -193,7 +240,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         self.state_representation = self.observation_modes[state_representation]()
 
         width, height = grid_size
-        world = GridWorld
+        world = RoomsWorld
         actions_set = GridActions
 
         # NOTE: currently only one agent is supported
@@ -242,8 +289,41 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                     pass
 
         # place goal
-        goal = Goal(self.world, 0)
-        self.put_obj(goal, *self.layout_config.spawn_configs[self.spawn_type].goal_pos)
+        goal = self.layout_config.spawn_configs[self.spawn_type].goal
+        goal_obj = Goal(
+            self.world,
+            0,
+            color="green",
+            reward=goal.reward,
+            absorbing=True,
+        )
+        assert isinstance(goal_obj, Goal), "Goal object must be of type Goal"
+        self.put_obj(goal_obj, *goal.pos)
+
+        # place lavas
+        for i, lava in enumerate(
+            self.layout_config.spawn_configs[self.spawn_type].lavas
+        ):
+            lava_obj = Lava(
+                self.world,
+                color="red",
+                reward=lava.reward,
+                absorbing=True,
+            )
+            self.put_obj(lava_obj, *lava.pos)
+
+        # place holes
+        for i, hole in enumerate(
+            self.layout_config.spawn_configs[self.spawn_type].holes
+        ):
+            hole_obj = Hole(
+                self.world,
+                color="purple",
+                bg_color=None,
+                reward=hole.reward,
+                absorbing=True,
+            )
+            self.put_obj(hole_obj, *hole.pos)
 
         self.state_representation.save_static_obs(self, {})
 
@@ -258,7 +338,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             else:
                 agent_positions = self.layout_config.spawn_configs[
                     self.spawn_type
-                ].agent_pos
+                ].agent
                 self.place_agent(agent, pos=agent_positions)
 
     def reset(
@@ -338,13 +418,16 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
             fwd_cell = self.grid.get(*fwd_pos)
             if fwd_cell is not None:
-                if fwd_cell.type == "goal":
+                if fwd_cell.can_overlap() and fwd_cell.absorbing:
                     terminated = True
-                    rewards[i] = self.reward_config.goal_reward
-                    info["success"] = True
+                    rewards[i] = fwd_cell.reward
+                    if isinstance(fwd_cell, Goal):
+                        info["success"] = True
+                    else:
+                        info["success"] = False
                 else:
                     pass
-            elif fwd_cell is None or fwd_cell.can_overlap():
+            elif fwd_cell is None:
                 self.grid.set(*agent.pos, None)
                 self.grid.set(*fwd_pos, agent)
                 agent.pos = fwd_pos

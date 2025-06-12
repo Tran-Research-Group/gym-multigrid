@@ -33,6 +33,19 @@ def test_rooms_render(rooms_env: gym.Env) -> None:
     assert os.path.exists(image_path)
 
 
+def test_rooms_render_lava():
+    """Test RoomsEnv render with lava"""
+    env = gym.make("multigrid-rooms-v0", spawn_type=3)
+    image_path = "tests/out/plots/test_rooms_render_lava.png"
+    env.reset()
+    img = env.render()
+
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    imageio.imsave(image_path, img)
+    assert os.path.exists(image_path)
+    env.close()
+
+
 def test_rooms_reset(rooms_env: gym.Env) -> None:
     """Test RoomsEnv reset. Should return initial observation and info."""
     obs, info = rooms_env.reset()
@@ -47,25 +60,41 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
     ["reset_options", "action", "target_reward", "target_info"],
     [
         (
-            {"spawn_configs": [{"agent_pos": (2, 3), "goal_pos": (3, 3)}]},
+            {
+                "spawn_configs": [
+                    {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
+                ]
+            },
             GridActions.RIGHT,
             1.0,
             {"success": True},
         ),
         (
-            {"spawn_configs": [{"agent_pos": (2, 3), "goal_pos": (3, 3)}]},
+            {
+                "spawn_configs": [
+                    {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
+                ]
+            },
             GridActions.LEFT,
             0.0,
             {"success": False},
         ),
         (
-            {"spawn_configs": [{"agent_pos": (2, 3), "goal_pos": (3, 3)}]},
+            {
+                "spawn_configs": [
+                    {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
+                ]
+            },
             GridActions.UP,
             0.0,
             {"success": False},
         ),
         (
-            {"spawn_configs": [{"agent_pos": (2, 3), "goal_pos": (3, 3)}]},
+            {
+                "spawn_configs": [
+                    {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
+                ]
+            },
             GridActions.DOWN,
             0.0,
             {"success": False},

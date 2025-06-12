@@ -167,3 +167,23 @@ GridWorld = World(
         "obstacle": 13,
     },
 )
+
+RoomsWorld = World(
+    encode_dim=1,
+    normalize_obs=1,
+    COLORS=ACCESSIBLE_COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "wall": 1,
+        "agent": 2,
+        "goal": 3,
+        "lava": 4,
+        "hole": 5,
+        "floor": 6,
+        "door": 7,
+        "key": 8,
+        "ball": 9,
+        "box": 10,
+        "objgoal": 11,
+    },
+)

@@ -284,14 +284,44 @@ register(
                 "#############",
             ],
             "spawn_configs": [
-                {"agent_pos": (9, 3), "goal_pos": (3, 9)},
-                {"agent_pos": (11, 1), "goal_pos": (7, 9)},
-                {"agent_pos": (9, 3), "goal_pos": (9, 9)},
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (11, 1),
+                    "goal": {"pos": (7, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (9, 9), "reward": 1.0},
+                    "lavas": [],
+                    "holes": [],
+                },
+                {
+                    "agent": (9, 3),
+                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "lavas": [
+                        {"pos": (7, 4), "reward": -0.5},
+                        {"pos": (4, 3), "reward": -0.5},
+                        {"pos": (2, 7), "reward": -0.5},
+                        {"pos": (10, 8), "reward": -0.5},
+                    ],
+                    "holes": [
+                        {"pos": (10, 2), "reward": -0.5},
+                        {"pos": (2, 2), "reward": -0.5},
+                        {"pos": (4, 10), "reward": -0.5},
+                        {"pos": (8, 9), "reward": -0.5},
+                    ],
+                },
             ],
         },
         "state_representation": "vectorized_tensor",
         "reward_config": {
-            "goal_reward": 1.0,
             "step_penalty": 0.0,
             "sum_reward": True,
         },
