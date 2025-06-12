@@ -278,9 +278,11 @@ class Goal(WorldObj):
         absorbing: bool = False,
     ):
         if color is None:
-            super().__init__(world, "goal", world.IDX_TO_COLOR[index])
+            super().__init__(
+                world, "goal", world.IDX_TO_COLOR[index], absorbing=absorbing
+            )
         else:
-            super().__init__(world, "goal", color=color)
+            super().__init__(world, "goal", color=color, absorbing=absorbing)
         self.index = index
         self.reward = reward
 

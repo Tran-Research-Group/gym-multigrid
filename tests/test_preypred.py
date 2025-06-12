@@ -47,10 +47,6 @@ def test_preypred_step() -> None:
 
     assert not truncated
 
-    os.makedirs(os.path.dirname(animation_path), exist_ok=True)
-    imageio.mimsave(animation_path, [frames], duration=2, loop=20)
-    assert os.path.exists(animation_path)
-
 
 def test_preypred_render() -> None:
     """Test PreyPredEnv render"""
