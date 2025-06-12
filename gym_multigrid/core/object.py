@@ -11,6 +11,7 @@ from gym_multigrid.utils.rendering import (
     point_in_circle,
     point_in_line,
     point_in_rect,
+    point_in_star,
 )
 
 
@@ -25,6 +26,8 @@ class WorldObj:
         type: str = "base",
         color: str = "grey",
         bg_color: str | None = None,
+        reward: float = 0.0,
+        absorbing: bool = False,
     ):
         """Create a WorldObj object
 
@@ -48,6 +51,8 @@ class WorldObj:
         self.world = world
         self.bg_color: str | None = bg_color
         self.init_bg_color: Final[str | None] = bg_color
+        self.reward: float = reward
+        self.absorbing: bool = absorbing
 
         # Initial position of the object
         self.init_pos: Position = (-1, -1)
@@ -264,11 +269,20 @@ class ObjectGoal(WorldObj):
 
 
 class Goal(WorldObj):
-    def __init__(self, world: World, index: int, reward=1, color=None):
+    def __init__(
+        self,
+        world: World,
+        index: int,
+        reward: float = 1,
+        color=None,
+        absorbing: bool = False,
+    ):
         if color is None:
-            super().__init__(world, "goal", world.IDX_TO_COLOR[index])
+            super().__init__(
+                world, "goal", world.IDX_TO_COLOR[index], absorbing=absorbing
+            )
         else:
-            super().__init__(world, "goal", world.IDX_TO_COLOR[color])
+            super().__init__(world, "goal", color=color, absorbing=absorbing)
         self.index = index
         self.reward = reward
 
@@ -315,8 +329,17 @@ class Zone(Floor):
 
 
 class Lava(WorldObj):
-    def __init__(self, world: World):
-        super().__init__(world, "lava", "red")
+    def __init__(
+        self,
+        world: World,
+        color: str = "red",
+        type: str = "lava",
+        reward: float = 0,
+        absorbing: bool = False,
+    ):
+        super().__init__(
+            world, type, color, bg_color=None, reward=reward, absorbing=absorbing
+        )
 
     def can_overlap(self):
         return True
@@ -348,23 +371,87 @@ class Wall(WorldObj):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
+class Trap(WorldObj):
+    def __init__(
+        self,
+        world: World,
+        color: str = "purple",
+        reward: float = -1,
+        absorbing: bool = False,
+    ):
+        super().__init__(
+            world, "trap", color, reward=reward, bg_color=None, absorbing=absorbing
+        )
+
+    def can_overlap(self):
+        return True
+
+    def see_behind(self):
+        return False
+
+    def render(self, img):
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
+
+
+class Hole(WorldObj):
+    def __init__(
+        self,
+        world: World,
+        color: str = "black",
+        bg_color: str | None = "purple",
+        reward: float = -1,
+        absorbing: bool = False,
+    ):
+        super().__init__(
+            world, "hole", color, reward=reward, bg_color=bg_color, absorbing=absorbing
+        )
+
+    def can_overlap(self):
+        return True
+
+    def see_behind(self):
+        return False
+
+    def render(self, img):
+        fill_coords(
+            img,
+            point_in_circle(0.5, 0.5, 0.31),
+            self.world.COLORS[self.color],
+            self.world.COLORS[self.bg_color] if self.bg_color else None,
+        )
+
+
+class Star(WorldObj):
+    def __init__(self, world: World, color: str = "yellow", reward: float = 1):
+        super().__init__(world, "star", color, reward=reward)
+
+    def can_overlap(self):
+        return True
+
+    def render(self, img):
+        fill_coords(
+            img,
+            point_in_star(0.5, 0.5, 0.31, 5),
+            self.world.COLORS[self.color],
+        )
+
+
 class Obstacle(WorldObj):
     def __init__(
         self,
         world: World,
-        penalty: float = 0,
+        reward: float = 0,
         can_see_through: bool = True,
         color: str = "grey",
     ):
-        super().__init__(world, "obstacle", color)
-        self.penalty = penalty
+        super().__init__(world, "obstacle", color, reward=reward)
         self.can_see_through = can_see_through
 
     def see_behind(self):
         return self.can_see_through
 
     def can_overlap(self):
-        return True if self.penalty != 0 else False
+        return True if self.reward != 0 else False
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
