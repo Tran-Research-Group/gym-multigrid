@@ -338,6 +338,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         # the same seed before calling env.reset()
         # if state is given in options, then use it to generate the grid with given state as the initial state
         self._gen_grid(self.width, self.height)
+        self.init_grid: Grid = self.grid.copy()
 
         # Agent status should be reset inside self._gen_grid
         self._reset_agents()
