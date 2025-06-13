@@ -39,6 +39,7 @@ The details are [here](./docs/environments/ctf.md).
 ### Collect Game
 ![Collect Game Respawn](./assets/collect-game-respawn.gif)
 
+
 | Attribute             | Description                                                |
 | --------------------- | ---------------------------------------------------------- |
 | Action Space          | `Discrete(4)`                                              |
