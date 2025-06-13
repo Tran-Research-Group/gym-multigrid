@@ -316,7 +316,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 self.world,
                 color="red",
                 reward=lava.reward,
-                absorbing=True,
+                absorbing=lava.reward < 0,
             )
             self.put_obj(lava_obj, *lava.pos)
 
@@ -329,7 +329,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 color="purple",
                 bg_color=None,
                 reward=hole.reward,
-                absorbing=True,
+                absorbing=hole.reward < 0,
             )
             self.put_obj(hole_obj, *hole.pos)
 
@@ -424,24 +424,22 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                         f"Unknown action: {actions[i]}. Expected one of {self.actions}"
                     )
 
+            info["success"] = False
             fwd_cell = self.grid.get(*fwd_pos)
             if fwd_cell is not None:
-                if fwd_cell.can_overlap() and fwd_cell.absorbing:
-                    terminated = True
-                    rewards[i] = fwd_cell.reward
-                    if isinstance(fwd_cell, Goal):
-                        info["success"] = True
-                    else:
-                        info["success"] = False
+                if fwd_cell.can_overlap():
+                    agent.move(fwd_pos, self.grid, self.init_grid)
+                    if fwd_cell.absorbing:
+                        terminated = True
+                        rewards[i] = fwd_cell.reward
+                        if isinstance(fwd_cell, Goal):
+                            info["success"] = True
+                        else:
+                            pass
                 else:
                     pass
-            elif fwd_cell is None:
-                self.grid.set(*agent.pos, None)
-                self.grid.set(*fwd_pos, agent)
-                agent.pos = fwd_pos
             else:
-                # If the cell in front of the agent is not empty, do nothing
-                pass
+                agent.move(fwd_pos, self.grid, self.init_grid)
 
         if self.reward_config.sum_reward:
             rewards = np.sum(rewards)

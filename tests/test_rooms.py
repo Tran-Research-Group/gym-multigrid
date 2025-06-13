@@ -120,3 +120,23 @@ def test_rooms_step(
     assert isinstance(next_info, dict)
     assert reward == target_reward
     assert next_info == target_info
+
+
+def test_rooms_episode() -> None:
+    """Test RoomsEnv episode. Should complete an episode without errors."""
+    animation_path = "tests/out/animations/test_rooms_episode.gif"
+    rooms_env = gym.make("multigrid-rooms-v0", spawn_type=3)
+    terminated: bool = False
+    rooms_env.reset()
+    frames = [rooms_env.render()]
+
+    for _ in range(50):
+        action = rooms_env.action_space.sample()
+        obs, reward, terminated, truncated, info = rooms_env.step(action)
+        frames.append(rooms_env.render())
+        if terminated or truncated:
+            break
+
+    os.makedirs(os.path.dirname(animation_path), exist_ok=True)
+    imageio.mimsave(animation_path, frames, duration=0.1)
+    assert os.path.exists(animation_path)
