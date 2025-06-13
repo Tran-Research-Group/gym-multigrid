@@ -106,6 +106,38 @@ def point_in_rect(xmin, xmax, ymin, ymax) -> Callable[[float, float], bool]:
     return fn
 
 
+def point_in_star(cx, cy, r, n) -> Callable[[float, float], bool]:
+    """
+    Returns a function that checks if a point is inside a star shape
+    centered at (cx, cy) with radius r and n points.
+    """
+    angle_step = 2 * np.pi / n
+
+    def fn(x, y):
+        # Translate point to origin
+        x -= cx
+        y -= cy
+
+        # Calculate the angle of the point
+        angle = np.arctan2(y, x)
+        if angle < 0:
+            angle += 2 * np.pi
+
+        # Determine the distance from the center
+        distance = np.sqrt(x**2 + y**2)
+
+        # Calculate the angle index
+        index = int(angle // angle_step)
+        inner_radius = r * 0.5  # Inner radius for star points
+
+        # Check if the point is within the star's arms or inner points
+        return (index % 2 == 0 and distance <= r) or (
+            index % 2 == 1 and distance <= inner_radius
+        )
+
+    return fn
+
+
 def point_in_triangle(a, b, c) -> Callable[[float, float], bool]:
     a = np.array(a)
     b = np.array(b)

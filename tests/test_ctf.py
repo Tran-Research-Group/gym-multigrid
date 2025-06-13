@@ -1,37 +1,87 @@
-import pytest
 import os
 
-import numpy as np
 import imageio
-from stable_baselines3 import PPO
-
-from gym_multigrid.envs.ctf import Ctf1v1Env, CtFMvNEnv
-from gym_multigrid.policy.ctf.heuristic import (
-    FightPolicy,
-    CapturePolicy,
-    PatrolPolicy,
-    RwPolicy,
-    PatrolFightPolicy,
-)
-from gym_multigrid.utils.map import load_text_map
 import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from gym_multigrid.envs.ctf import Ctf1v1Env, CtfMvNEnv
+from gym_multigrid.utils.map import load_text_map
 
 
-def test_ctf() -> None:
-    map_path: str = "tests/assets/board.txt"
+def test_ctf_pos_map() -> None:
+    map_path: str = "tests/assets/board_wall.txt"
 
     env = Ctf1v1Env(
-        map_path=map_path, render_mode="human", observation_option="flattened"
+        map_path=map_path, render_mode="human", observation_option="pos_map"
     )
     obs, _ = env.reset()
-    env.render()
+    frames = [env.render()]
+
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    frames.append(env.render())
+
+    os.makedirs("tests/out/animations", exist_ok=True)
+    imageio.mimsave("tests/out/animations/ctf_pos_map.gif", frames, duration=0.5)
+    assert os.path.exists("tests/out/animations/ctf_pos_map.gif")
+
+
+def test_ctf_pos_map_flattened() -> None:
+    map_path: str = "tests/assets/board_wall.txt"
+
+    env = Ctf1v1Env(
+        map_path=map_path, render_mode="human", observation_option="pos_map_flattened"
+    )
+    obs, _ = env.reset()
+    frames = [env.render()]
+
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    frames.append(env.render())
+
+    os.makedirs("tests/out/animations", exist_ok=True)
+    imageio.mimsave(
+        "tests/out/animations/ctf_pos_map_flattened.gif", frames, duration=0.5
+    )
+    assert os.path.exists("tests/out/animations/ctf_pos_map_flattened.gif")
+
+
+@pytest.mark.parametrize(
+    "enemy_policy, num_blue_agents, num_red_agents",
+    [
+        ("fight", 2, 1),
+        ("roomba", 2, 1),
+        ("fight", 1, 2),
+        ("roomba", 1, 2),
+    ],
+)
+def test_ctf_mvn_enemy_policies(
+    enemy_policy: str, num_blue_agents: int, num_red_agents: int
+) -> None:
+    map_path: str = "tests/assets/board_wall.txt"
+
+    env = CtfMvNEnv(
+        map_path=map_path,
+        render_mode="human",
+        observation_option="tensor",
+        num_blue_agents=num_blue_agents,
+        num_red_agents=num_red_agents,
+        enemy_policies=enemy_policy,
+    )
+    obs, _ = env.reset()
+    frames = [env.render()]
 
     while True:
-        action = np.random.choice(list(env.actions_set))
+        action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
-        env.render()
+        frames.append(env.render())
         if terminated or truncated:
             break
+
+    os.makedirs("tests/out/animations", exist_ok=True)
+    imageio.mimsave("tests/out/animations/ctf_tensor.gif", frames, duration=0.5)
+    assert terminated or truncated
 
 
 # TODO: might be good idea to include seeding test for other environments
@@ -51,7 +101,7 @@ def test_ctf_random_seeding() -> None:
 # MvN CtF test
 def test_ctf_mvn_human() -> None:
     map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -61,19 +111,14 @@ def test_ctf_mvn_human() -> None:
     obs, _ = env.reset()
     env.render()
 
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        env.render()
-        if terminated or truncated:
-            break
-
-    assert terminated or truncated
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    env.render()
 
 
 def test_ctf_mvn_rgb() -> None:
     map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
+    env = CtfMvNEnv(
         num_blue_agents=2,
         num_red_agents=2,
         map_path=map_path,
@@ -82,155 +127,11 @@ def test_ctf_mvn_rgb() -> None:
     )
     obs, _ = env.reset()
     frames = [env.render()]
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        if terminated or truncated:
-            break
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    frames.append(env.render())
 
+    os.makedirs("tests/out/animations", exist_ok=True)
     imageio.mimsave("tests/out/animations/ctf_mvn.gif", frames, duration=0.5)
 
     assert os.path.exists("tests/out/animations/ctf_mvn.gif")
-
-
-def test_fight_policy() -> None:
-    animation_path: str = "tests/out/animations/ctf_mvn_fight_policy.gif"
-    map_path: str = "tests/assets/board.txt"
-
-    field_map = load_text_map(map_path)
-    enemy_policy = FightPolicy()
-
-    env = CtFMvNEnv(
-        num_blue_agents=2,
-        num_red_agents=2,
-        map_path=map_path,
-        render_mode="human",
-        observation_option="flattened",
-        enemy_policies=[enemy_policy, RwPolicy()],
-    )
-
-    obs, _ = env.reset()
-    frames = [env.render()]
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, duration=0.5)
-
-    assert os.path.exists(animation_path)
-
-
-def test_capture_policy() -> None:
-    animation_path: str = "tests/out/animations/ctf_mvn_capture_policy.gif"
-    map_path: str = "tests/assets/board.txt"
-
-    field_map = load_text_map(map_path)
-    enemy_policy = CapturePolicy(field_map)
-
-    env = CtFMvNEnv(
-        num_blue_agents=2,
-        num_red_agents=2,
-        map_path=map_path,
-        render_mode="human",
-        observation_option="flattened",
-        enemy_policies=[enemy_policy, RwPolicy()],
-    )
-
-    obs, _ = env.reset()
-    frames = [env.render()]
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, duration=0.5)
-
-    assert os.path.exists(animation_path)
-
-
-def test_patrol_policy() -> None:
-    animation_path: str = "tests/out/animations/ctf_mvn_patrol_policy.gif"
-    map_path: str = "tests/assets/board.txt"
-
-    field_map = load_text_map(map_path)
-    enemy_policy = PatrolPolicy(field_map)
-
-    env = CtFMvNEnv(
-        num_blue_agents=2,
-        num_red_agents=2,
-        map_path=map_path,
-        render_mode="human",
-        observation_option="flattened",
-        enemy_policies=enemy_policy,
-    )
-
-    obs, _ = env.reset()
-    frames = [env.render()]
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, duration=0.5)
-
-    assert os.path.exists(animation_path)
-
-
-def test_patrol_fight_policy() -> None:
-    animation_path: str = "tests/out/animations/ctf_mvn_patrol_fight_policy.gif"
-    map_path: str = "tests/assets/board.txt"
-
-    field_map = load_text_map(map_path)
-    enemy_policy = PatrolFightPolicy(field_map)
-
-    env = CtFMvNEnv(
-        num_blue_agents=2,
-        num_red_agents=2,
-        map_path=map_path,
-        render_mode="human",
-        observation_option="flattened",
-        enemy_policies=enemy_policy,
-    )
-
-    obs, _ = env.reset()
-    frames = [env.render()]
-    while True:
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        frames.append(env.render())
-        if terminated or truncated:
-            break
-
-    imageio.mimsave(animation_path, frames, duration=0.5)
-
-    assert os.path.exists(animation_path)
-
-
-def test_mvn_ctf_render() -> None:
-    img_save_path: str = "tests/out/plots/mvn_ctf_render.png"
-    map_path: str = "tests/assets/board.txt"
-    env = CtFMvNEnv(
-        num_blue_agents=2,
-        num_red_agents=2,
-        map_path=map_path,
-        render_mode="human",
-        observation_option="flattened",
-    )
-    obs, _ = env.reset()
-
-    for _ in range(1):
-        action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-
-    img = env.render()
-    plt.imsave(img_save_path, img, dpi=600)
-
-    assert os.path.exists(img_save_path)

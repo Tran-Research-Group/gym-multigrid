@@ -1,22 +1,27 @@
-from typing import TypeVar
-from dataclasses import dataclass, field
-
+import numpy as np
 from numpy.typing import NDArray
+from pydantic import Field, dataclasses
 
-from gym_multigrid.core.constants import COLORS, CTF_COLORS, MAZE_COLORS
+from gym_multigrid.core.constants import (
+    ACCESSIBLE_COLORS,
+    COLORS,
+    CTF_COLORS,
+    LABYRINTH_COLORS,
+    MAZE_COLORS,
+)
 
-WorldT = TypeVar("WorldT", bound="World")
 
-
-@dataclass
+@dataclasses.dataclass(config={"arbitrary_types_allowed": True})
 class World:
+    """This class defines the world within which grid is situated."""
+
     encode_dim: int
     normalize_obs: int
     OBJECT_TO_IDX: dict[str, int]  # Map of object type to integers
-    COLORS: dict[str, NDArray]  # Map of color names to RGB values
-    COLOR_TO_IDX: dict[str, int] = field(init=False)
-    IDX_TO_COLOR: dict[int, str] = field(init=False)
-    IDX_TO_OBJECT: dict[int, str] = field(init=False)
+    COLORS: dict[str, NDArray[np.uint8]] = Field(default=COLORS)
+    COLOR_TO_IDX: dict[str, int] = Field(init=False)
+    IDX_TO_COLOR: dict[int, str] = Field(init=False)
+    IDX_TO_OBJECT: dict[int, str] = Field(init=False)
 
     def __post_init__(self):
         self.COLOR_TO_IDX = dict(
@@ -51,6 +56,25 @@ DefaultWorld = World(
     },
 )
 
+FRWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "floor": 3,
+        "door": 4,
+        "key": 5,
+        "ball": 6,
+        "box": 7,
+        "goal": 8,
+        "lava": 9,
+        "agent": 10,
+    },
+)
+
 CollectWorld = World(
     encode_dim=3,
     normalize_obs=1,
@@ -60,6 +84,18 @@ CollectWorld = World(
         "wall": 1,
         "ball": 2,
         "agent": 3,
+    },
+)
+
+WildfireWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "tree": 1,
+        "agent": 2,
+        "wall": 3,
     },
 )
 
@@ -81,11 +117,73 @@ CtfWorld = World(
 MazeWorld = World(
     encode_dim=3,
     normalize_obs=1,
-    COLORS=MAZE_COLORS,
+    COLORS=ACCESSIBLE_COLORS,
     OBJECT_TO_IDX={
         "background": 0,
         "agent": 1,
         "flag": 2,
-        "obstacle": 3,
+        "wall": 3,
+    },
+)
+
+LabyrinthWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=LABYRINTH_COLORS,
+    OBJECT_TO_IDX={
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "agent": 3,
+        "door": 4,
+        "goal": 5,
+        "button": 6,
+        "box": 7,
+        "zone": 8,
+        "blue_zone": 9,
+        "red_zone": 10,
+        "purple_zone": 11,
+    },
+)
+
+GridWorld = World(
+    encode_dim=1,
+    normalize_obs=1,
+    COLORS=COLORS,
+    OBJECT_TO_IDX={
+        "unseen": 0,
+        "empty": 1,
+        "wall": 2,
+        "floor": 3,
+        "door": 4,
+        "key": 5,
+        "ball": 6,
+        "box": 7,
+        "goal": 8,
+        "lava": 9,
+        "agent": 10,
+        "objgoal": 11,
+        "switch": 12,
+        "obstacle": 13,
+    },
+)
+
+RoomsWorld = World(
+    encode_dim=1,
+    normalize_obs=1,
+    COLORS=ACCESSIBLE_COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "wall": 1,
+        "agent": 2,
+        "goal": 3,
+        "lava": 4,
+        "hole": 5,
+        "floor": 6,
+        "door": 7,
+        "key": 8,
+        "ball": 9,
+        "box": 10,
+        "objgoal": 11,
     },
 )

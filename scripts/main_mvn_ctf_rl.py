@@ -4,7 +4,7 @@ from stable_baselines3 import PPO
 import torch
 import imageio
 
-from gym_multigrid.envs.ctf import CtFMvNEnv
+from gym_multigrid.envs.ctf import CtfMvNEnv
 
 total_timesteps: int = 1_000_000
 tb_log_dir: str = "out/logs/ctf/"
@@ -12,12 +12,12 @@ tb_log_name: str = "ctf_mvn_ppo"
 model_save_path: str = "out/models/ctf_ppo"
 # Create the environment
 map_path: str = "tests/assets/board.txt"
-env = CtFMvNEnv(
+env = CtfMvNEnv(
     num_blue_agents=2,
     num_red_agents=2,
     map_path=map_path,
     render_mode="rgb_array",
-    observation_option="flattened",
+    observation_option="pos_map_flattened",
 )
 
 print("GPU available: ", torch.cuda.is_available())
