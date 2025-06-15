@@ -4,6 +4,7 @@ import gymnasium as gym
 import imageio
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 import gym_multigrid
 from gym_multigrid.core.agent import GridActions
@@ -37,7 +38,27 @@ def test_rooms_render_lava():
     """Test RoomsEnv render with lava"""
     env = gym.make("multigrid-rooms-v0", spawn_type=3)
     image_path = "tests/out/plots/test_rooms_render_lava.png"
-    env.reset()
+    target_obs: NDArray[np.int64] = np.array(
+        [
+            [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 5, 0, 0, 0, 5, 4, 0, 3, 0, 0, 1],
+                [1, 0, 0, 5, 4, 1, 0, 0, 0, 5, 0, 0, 1],
+                [1, 0, 4, 0, 0, 1, 0, 0, 4, 0, 0, 0, 1],
+                [1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+                [1, 0, 5, 0, 0, 0, 1, 0, 5, 0, 0, 0, 1],
+                [1, 0, 0, 4, 0, 0, 1, 0, 0, 4, 0, 0, 1],
+                [1, 0, 0, 2, 0, 5, 1, 0, 0, 5, 0, 0, 1],
+                [1, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ]
+        ]
+    )
+    obs, _ = env.reset()
+    assert np.array_equal(obs, target_obs.flatten())
     img = env.render()
 
     os.makedirs(os.path.dirname(image_path), exist_ok=True)
