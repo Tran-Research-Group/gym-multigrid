@@ -75,6 +75,12 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
                     static_obs[x, y] = env.world.OBJECT_TO_IDX["wall"]
                 else:
                     pass
+        for lava in env.layout_config.spawn_configs[env.spawn_type].lavas:
+            static_obs[lava.pos[0], lava.pos[1]] = env.world.OBJECT_TO_IDX["lava"]
+        for hole in env.layout_config.spawn_configs[env.spawn_type].holes:
+            static_obs[hole.pos[0], hole.pos[1]] = env.world.OBJECT_TO_IDX["hole"]
+        goal = env.layout_config.spawn_configs[env.spawn_type].goal
+        static_obs[goal.pos[0], goal.pos[1]] = env.world.OBJECT_TO_IDX["goal"]
         self.static_obs = static_obs
 
 
@@ -111,7 +117,7 @@ class SpawnConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-class SpawnConfigDict(TypedDict):
+class SpawnConfigDict(TypedDict, total=False):
     agent: Position
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
@@ -177,20 +183,14 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 {
                     "agent": (9, 3),
                     "goal": {"pos": (3, 9), "reward": 1.0},
-                    "lavas": [],
-                    "holes": [],
                 },
                 {
                     "agent": (11, 1),
                     "goal": {"pos": (7, 9), "reward": 1.0},
-                    "lavas": [],
-                    "holes": [],
                 },
                 {
                     "agent": (9, 3),
                     "goal": {"pos": (9, 9), "reward": 1.0},
-                    "lavas": [],
-                    "holes": [],
                 },
                 {
                     "agent": (9, 3),
@@ -334,6 +334,16 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             self.put_obj(hole_obj, *hole.pos)
 
         self.state_representation.save_static_obs(self, {})
+
+        self.lava_pos: list[Position] = [
+            lava.pos for lava in self.layout_config.spawn_configs[self.spawn_type].lavas
+        ]
+        self.hole_pos: list[Position] = [
+            hole.pos for hole in self.layout_config.spawn_configs[self.spawn_type].holes
+        ]
+        self.goal_pos: Position = self.layout_config.spawn_configs[
+            self.spawn_type
+        ].goal.pos
 
     def _reset_agents(self, random_init_pos: bool = False):
         """
