@@ -58,7 +58,7 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
         obs = np.zeros((env.width, env.height), dtype=np.int64)
         obs[:, :] = self.static_obs
         for agent in env.agents:
-            obs[agent.pos[0], agent.pos[1]] = env.world.OBJECT_TO_IDX["agent"]
+            obs[agent.pos[1], agent.pos[0]] = env.world.OBJECT_TO_IDX["agent"]
 
         return obs
 
@@ -72,15 +72,15 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
         for x, row in enumerate(env.layout_config.field_map):
             for y, cell in enumerate(row):
                 if cell == "#":
-                    static_obs[x, y] = env.world.OBJECT_TO_IDX["wall"]
+                    static_obs[y, x] = env.world.OBJECT_TO_IDX["wall"]
                 else:
                     pass
         for lava in env.layout_config.spawn_configs[env.spawn_type].lavas:
-            static_obs[lava.pos[0], lava.pos[1]] = env.world.OBJECT_TO_IDX["lava"]
+            static_obs[lava.pos[1], lava.pos[0]] = env.world.OBJECT_TO_IDX["lava"]
         for hole in env.layout_config.spawn_configs[env.spawn_type].holes:
-            static_obs[hole.pos[0], hole.pos[1]] = env.world.OBJECT_TO_IDX["hole"]
+            static_obs[hole.pos[1], hole.pos[0]] = env.world.OBJECT_TO_IDX["hole"]
         goal = env.layout_config.spawn_configs[env.spawn_type].goal
-        static_obs[goal.pos[0], goal.pos[1]] = env.world.OBJECT_TO_IDX["goal"]
+        static_obs[goal.pos[1], goal.pos[0]] = env.world.OBJECT_TO_IDX["goal"]
         self.static_obs = static_obs
 
 

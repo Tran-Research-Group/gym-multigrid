@@ -58,7 +58,7 @@ def test_rooms_render_lava():
         ]
     )
     obs, _ = env.reset()
-    assert np.array_equal(obs, target_obs.flatten())
+    assert np.array_equal(obs, target_obs.T.flatten())
     img = env.render()
 
     os.makedirs(os.path.dirname(image_path), exist_ok=True)
