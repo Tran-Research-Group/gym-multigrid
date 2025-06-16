@@ -447,7 +447,7 @@ class TeamNavigationEnv(MultiGridEnv):
         width: int = 7,
         num_agents: int = 2,
         p_intended_movement: float = 0.95,
-        p_detect_visual: float = 0.005,
+        p_detect_visual: float = 0.0,
         zone_width: int = 1,
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
@@ -654,7 +654,7 @@ class TeamNavigationEnv(MultiGridEnv):
                 obj_type="zone",
                 group_index=1,
                 visual_detect_prob=self.p_detect_visual,
-                radio_detect_prob=0.00,
+                radio_detect_prob=0.0,
             ),
         ]
 
