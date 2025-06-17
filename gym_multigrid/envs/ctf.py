@@ -524,7 +524,7 @@ class CtfMvNEnv(MultiGridEnv):
             )
 
         for i, j in self.obstacle:
-            self.put_obj(Obstacle(self.world, penalty=self.obstacle_penalty), i, j)
+            self.put_obj(Obstacle(self.world, reward=-self.obstacle_penalty), i, j)
 
         self.put_obj(
             Flag(

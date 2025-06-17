@@ -520,6 +520,27 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
     ) -> Position:
         """
         Set the agent's starting point at an empty position in the grid and reset the agent's state
+
+        Parameters
+        ----------
+        agent : Agent
+            The agent to place in the grid
+        pos : Position | None = None
+            The position to place the agent at. If None, a random position will be chosen.
+        top : Position | None = None
+            The top-left position of the rectangle where to place the agent.
+            If None, the whole grid will be used.
+        size : tuple[int, int] | None = None
+            The size of the rectangle where to place the agent.
+            If None, the whole grid will be used.
+        rand_dir : bool = False
+            Whether to randomly set the agent's direction.
+            If False, the agent will face to direction 3.
+        max_tries : float = math.inf
+            Maximum number of tries to place the agent at a random position.
+        reset_agent_status : bool = False
+            Whether to reset the agent's status (e.g., position, direction).
+            If False, the agent's position and direction will not be reset.
         """
         if reset_agent_status:
             agent.reset()
