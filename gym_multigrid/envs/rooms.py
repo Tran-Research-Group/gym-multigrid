@@ -223,6 +223,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             "step_penalty": 0.0,
             "sum_reward": True,
         },
+        random_init_pos: bool = False,
         tile_size: int = 32,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -240,6 +241,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         # ]
         self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
         self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
+        self.random_init_pos: bool = random_init_pos
 
         grid_size: tuple[int, int] = (
             len(self.layout_config.field_map[0]),
@@ -352,6 +354,8 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         """
         for agent in self.agents:
             agent_positions = self.layout_config.spawn_configs[self.spawn_type].agent
+            if self.random_init_pos:
+                agent_positions = None
             self.place_agent(agent, pos=agent_positions, reset_agent_status=True)
 
     def reset(
