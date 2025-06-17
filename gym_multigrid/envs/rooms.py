@@ -109,7 +109,7 @@ class ObjConfigDict(TypedDict):
 
 
 class SpawnConfig(BaseModel):
-    agent: Position
+    agent: Position | None = None
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
@@ -118,7 +118,7 @@ class SpawnConfig(BaseModel):
 
 
 class SpawnConfigDict(TypedDict, total=False):
-    agent: Position
+    agent: Position | None
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
     holes: list[ObjConfigDict]
@@ -345,19 +345,14 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             self.spawn_type
         ].goal.pos
 
-    def _reset_agents(self, random_init_pos: bool = False):
+    def _reset_agents(self):
         """
         Reset the agents' positions in the grid.
         If random_init_pos is True, randomly select a position from the grid.
         """
         for agent in self.agents:
-            if random_init_pos:
-                self.place_agent(agent)
-            else:
-                agent_positions = self.layout_config.spawn_configs[
-                    self.spawn_type
-                ].agent
-                self.place_agent(agent, pos=agent_positions)
+            agent_positions = self.layout_config.spawn_configs[self.spawn_type].agent
+            self.place_agent(agent, pos=agent_positions, reset_agent_status=True)
 
     def reset(
         self,
