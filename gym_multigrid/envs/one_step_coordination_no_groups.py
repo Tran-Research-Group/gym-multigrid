@@ -83,6 +83,34 @@ def get_hlmdp_config(num_subtasks) -> HLMDPConfig:
     return hlmdp_config
 
 
+def get_subtask_to_thres(num_agents):
+    match num_agents:
+        case 3:
+            subtask_idx_to_thres = {
+                0: 1,
+                1: 2,
+                2: 3,
+            }
+        case 6:
+            subtask_idx_to_thres = {
+                0: 1,
+                1: 3,
+                2: 6,
+            }
+        case 9:
+            subtask_idx_to_thres = {
+                0: 1,
+                1: 5,
+                2: 9,
+            }
+        case _:
+            raise ValueError(
+                "Chosen number of subtasks not implemented in the environment."
+            )
+
+    return subtask_idx_to_thres
+
+
 # Classes used to interface with the env
 class EnvInfo(TypedDict):
     """info about the environment used for PyMARL training"""
@@ -121,8 +149,7 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
     # setup and env properties
     def __init__(
         self,
-        num_agents: int = 4,
-        num_type_1_thres: int = 2,
+        num_agents: int = 3,
         subtask_idx: int = 0,
         p_intended_movement: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
@@ -139,8 +166,6 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
         ----------
         num_agents: int = 4
             Number of agents in the environment
-        num_type_1_thres: int = 2
-            Number of Type 1 agents that have to take the down action to receive the high reward
         p_intended_movement : float = 1.0
             Probability of the intended movement.
         actions_set : type[ActionsT] = NavigationActions
@@ -157,8 +182,11 @@ class OneStepCoordinationNoGroupsEnv(MultiGridEnv):
             Render mode for the environment.
         """
         self.num_agents = num_agents
-        self.num_type_1_thres = num_type_1_thres
         self.subtask_idx = subtask_idx
+
+        subtask_idx_to_thres = get_subtask_to_thres(self.num_agents)
+        self.num_type_1_thres = subtask_idx_to_thres[self.subtask_idx]
+
         self.p_intended_movement: float = p_intended_movement
         self.reward_config: RewardConfig = reward_config
 
