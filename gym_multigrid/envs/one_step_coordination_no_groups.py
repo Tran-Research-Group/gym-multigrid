@@ -91,11 +91,23 @@ def get_subtask_to_thres(num_agents):
                 1: 2,
                 2: 3,
             }
+        case 5:
+            subtask_idx_to_thres = {
+                0: 1,
+                1: 3,
+                2: 5,
+            }
         case 6:
             subtask_idx_to_thres = {
                 0: 1,
                 1: 3,
                 2: 6,
+            }
+        case 7:
+            subtask_idx_to_thres = {
+                0: 1,
+                1: 4,
+                2: 7,
             }
         case 9:
             subtask_idx_to_thres = {
