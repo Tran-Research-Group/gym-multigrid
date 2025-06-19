@@ -69,17 +69,45 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
 
         case 3:
             state_data_tuple = (
+                ####################
+                # subtask 0 setups
+                # original setup (works w/ CASEC, doesn't work w/ MAPPO)
+                # StateData(
+                #     idx=0,
+                #     outgoing_init_state_dist=PositionDist(
+                #         probs=(1.0,),
+                #         states=(
+                #             (1, 6),
+                #             (1, 7),
+                #             (1, 8),
+                #         ),
+                #     ),
+                # ),
+                # setup 1 - agents start on the left, but a little more spread out
                 StateData(
                     idx=0,
                     outgoing_init_state_dist=PositionDist(
                         probs=(1.0,),
                         states=(
-                            (1, 1),
+                            (1, 5),
                             (1, 7),
-                            (1, 8),
+                            (1, 9),
                         ),
                     ),
                 ),
+                # setup 2 - agents start super spread out all over the map
+                # StateData(
+                #     idx=0,
+                #     outgoing_init_state_dist=PositionDist(
+                #         probs=(1.0,),
+                #         states=(
+                #             (3, 4),
+                #             (10, 3),
+                #             (6, 12),
+                #         ),
+                #     ),
+                # ),
+                ####################
                 StateData(
                     idx=1,
                     outgoing_init_state_dist=PositionDist(
@@ -116,19 +144,42 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
             )
 
             subtask_data_tuple = (
+                ####################
+                # subtask 0 setups
+                # # original setup
+                # SubtaskData(
+                #     edge=(0, 1),
+                #     idx=0,
+                #     final_state=(
+                #         (6, 2),
+                #         (6, 3),
+                #         (6, 4),
+                #     ),
+                #     termination_condition="reach_assigned_final_state",
+                # ),
+                # setup 1 - agents start on the left, but a little more spread out
                 SubtaskData(
                     edge=(0, 1),
                     idx=0,
                     final_state=(
                         (3, 3),
                         (3, 5),
-                        (2, 12),
-                        # (6, 2),
-                        # (6, 3),
-                        # (6, 4),
+                        (3, 10),
                     ),
                     termination_condition="reach_assigned_final_state",
                 ),
+                # setup 2 - agents start super spread out all over the map
+                # SubtaskData(
+                #     edge=(0, 1),
+                #     idx=0,
+                #     final_state=(
+                #         (1, 2),
+                #         (11, 8),
+                #         (1, 13),
+                #     ),
+                #     termination_condition="reach_assigned_final_state",
+                # ),
+                ####################
                 SubtaskData(
                     edge=(1, 3),
                     idx=1,
