@@ -69,8 +69,8 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
             np.ones((env.width, env.height), dtype=np.int64)
             * env.world.OBJECT_TO_IDX["empty"]
         )
-        for x, row in enumerate(env.layout_config.field_map):
-            for y, cell in enumerate(row):
+        for y, row in enumerate(env.layout_config.field_map):
+            for x, cell in enumerate(row):
                 if cell == "#":
                     static_obs[y, x] = env.world.OBJECT_TO_IDX["wall"]
                 else:
@@ -166,13 +166,13 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         layout_config: LayoutConfigDict = {
             "field_map": [
                 "#############",
-                "#    #      #",
-                "#    #      #",
-                "#           #",
-                "#    #      #",
-                "#    #      #",
-                "## ###### ###",
                 "#     #     #",
+                "#     #     #",
+                "#           #",
+                "#     #     #",
+                "#     #     #",
+                "## ####     #",
+                "#     ### ###",
                 "#     #     #",
                 "#     #     #",
                 "#           #",
@@ -193,27 +193,35 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                     "goal": {"pos": (9, 9), "reward": 1.0},
                 },
                 {
-                    "agent": (9, 3),
-                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "agent": (3, 9),
+                    "goal": {"pos": (9, 4), "reward": 1.0},
                     "lavas": [
-                        {"pos": (10, 4), "reward": -1},
-                        {"pos": (8, 3), "reward": -1},
-                        {"pos": (5, 2), "reward": 0},
-                        {"pos": (4, 4), "reward": 0},
-                        {"pos": (5, 8), "reward": 0},
-                        {"pos": (3, 7), "reward": 0},
+                        {"pos": (8, 4), "reward": 0},
+                        {"pos": (9, 2), "reward": 0},
+                        {"pos": (11, 1), "reward": 0},
+                        {"pos": (5, 3), "reward": 0},
+                        {"pos": (3, 5), "reward": 0},
+                        {"pos": (3, 2), "reward": 0},
+                        {"pos": (5, 9), "reward": -1},
+                        {"pos": (3, 8), "reward": -1},
+                        {"pos": (2, 11), "reward": -1},
                         {"pos": (10, 8), "reward": -1},
                         {"pos": (8, 9), "reward": -1},
+                        {"pos": (7, 11), "reward": -1},
                     ],
                     "holes": [
-                        {"pos": (7, 2), "reward": 0},
-                        {"pos": (9, 5), "reward": 0},
-                        {"pos": (4, 3), "reward": -1},
-                        {"pos": (3, 2), "reward": -1},
-                        {"pos": (4, 9), "reward": 0},
-                        {"pos": (3, 6), "reward": 0},
+                        {"pos": (7, 3), "reward": 0},
+                        {"pos": (10, 5), "reward": 0},
+                        {"pos": (8, 6), "reward": 0},
+                        {"pos": (4, 4), "reward": -1},
+                        {"pos": (2, 3), "reward": -1},
+                        {"pos": (1, 1), "reward": -1},
+                        {"pos": (2, 7), "reward": 0},
+                        {"pos": (1, 9), "reward": 0},
+                        {"pos": (4, 10), "reward": 0},
                         {"pos": (7, 8), "reward": -1},
-                        {"pos": (9, 9), "reward": -1},
+                        {"pos": (9, 10), "reward": -1},
+                        {"pos": (11, 11), "reward": -1},
                     ],
                 },
             ],
@@ -291,8 +299,8 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         self.grid = Grid(width, height, self.world)
 
         # Translate the maze structure into the grid
-        for x, row in enumerate(self.layout_config.field_map):
-            for y, cell in enumerate(row):
+        for y, row in enumerate(self.layout_config.field_map):
+            for x, cell in enumerate(row):
                 if cell == "#":
                     self.grid.set(x, y, Wall(self.world))
                 else:
