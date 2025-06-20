@@ -69,45 +69,17 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
 
         case 3:
             state_data_tuple = (
-                ####################
-                # subtask 0 setups
-                # original setup (works w/ CASEC, doesn't work w/ MAPPO)
-                # StateData(
-                #     idx=0,
-                #     outgoing_init_state_dist=PositionDist(
-                #         probs=(1.0,),
-                #         states=(
-                #             (1, 6),
-                #             (1, 7),
-                #             (1, 8),
-                #         ),
-                #     ),
-                # ),
-                # setup 1 - agents start on the left, but a little more spread out
                 StateData(
                     idx=0,
                     outgoing_init_state_dist=PositionDist(
                         probs=(1.0,),
                         states=(
-                            (1, 5),
+                            (1, 6),
                             (1, 7),
-                            (1, 9),
+                            (1, 8),
                         ),
                     ),
                 ),
-                # setup 2 - agents start super spread out all over the map
-                # StateData(
-                #     idx=0,
-                #     outgoing_init_state_dist=PositionDist(
-                #         probs=(1.0,),
-                #         states=(
-                #             (3, 4),
-                #             (10, 3),
-                #             (6, 12),
-                #         ),
-                #     ),
-                # ),
-                ####################
                 StateData(
                     idx=1,
                     outgoing_init_state_dist=PositionDist(
@@ -144,42 +116,16 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
             )
 
             subtask_data_tuple = (
-                ####################
-                # subtask 0 setups
-                # # original setup
-                # SubtaskData(
-                #     edge=(0, 1),
-                #     idx=0,
-                #     final_state=(
-                #         (6, 2),
-                #         (6, 3),
-                #         (6, 4),
-                #     ),
-                #     termination_condition="reach_assigned_final_state",
-                # ),
-                # setup 1 - agents start on the left, but a little more spread out
                 SubtaskData(
                     edge=(0, 1),
                     idx=0,
                     final_state=(
-                        (3, 3),
-                        (3, 5),
-                        (3, 10),
+                        (6, 2),
+                        (6, 3),
+                        (6, 4),
                     ),
                     termination_condition="reach_assigned_final_state",
                 ),
-                # setup 2 - agents start super spread out all over the map
-                # SubtaskData(
-                #     edge=(0, 1),
-                #     idx=0,
-                #     final_state=(
-                #         (1, 2),
-                #         (11, 8),
-                #         (1, 13),
-                #     ),
-                #     termination_condition="reach_assigned_final_state",
-                # ),
-                ####################
                 SubtaskData(
                     edge=(1, 3),
                     idx=1,
@@ -762,6 +708,8 @@ class TeamNavigationEnv(MultiGridEnv):
         self.map_obs: NDArray[np.int_] = self._get_map()
 
     def get_state(self):
+        # state = local agent observations + 1 copy of the map obs
+        ## if we concatenated the full agent observations to get the state, we would have num_agents copies of the map in the state, which adds a ton of unnecessary entries
         obs = self.get_obs(include_map=False)
         state = np.append(obs, self.map_obs)
         return state
@@ -860,21 +808,22 @@ class TeamNavigationEnv(MultiGridEnv):
 
                     # do not include any info about empty spaces, agents, or goals in the map view
                     if (obj is None) or obj.type in ["agent", "goal"]:
-                        pass
+                        obj_encoding: int = self.world.OBJECT_TO_IDX["empty"]
 
                     else:
                         obj_encoding: int = self.world.OBJECT_TO_IDX[obj.type]
-                        obj_data = [x, y, obj_encoding]
 
-                        if self.obs_type == "array":
-                            env_map_list += obj_data
+                    obj_data = [x, y, obj_encoding]
 
-                        elif self.obs_type == "array_scaled":
-                            env_map_list += [
-                                obj_data[0] / self.obs_scaling["x"],
-                                obj_data[1] / self.obs_scaling["y"],
-                                obj_data[2] / self.obs_scaling["obj_encoding"],
-                            ]
+                    if self.obs_type == "array":
+                        env_map_list += obj_data
+
+                    elif self.obs_type == "array_scaled":
+                        env_map_list += [
+                            obj_data[0] / self.obs_scaling["x"],
+                            obj_data[1] / self.obs_scaling["y"],
+                            obj_data[2] / self.obs_scaling["obj_encoding"],
+                        ]
 
         # elif self.obs_type in ["one_hot_array"]:
         #     env_map: NDArray[np.int_] = np.zeros(
