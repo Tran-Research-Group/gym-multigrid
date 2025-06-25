@@ -595,7 +595,7 @@ class TeamNavigationEnv(MultiGridEnv):
         super().reset(seed=seed, options=options)
 
         obs: Observation = self.get_obs()
-        info: StepInfo = self._get_step_info()
+        info: StepInfo = self._get_step_info(reach_goal=False)
 
         return obs, info
 
@@ -964,12 +964,12 @@ class TeamNavigationEnv(MultiGridEnv):
         # get observation from being in s_{t+1}
         obs: Observation = self.get_obs()
 
-        terminated: bool = self._terminated(next_state)
+        terminated, reach_goal = self._terminated(next_state)
 
         # truncated is handled by a Gymnasium wrapper
         truncated: bool = False
 
-        info: StepInfo = self._get_step_info(terminated=terminated)
+        info: StepInfo = self._get_step_info(reach_goal)
 
         return obs, reward, terminated, truncated, info
 
@@ -1260,7 +1260,7 @@ class TeamNavigationEnv(MultiGridEnv):
         return reward
 
     # termination function
-    def _terminated(self, next_state: NDArray[np.int_]) -> bool:
+    def _terminated(self, next_state: NDArray[np.int_]) -> tuple[bool, bool]:
         """
         Returns
         -------
@@ -1271,7 +1271,7 @@ class TeamNavigationEnv(MultiGridEnv):
             self._agents_reached_terminal_goal(next_state) | self._agents_detected()
         )
 
-        return terminated
+        return terminated, self._agents_reached_terminal_goal(next_state)
 
     def _agents_detected(self) -> bool:
         detected: bool = False
@@ -1290,8 +1290,8 @@ class TeamNavigationEnv(MultiGridEnv):
         return np.array_equal(next_state, final_state)
 
     # step info
-    def _get_step_info(self, terminated=False) -> StepInfo:
+    def _get_step_info(self, reach_goal: bool) -> StepInfo:
         """get info to be returned in the step function"""
-        step_info: StepInfo = {"success": terminated}
+        step_info: StepInfo = {"success": reach_goal}
 
         return step_info
