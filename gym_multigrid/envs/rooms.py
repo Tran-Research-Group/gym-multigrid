@@ -6,7 +6,7 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from gym_multigrid.core.agent import Agent, GridActions
+from gym_multigrid.core.agent import Agent, NavigationActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Hole, Lava, Wall
 from gym_multigrid.core.world import RoomsWorld
@@ -259,7 +259,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         width, height = grid_size
         world = RoomsWorld
-        actions_set = GridActions
+        actions_set = NavigationActions
 
         # NOTE: currently only one agent is supported
         agents = [
@@ -423,7 +423,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             curr_pos: Position = agent.pos
 
             # Rotate left
-            self.actions: type[GridActions]
+            self.actions: type[NavigationActions]
             fwd_pos: Position
             match actions[i]:
                 case self.actions.LEFT:
