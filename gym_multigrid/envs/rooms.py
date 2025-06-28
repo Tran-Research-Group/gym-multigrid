@@ -390,7 +390,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
 
         ### NOTE: NOT MULTIAGENT SETTING
         observations = self._get_obs()
-        info = {"success": False}
+        info = {"is_success": False}
 
         return observations, info
 
@@ -411,7 +411,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         order = np.random.permutation(len(actions))
 
         rewards = np.zeros(len(actions))
-        info = {"success": False}
+        info = {"is_success": False}
         terminated: bool = False
         for i in order:
             agent: Agent = self.agents[i]
@@ -441,7 +441,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                         f"Unknown action: {actions[i]}. Expected one of {self.actions}"
                     )
 
-            info["success"] = False
+            info["is_success"] = False
             fwd_cell = self.grid.get(*fwd_pos)
             if fwd_cell is not None:
                 if fwd_cell.can_overlap():
@@ -450,7 +450,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                         terminated = True
                         rewards[i] = fwd_cell.reward
                         if isinstance(fwd_cell, Goal):
-                            info["success"] = True
+                            info["is_success"] = True
                         else:
                             pass
                 else:
