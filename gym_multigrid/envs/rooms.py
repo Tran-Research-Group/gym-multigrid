@@ -341,7 +341,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 color="purple",
                 bg_color=None,
                 reward=hole.reward,
-                absorbing=hole.reward < 0,
+                absorbing=hole.absorbing,
             )
             self.put_obj(hole_obj, *hole.pos)
 
