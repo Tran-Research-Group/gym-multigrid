@@ -101,11 +101,13 @@ class VectorizedTensorObs(TensorObs):
 class ObjConfig(BaseModel):
     pos: Position
     reward: float = 0.0
+    absorbing: bool = True
 
 
-class ObjConfigDict(TypedDict):
+class ObjConfigDict(TypedDict, total=False):
     pos: Position
     reward: float
+    absorbing: bool
 
 
 class SpawnConfig(BaseModel):
@@ -182,46 +184,46 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             "spawn_configs": [
                 {
                     "agent": (9, 3),
-                    "goal": {"pos": (3, 9), "reward": 1.0},
+                    "goal": {"pos": (3, 9), "reward": 1.0, "absorbing": True},
                 },
                 {
                     "agent": (11, 1),
-                    "goal": {"pos": (7, 9), "reward": 1.0},
+                    "goal": {"pos": (7, 9), "reward": 1.0, "absorbing": True},
                 },
                 {
                     "agent": (9, 3),
-                    "goal": {"pos": (9, 9), "reward": 1.0},
+                    "goal": {"pos": (9, 9), "reward": 1.0, "absorbing": True},
                 },
                 {
                     "agent": (3, 9),
-                    "goal": {"pos": (9, 4), "reward": 1.0},
+                    "goal": {"pos": (9, 4), "reward": 1.0, "absorbing": True},
                     "lavas": [
-                        {"pos": (8, 4), "reward": 0},
-                        {"pos": (9, 2), "reward": 0},
-                        {"pos": (11, 1), "reward": 0},
-                        {"pos": (5, 3), "reward": 0},
-                        {"pos": (3, 5), "reward": 0},
-                        {"pos": (3, 2), "reward": 0},
-                        {"pos": (5, 9), "reward": -1},
-                        {"pos": (3, 8), "reward": -1},
-                        {"pos": (2, 11), "reward": -1},
-                        {"pos": (10, 8), "reward": -1},
-                        {"pos": (8, 9), "reward": -1},
-                        {"pos": (7, 11), "reward": -1},
+                        {"pos": (8, 4), "reward": 0, "absorbing": False},
+                        {"pos": (9, 2), "reward": 0, "absorbing": False},
+                        {"pos": (11, 1), "reward": 0, "absorbing": False},
+                        {"pos": (5, 3), "reward": 0, "absorbing": False},
+                        {"pos": (3, 5), "reward": 0, "absorbing": False},
+                        {"pos": (3, 2), "reward": 0, "absorbing": False},
+                        {"pos": (5, 9), "reward": -1, "absorbing": True},
+                        {"pos": (3, 8), "reward": -1, "absorbing": True},
+                        {"pos": (2, 11), "reward": -1, "absorbing": True},
+                        {"pos": (10, 8), "reward": -1, "absorbing": True},
+                        {"pos": (8, 9), "reward": -1, "absorbing": True},
+                        {"pos": (7, 11), "reward": -1, "absorbing": True},
                     ],
                     "holes": [
-                        {"pos": (7, 3), "reward": 0},
-                        {"pos": (10, 5), "reward": 0},
-                        {"pos": (8, 6), "reward": 0},
-                        {"pos": (4, 4), "reward": -1},
-                        {"pos": (2, 3), "reward": -1},
-                        {"pos": (1, 1), "reward": -1},
-                        {"pos": (2, 7), "reward": 0},
-                        {"pos": (1, 9), "reward": 0},
-                        {"pos": (4, 10), "reward": 0},
-                        {"pos": (7, 8), "reward": -1},
-                        {"pos": (9, 10), "reward": -1},
-                        {"pos": (11, 11), "reward": -1},
+                        {"pos": (7, 3), "reward": 0, "absorbing": False},
+                        {"pos": (10, 5), "reward": 0, "absorbing": False},
+                        {"pos": (8, 6), "reward": 0, "absorbing": False},
+                        {"pos": (4, 4), "reward": -1, "absorbing": True},
+                        {"pos": (2, 3), "reward": -1, "absorbing": True},
+                        {"pos": (1, 1), "reward": -1, "absorbing": True},
+                        {"pos": (2, 7), "reward": 0, "absorbing": False},
+                        {"pos": (1, 9), "reward": 0, "absorbing": False},
+                        {"pos": (4, 10), "reward": 0, "absorbing": False},
+                        {"pos": (7, 8), "reward": -1, "absorbing": True},
+                        {"pos": (9, 10), "reward": -1, "absorbing": True},
+                        {"pos": (11, 11), "reward": -1, "absorbing": True},
                     ],
                 },
             ],
@@ -313,7 +315,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             0,
             color="green",
             reward=goal.reward,
-            absorbing=True,
+            absorbing=goal.absorbing,
         )
         assert isinstance(goal_obj, Goal), "Goal object must be of type Goal"
         self.put_obj(goal_obj, *goal.pos)
@@ -326,7 +328,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 self.world,
                 color="red",
                 reward=lava.reward,
-                absorbing=lava.reward < 0,
+                absorbing=lava.absorbing,
             )
             self.put_obj(lava_obj, *lava.pos)
 
