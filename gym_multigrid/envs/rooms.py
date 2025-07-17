@@ -17,7 +17,7 @@ from gym_multigrid.multigrid import (
     PartialObsConfig,
     RenderingConfig,
 )
-from gym_multigrid.typing import Position
+from gym_multigrid.typing import Position, Size
 
 
 class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
@@ -43,6 +43,55 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
         obs = obs / np.maximum(env.width, env.height)
 
         return obs
+
+
+class PositionalDictObs(
+    ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+):
+    """
+    Observation mode that returns the agent's position and goal position as a dictionary.
+
+    The object locations are scaled to [0, 1] by the grid width and height.
+    The observation dictionary contains:
+    - "obs": The agent, lava, and hole positions scaled to [0, 1].
+    - "desired_goal": The goal position scaled to [0, 1].
+    """
+
+    def observation_space(self, env: "RoomsEnv") -> spaces.Dict:
+        return spaces.Dict(
+            {
+                "obs": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(len(env.agents) + len(env.lava_pos) + len(env.hole_pos), 2),
+                    dtype=np.float32,
+                ),
+                "desired_goal": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(2,),
+                    dtype=np.float32,
+                ),
+            }
+        )
+
+    def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float32]]:
+        # Scale the agent's position and goal position to [0, 1] by the grid width and height
+        grid_sizes: NDArray[np.float32] = np.array(
+            [env.width, env.height],
+            dtype=np.float32,
+        )
+        return {
+            "obs": np.array(
+                [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float32
+            )
+            / grid_sizes,
+            "desired_goal": np.array(
+                env.layout_config.spawn_configs[env.spawn_type].goal.pos,
+                dtype=np.float32,
+            )
+            / grid_sizes,
+        }
 
 
 class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
@@ -99,15 +148,17 @@ class VectorizedTensorObs(TensorObs):
 
 
 class ObjConfig(BaseModel):
-    pos: Position
+    pos: Position = (-1, -1)  # Default position indicating no specific position
     reward: float = 0.0
     absorbing: bool = True
+    random_init_range: tuple[Position, Size] | None = None
 
 
 class ObjConfigDict(TypedDict, total=False):
     pos: Position
     reward: float
     absorbing: bool
+    random_init_range: tuple[Position, Size] | None
 
 
 class SpawnConfig(BaseModel):
@@ -146,7 +197,11 @@ class RewardConfigDict(TypedDict):
     sum_reward: bool
 
 
-class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
+class RoomsEnv(
+    MultiGridEnv[
+        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]]
+    ]
+):
     """
     Environment for capture the flag with multiple agents with N blue agents and M red agents.
     """
@@ -154,9 +209,13 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
     observation_modes: dict[
         str,
         type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]]
-        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]],
+        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]]
+        | type[
+            ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+        ],
     ] = {
         "positional": PositionalObs,
+        "positional_dict": PositionalDictObs,
         "tensor": TensorObs,
         "vectorized_tensor": VectorizedTensorObs,
     }
@@ -230,7 +289,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         },
         state_representation: str = "tensor",
         reward_config: RewardConfigDict = {
-            "step_penalty": 0.0,
+            "step_penalty": 0.01,
             "sum_reward": True,
         },
         random_init_pos: bool = False,
@@ -291,7 +350,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             **dict(partial_obs_config),
         )
 
-    def _set_observation_space(self) -> spaces.Box:
+    def _set_observation_space(self) -> spaces.Box | spaces.Dict:
         observation_space = self.state_representation.observation_space(self)
 
         return observation_space
@@ -318,7 +377,11 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
             absorbing=goal.absorbing,
         )
         assert isinstance(goal_obj, Goal), "Goal object must be of type Goal"
+
         self.put_obj(goal_obj, *goal.pos)
+
+        self.lava_pos: list[Position] = []
+        self.hole_pos: list[Position] = []
 
         # place lavas
         for i, lava in enumerate(
@@ -330,7 +393,20 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 reward=lava.reward,
                 absorbing=lava.absorbing,
             )
-            self.put_obj(lava_obj, *lava.pos)
+            if lava.pos == (-1, -1):
+                top: Position | None = None
+                size: Size | None = None
+                if lava.random_init_range:
+                    top, size = lava.random_init_range
+                lava.pos = self.place_obj(
+                    lava_obj,
+                    top=top,
+                    size=size,
+                )
+            else:
+                self.put_obj(lava_obj, *lava.pos)
+
+            self.lava_pos.append(lava.pos)
 
         # place holes
         for i, hole in enumerate(
@@ -343,16 +419,24 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
                 reward=hole.reward,
                 absorbing=hole.absorbing,
             )
-            self.put_obj(hole_obj, *hole.pos)
+
+            if hole.pos == (-1, -1):
+                top: Position | None = None
+                size: Size | None = None
+                if hole.random_init_range:
+                    top, size = hole.random_init_range
+                hole.pos = self.place_obj(
+                    hole_obj,
+                    top=top,
+                    size=size,
+                )
+            else:
+                self.put_obj(hole_obj, *hole.pos)
+
+            self.hole_pos.append(hole.pos)
 
         self.state_representation.save_static_obs(self, {})
 
-        self.lava_pos: list[Position] = [
-            lava.pos for lava in self.layout_config.spawn_configs[self.spawn_type].lavas
-        ]
-        self.hole_pos: list[Position] = [
-            hole.pos for hole in self.layout_config.spawn_configs[self.spawn_type].holes
-        ]
         self.goal_pos: Position = self.layout_config.spawn_configs[
             self.spawn_type
         ].goal.pos
@@ -399,7 +483,7 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
     def step(
         self, action: np.int64 | NDArray[np.int64]
     ) -> tuple[
-        NDArray[np.int64] | NDArray[np.float32],
+        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]],
         NDArray[np.float64] | float,
         bool,
         bool,
@@ -477,6 +561,10 @@ class RoomsEnv(MultiGridEnv[NDArray[np.int64] | NDArray[np.float32]]):
         return self.state_representation.create_observation(self)
 
     def get_rewards_heatmap(self, extractor: torch.nn.Module, eigenvectors: np.ndarray):
+        raise NotImplementedError(
+            "get_rewards_heatmap is not implemented for RoomsEnv. "
+            "Please implement this method in your subclass."
+        )
         assert self.state_representation in [
             "vectorized_tensor",
             "tensor",
