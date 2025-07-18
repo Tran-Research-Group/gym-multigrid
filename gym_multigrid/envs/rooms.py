@@ -21,6 +21,20 @@ from gym_multigrid.typing import Position, Size
 
 
 class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
+    """
+    Observation mode that returns the agent's position and goal position as a vector.
+
+    The object locations are scaled to [0, 1] by the grid width and height.
+    The observation vector contains:
+    - Agent's x position
+    - Agent's y position
+    - Goal's x position
+    - Goal's y position
+    The observation space is a Box with shape (4,) and dtype float32, with values in the range [0, 1].
+    The agent's position is at index 0 and 1, and the goal's position is at index 2 and 3.
+
+    """
+
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=np.array([0, 0, 0, 0], dtype=np.float32),
@@ -55,6 +69,13 @@ class PositionalDictObs(
     The observation dictionary contains:
     - "obs": The agent, lava, and hole positions scaled to [0, 1].
     - "desired_goal": The goal position scaled to [0, 1].
+
+    The observation space is a Dict with:
+    - "obs": Box with shape (N, 2) where N is the number of agents, lava, and holes.
+      Each entry is a 2D position scaled to [0, 1].
+    - "desired_goal": Box with shape (2,) representing the goal position scaled to [0, 1].
+    The agent's position is at index 0, followed by lava positions and hole positions.
+    The goal position is at index 0 and 1 in the "desired_goal" array
     """
 
     def observation_space(self, env: "RoomsEnv") -> spaces.Dict:
@@ -95,6 +116,27 @@ class PositionalDictObs(
 
 
 class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
+    """
+    Observation mode that returns the agent, goal, and obstacles (lava, holes) as a grid tensor.
+
+    The observation is a 2D grid where:
+    - Each cell contains an integer representing the object type:
+        - "empty": 0,
+        - "wall": 1,
+        - "agent": 2,
+        - "goal": 3,
+        - "lava": 4,
+        - "hole": 5,
+        - "floor": 6,
+        - "door": 7,
+        - "key": 8,
+        - "ball": 9,
+        - "box": 10,
+
+    The observation space is a Box with shape (width, height) and dtype int64,
+    with values in the range [0, 10].
+    """
+
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
@@ -134,6 +176,16 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
 
 
 class VectorizedTensorObs(TensorObs):
+    """
+    Observation mode that returns the agent, goal, and obstacles (lava, holes) as a flattened grid tensor.
+
+    The observation is a 1D array where:
+    - Each cell contains an integer representing the object type same as in TensorObs.
+
+    The observation space is a Box with shape (width * height,) and dtype int64,
+    with values in the range [0, 10].
+    """
+
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
             low=0,
@@ -203,7 +255,133 @@ class RoomsEnv(
     ]
 ):
     """
-    Environment for capture the flag with multiple agents with N blue agents and M red agents.
+    Environment with separate rooms, where agents navigate to a goal while avoiding obstacles like lava and holes.
+
+    Observation
+    -----------
+    There are multiple observation modes available:
+    - "positional": Returns the agent's position and goal position as a vector.
+    - "positional_dict": Returns the agent's position, lava positions, and hole positions
+      as a dictionary with keys "obs" and "desired_goal".
+    - "tensor": Returns a 2D grid tensor where each cell contains an integer representing
+      the object type (e.g., empty, wall, agent, goal, lava, hole).
+    - "vectorized_tensor": Returns a flattened 1D array of the grid tensor.
+    The observation space is defined based on the selected observation mode.
+
+    Action
+    -------
+    The action space is defined by the `NavigationActions` class, which includes actions:
+    0. Stay
+    1. Left
+    2. Down
+    3. Right
+    4. Up
+
+    Rewards
+    -------
+    The environment provides a step penalty defined in the `RewardConfig` class.
+    The agent receives a reward for reaching the goal and may receive penalties for stepping on lava or holes.
+    The object-based rewards are defined in `LayoutConfig.spawn_configs`.
+
+    Termination
+    -----------
+    The episode terminates when the agent reaches the goal or steps on a lava or hole.
+    The termination condition can be changed by modifying the `absorbing` attribute of the goal, lava, and hole objects in the `LayoutConfig.spawn_configs`.
+
+    Rendering
+    ---------
+    - The environment can be rendered in two modes: human and rgb_array.
+    - In rgb_array mode, the environment is rendered as a 3D numpy array with RGB values.
+
+    Note
+    -------
+    - The objects can be randomly initialized within specified ranges using the `random_init_range` attribute in the `ObjConfig` class.
+
+    Example
+    -------
+    ```python
+        import gymnasium as gym
+        import gym_multigrid
+
+        env = gym.make(
+            "gym_multigrid/RoomsEnv-v0",
+            max_episode_steps=100,
+            kwargs={
+                "spawn_type": 0,
+                "layout_config": {
+                    "field_map": [
+                        "#############",
+                        "#     #     #",
+                        "#     #     #",
+                        "#           #",
+                        "#     #     #",
+                        "#     #     #",
+                        "## ####     #",
+                        "#     ### ###",
+                        "#     #     #",
+                        "#     #     #",
+                        "#           #",
+                        "#     #     #",
+                        "#############",
+                    ],
+                    "spawn_configs": [
+                        {
+                            "agent": (9, 3),
+                            "goal": {"pos": (3, 9), "reward": 1.0, "absorbing": True},
+                        },
+                        {
+                            "agent": (11, 1),
+                            "goal": {"pos": (7, 9), "reward": 1.0, "absorbing": True},
+                        },
+                        {
+                            "agent": (9, 3),
+                            "goal": {"pos": (9, 9), "reward": 1.0, "absorbing": True},
+                        },
+                        {
+                            "agent": (3, 9),
+                            "goal": {"pos": (9, 4), "reward": 1.0, "absorbing": True},
+                            "lavas": [
+                                {"pos": (8, 4), "reward": 0, "absorbing": False},
+                                {"pos": (9, 2), "reward": 0, "absorbing": False},
+                                {"pos": (11, 1), "reward": 0, "absorbing": False},
+                                {"pos": (5, 3), "reward": 0, "absorbing": False},
+                                {"pos": (3, 5), "reward": 0, "absorbing": False},
+                                {"pos": (3, 2), "reward": 0, "absorbing": False},
+                                {"pos": (5, 9), "reward": -1, "absorbing": True},
+                                {"pos": (3, 8), "reward": -1, "absorbing": True},
+                                {"pos": (2, 11), "reward": -1, "absorbing": True},
+                                {"pos": (10, 8), "reward": -1, "absorbing": True},
+                                {"pos": (8, 9), "reward": -1, "absorbing": True},
+                                {"pos": (7, 11), "reward": -1, "absorbing": True},
+                            ],
+                            "holes": [
+                                {"pos": (7, 3), "reward": 0, "absorbing": False},
+                                {"pos": (10, 5), "reward": 0, "absorbing": False},
+                                {"pos": (8, 6), "reward": 0, "absorbing": False},
+                                {"pos": (4, 4), "reward": -1, "absorbing": True},
+                                {"pos": (2, 3), "reward": -1, "absorbing": True},
+                                {"pos": (1, 1), "reward": -1, "absorbing": True},
+                                {"pos": (2, 7), "reward": 0, "absorbing": False},
+                                {"pos": (1, 9), "reward": 0, "absorbing": False},
+                                {"pos": (4, 10), "reward": 0, "absorbing": False},
+                                {"pos": (7, 8), "reward": -1, "absorbing": True},
+                                {"pos": (9, 10), "reward": -1, "absorbing": True},
+                                {"pos": (11, 11), "reward": -1, "absorbing": True},
+                            ],
+                        },
+                    ],
+                },
+                "state_representation": "vectorized_tensor",
+                "reward_config": {
+                    "step_penalty": 0.01,
+                    "sum_reward": True,
+                },
+                "tile_size": 32,
+                "render_mode": "rgb_array",
+            },
+        )
+    ```
+
     """
 
     observation_modes: dict[
@@ -301,7 +479,28 @@ class RoomsEnv(
 
         Parameters
         ----------
-
+        spawn_type: int
+            The array index of the spawn configuration to use from `layout_config.spawn_configs`.
+            This determines the initial positions of the agent, goal, lava, and holes.
+        layout_config: LayoutConfigDict
+            The layout configuration for the environment.
+        state_representation: str
+            The state representation mode to use. Options are:
+            - "positional": Returns the agent's position and goal position as a vector.
+            - "positional_dict": Returns the agent's position, lava positions, and hole positions as a dictionary.
+            - "tensor": Returns a 2D grid tensor where each cell contains an integer representing the object type.
+            - "vectorized_tensor": Returns a flattened 1D array of the grid tensor.
+        reward_config: RewardConfigDict
+            The reward configuration for the environment.
+        random_init_pos: bool
+            If True, the agent's initial position is randomly selected from the grid.
+            If False, the agent's initial position is set to the position specified in `layout_config.spawn_configs`.
+        tile_size: int
+            The size of each tile in the grid for rendering.
+        render_mode: Literal["human", "rgb_array"]
+            The rendering mode to use. Options are:
+            - "human": Renders the environment for human consumption (e.g., using Pygame).
+            - "rgb_array": Returns a RGB array representation of the environment.
         """
         ### fundamental parameters
         self.spawn_type: int = spawn_type

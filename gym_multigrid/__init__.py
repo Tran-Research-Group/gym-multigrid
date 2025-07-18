@@ -332,7 +332,7 @@ register(
         },
         "state_representation": "vectorized_tensor",
         "reward_config": {
-            "step_penalty": 0.0,
+            "step_penalty": 0.01,
             "sum_reward": True,
         },
         "tile_size": 32,
