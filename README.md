@@ -4,11 +4,11 @@ This repo is intended to be a lightweight, multi-agent, gridworld environment. I
 
 ```
 @misc{multigrid,
-  title = {Tran Research Group Gridworld Environment},
+  title = {Tran Research Group Gymnasium Gridworld Environment},
   year = {2023},
   publisher = {GitHub},
   journal = {GitHub repository},
-  howpublished = {\url{https://github.com/Tran-Research-Group/trg-multigrid}},
+  howpublished = {\url{https://github.com/LIRA-illinois/gym-multigrid}},
 }
 ```
 
@@ -19,7 +19,7 @@ The library is available on PyPI, so you can simply run `pip install gym-multigr
 Alternatively, if you would like to install specific branch version of the package (for example, `dev` branch), run:
 
 ```
- pip install git+https://github.com/Tran-Research-Group/gym-multigrid.git@dev
+ pip install git+https://github.com/LIRA-illinois/gym-multigrid.git@dev
 ```
 
 To modify or contribute to this project, install gym-multigrid from source.
@@ -27,7 +27,7 @@ This repo uses [poetry](https://python-poetry.org/docs/) library dependency mana
 To install the dependencies for this project run:
 
 ```
-git clone https://github.com/Tran-Research-Group/gym-multigrid.git
+git clone https://github.com/LIRA-illinois/gym-multigrid.git
 cd gym-multigrid
 poetry install
 ```
