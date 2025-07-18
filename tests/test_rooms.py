@@ -7,7 +7,7 @@ import pytest
 from numpy.typing import NDArray
 
 import gym_multigrid
-from gym_multigrid.core.agent import GridActions
+from gym_multigrid.core.agent import NavigationActions
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def test_rooms_render(rooms_env: gym.Env) -> None:
 
 def test_rooms_render_lava():
     """Test RoomsEnv render with lava"""
-    env = gym.make("multigrid-rooms-v0", spawn_type=3)
+    env = gym.make("multigrid-rooms-v0", spawn_type=3, state_representation="tensor")
     image_path = "tests/out/plots/test_rooms_render_lava.png"
     target_obs: NDArray[np.int64] = np.array(
         [
@@ -71,7 +71,7 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
     assert obs is not None
     assert isinstance(info, dict)
     assert info == {
-        "success": False,
+        "is_success": False,
     }
 
 
@@ -84,9 +84,9 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
                     {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
                 ]
             },
-            GridActions.RIGHT,
-            1.0,
-            {"success": True},
+            NavigationActions.RIGHT,
+            0.99,
+            {"is_success": True},
         ),
         (
             {
@@ -94,9 +94,9 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
                     {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
                 ]
             },
-            GridActions.LEFT,
-            0.0,
-            {"success": False},
+            NavigationActions.LEFT,
+            -0.01,
+            {"is_success": False},
         ),
         (
             {
@@ -104,9 +104,9 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
                     {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
                 ]
             },
-            GridActions.UP,
-            0.0,
-            {"success": False},
+            NavigationActions.UP,
+            -0.01,
+            {"is_success": False},
         ),
         (
             {
@@ -114,9 +114,9 @@ def test_rooms_reset(rooms_env: gym.Env) -> None:
                     {"agent": (2, 3), "goal": {"pos": (3, 3), "reward": 1.0}}
                 ]
             },
-            GridActions.DOWN,
-            0.0,
-            {"success": False},
+            NavigationActions.DOWN,
+            -0.01,
+            {"is_success": False},
         ),
     ],
 )
