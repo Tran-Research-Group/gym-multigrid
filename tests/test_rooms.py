@@ -159,3 +159,71 @@ def test_rooms_episode() -> None:
     os.makedirs(os.path.dirname(animation_path), exist_ok=True)
     imageio.mimsave(animation_path, frames, duration=0.1)
     assert os.path.exists(animation_path)
+
+
+def test_random_spawn() -> None:
+    """Test RoomsEnv with random spawn."""
+    env = gym.make(
+        "multigrid-rooms-v0",
+        layout_config={
+            "field_map": [
+                "#############",
+                "#     #     #",
+                "#     #     #",
+                "#           #",
+                "#     #     #",
+                "#     #     #",
+                "## ####     #",
+                "#     ### ###",
+                "#     #     #",
+                "#     #     #",
+                "#           #",
+                "#     #     #",
+                "#############",
+            ],
+            "spawn_configs": [
+                {
+                    "agent": ((1, 7), (5, 5)),
+                    "goal": {"pos": ((7, 1), (5, 6)), "reward": 1.0, "absorbing": True},
+                    "lavas": [
+                        {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                    ],
+                    "holes": [
+                        {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
+                        {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
+                        {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                        {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
+                    ],
+                },
+            ],
+        },
+    )
+    obs, info = env.reset()
+    assert obs is not None
+    assert isinstance(info, dict)
+    assert info == {"is_success": False}
+
+    image = env.render()
+    image_path = "tests/out/plots/test_rooms_random_spawn.png"
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    imageio.imsave(image_path, image)
+    assert os.path.exists(image_path)

@@ -493,8 +493,8 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             num_tries += 1
 
             pos: Position = (
-                self._rand_int(top[0], min(top[0] + size[0], self.grid.width - 1)),
-                self._rand_int(top[1], min(top[1] + size[1], self.grid.height - 1)),
+                self._rand_int(top[0], min(top[0] + size[0] - 1, self.grid.width - 1)),
+                self._rand_int(top[1], min(top[1] + size[1] - 1, self.grid.height - 1)),
             )
 
             # Don't place the object on top of another object
@@ -578,6 +578,54 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             agent.dir = 3
 
         agent.init_dir = agent.dir
+
+        return pos
+
+    def place_object(
+        self,
+        obj: WorldObj,
+        pos: Position | None = None,
+        top: Position | None = None,
+        size: Size | None = None,
+        reject_fn: Callable[["MultiGridEnv", Position], bool] | None = None,
+        max_tries: float = math.inf,
+        reset_obj_status: bool = False,
+    ) -> Position:
+        """
+        Place an object at an empty position in the grid.
+
+        Parameters
+        ----------
+        obj : WorldObj
+            The object to place in the grid.
+        pos : Position | None = None
+            The position to place the object at. If None, a random position will be chosen.
+        top : Position | None = None
+            The top-left position of the rectangle where to place the object.
+            If None, the whole grid will be used.
+        size : Size | None = None
+            The size of the rectangle where to place the object.
+            If None, the whole grid will be used.
+        reject_fn : Callable[["MultiGridEnv", Position], bool] | None = None
+            A function that takes the environment and a position as input and returns True if the position should
+            be rejected for placing the object. If None, no filtering is applied.
+        max_tries : float = math.inf
+            Maximum number of tries to place the object at a random position.
+        reset_obj_status : bool = False
+            Whether to reset the object's status (e.g., position).
+        """
+        if reset_obj_status:
+            obj.reset()
+        else:
+            pass
+
+        if pos is not None and pos != (-1, -1):
+            obj.pos = pos
+            self.put_obj(obj, i=pos[0], j=pos[1])
+        else:
+            pos = self.place_obj(obj, top, size, reject_fn, max_tries=max_tries)
+            obj.pos = pos
+            obj.init_pos = pos
 
         return pos
 

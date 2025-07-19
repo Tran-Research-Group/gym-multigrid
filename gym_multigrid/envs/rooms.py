@@ -107,11 +107,7 @@ class PositionalDictObs(
                 [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float32
             )
             / grid_sizes,
-            "desired_goal": np.array(
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos,
-                dtype=np.float32,
-            )
-            / grid_sizes,
+            "desired_goal": np.array(env.goal_pos, dtype=np.float32) / grid_sizes,
         }
 
 
@@ -166,12 +162,11 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
                     static_obs[y, x] = env.world.OBJECT_TO_IDX["wall"]
                 else:
                     pass
-        for lava in env.layout_config.spawn_configs[env.spawn_type].lavas:
-            static_obs[lava.pos[1], lava.pos[0]] = env.world.OBJECT_TO_IDX["lava"]
-        for hole in env.layout_config.spawn_configs[env.spawn_type].holes:
-            static_obs[hole.pos[1], hole.pos[0]] = env.world.OBJECT_TO_IDX["hole"]
-        goal = env.layout_config.spawn_configs[env.spawn_type].goal
-        static_obs[goal.pos[1], goal.pos[0]] = env.world.OBJECT_TO_IDX["goal"]
+        for lava in env.lava_pos:
+            static_obs[lava[1], lava[0]] = env.world.OBJECT_TO_IDX["lava"]
+        for hole in env.hole_pos:
+            static_obs[hole[1], hole[0]] = env.world.OBJECT_TO_IDX["hole"]
+        static_obs[env.goal_pos[1], env.goal_pos[0]] = env.world.OBJECT_TO_IDX["goal"]
         self.static_obs = static_obs
 
 
@@ -200,21 +195,21 @@ class VectorizedTensorObs(TensorObs):
 
 
 class ObjConfig(BaseModel):
-    pos: Position = (-1, -1)  # Default position indicating no specific position
+    pos: Position | tuple[Position, Size] | None = (
+        None  # Default position indicating no specific position
+    )
     reward: float = 0.0
     absorbing: bool = True
-    random_init_range: tuple[Position, Size] | None = None
 
 
 class ObjConfigDict(TypedDict, total=False):
-    pos: Position
+    pos: Position | tuple[Position, Size] | None
     reward: float
     absorbing: bool
-    random_init_range: tuple[Position, Size] | None
 
 
 class SpawnConfig(BaseModel):
-    agent: Position | None = None
+    agent: Position | tuple[Position, Size] | None = None
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
@@ -247,6 +242,12 @@ class RewardConfig(BaseModel):
 class RewardConfigDict(TypedDict):
     step_penalty: float
     sum_reward: bool
+
+
+class ObjInitDict(TypedDict):
+    pos: Position | None
+    top: Position | None
+    size: Size | None
 
 
 class RoomsEnv(
@@ -470,7 +471,6 @@ class RoomsEnv(
             "step_penalty": 0.01,
             "sum_reward": True,
         },
-        random_init_pos: bool = False,
         tile_size: int = 32,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -492,9 +492,6 @@ class RoomsEnv(
             - "vectorized_tensor": Returns a flattened 1D array of the grid tensor.
         reward_config: RewardConfigDict
             The reward configuration for the environment.
-        random_init_pos: bool
-            If True, the agent's initial position is randomly selected from the grid.
-            If False, the agent's initial position is set to the position specified in `layout_config.spawn_configs`.
         tile_size: int
             The size of each tile in the grid for rendering.
         render_mode: Literal["human", "rgb_array"]
@@ -509,7 +506,6 @@ class RoomsEnv(
         # ]
         self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
         self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
-        self.random_init_pos: bool = random_init_pos
 
         grid_size: tuple[int, int] = (
             len(self.layout_config.field_map[0]),
@@ -554,6 +550,60 @@ class RoomsEnv(
 
         return observation_space
 
+    def _parse_init_pos(
+        self, init_pos: Position | tuple[Position, Size] | None
+    ) -> ObjInitDict:
+        """
+        Parse the initial position for the agent.
+
+        Parameters
+        ----------
+        init_pos: Position | tuple[Position, Size] | None
+            The initial position for the agent.
+
+        Returns
+        -------
+        obj_init_dict: ObjInitDict
+        A dictionary containing the parsed position, top left corner, and size for the agent's initial position.
+        The dictionary contains the following keys:
+        - pos: Position | None
+           - The position to place the agent.
+        - top: Position | None
+            - The top left corner of the range to position to place the agent.
+        - size: Size | None
+           - The size of the range to position the agent.
+
+        """
+        pos: Position | None
+        size: Size | None
+        top: Position | None
+        match init_pos:
+            case None:
+                pos = None
+                top = None
+                size = None
+            case (x, y) if isinstance(x, int) and isinstance(y, int):
+                pos = (x, y)
+                top = None
+                size = None
+            case (a, b) if isinstance(a, tuple) and isinstance(b, tuple):
+                pos = None
+                top = a
+                size = b
+            case _:
+                raise ValueError(
+                    f"Invalid initial position: {init_pos}. ",
+                    "Expected None, a tuple of (x, y), or a tuple of (top, size)",
+                )
+
+        obj_init_dict: ObjInitDict = {
+            "pos": pos,
+            "top": top,
+            "size": size,
+        }
+
+        return obj_init_dict
+
     def _gen_grid(self, width: int, height: int):
         # Create the grid
         self.grid = Grid(width, height, self.world)
@@ -575,9 +625,8 @@ class RoomsEnv(
             reward=goal.reward,
             absorbing=goal.absorbing,
         )
-        assert isinstance(goal_obj, Goal), "Goal object must be of type Goal"
-
-        self.put_obj(goal_obj, *goal.pos)
+        self.place_object(goal_obj, **self._parse_init_pos(goal.pos))
+        self.goal_pos: Position = goal_obj.pos
 
         self.lava_pos: list[Position] = []
         self.hole_pos: list[Position] = []
@@ -592,20 +641,8 @@ class RoomsEnv(
                 reward=lava.reward,
                 absorbing=lava.absorbing,
             )
-            if lava.pos == (-1, -1):
-                top: Position | None = None
-                size: Size | None = None
-                if lava.random_init_range:
-                    top, size = lava.random_init_range
-                lava.pos = self.place_obj(
-                    lava_obj,
-                    top=top,
-                    size=size,
-                )
-            else:
-                self.put_obj(lava_obj, *lava.pos)
-
-            self.lava_pos.append(lava.pos)
+            self.place_object(lava_obj, **self._parse_init_pos(lava.pos))
+            self.lava_pos.append(lava_obj.pos)
 
         # place holes
         for i, hole in enumerate(
@@ -618,27 +655,10 @@ class RoomsEnv(
                 reward=hole.reward,
                 absorbing=hole.absorbing,
             )
+            self.place_object(hole_obj, **self._parse_init_pos(hole.pos))
+            self.hole_pos.append(hole_obj.pos)
 
-            if hole.pos == (-1, -1):
-                top: Position | None = None
-                size: Size | None = None
-                if hole.random_init_range:
-                    top, size = hole.random_init_range
-                hole.pos = self.place_obj(
-                    hole_obj,
-                    top=top,
-                    size=size,
-                )
-            else:
-                self.put_obj(hole_obj, *hole.pos)
-
-            self.hole_pos.append(hole.pos)
-
-        self.state_representation.save_static_obs(self, {})
-
-        self.goal_pos: Position = self.layout_config.spawn_configs[
-            self.spawn_type
-        ].goal.pos
+        self.state_representation.save_static_obs(self)
 
     def _reset_agents(self):
         """
@@ -646,10 +666,11 @@ class RoomsEnv(
         If random_init_pos is True, randomly select a position from the grid.
         """
         for agent in self.agents:
-            agent_positions = self.layout_config.spawn_configs[self.spawn_type].agent
-            if self.random_init_pos:
-                agent_positions = None
-            self.place_agent(agent, pos=agent_positions, reset_agent_status=True)
+            agent_pos = self.layout_config.spawn_configs[self.spawn_type].agent
+
+            self.place_agent(
+                agent, **self._parse_init_pos(agent_pos), reset_agent_status=True
+            )
 
     def reset(
         self,
