@@ -20,6 +20,7 @@ pydantic = "^2.0"
 pytest = ">=7.3.1"
 stable-baselines3 = "^2.3.0"
 tensorboard = "^2.16.2"
+tomli-w = "^1.2.0"
 
 [build-system]
 requires = ["poetry-core"]
