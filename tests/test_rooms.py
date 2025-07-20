@@ -4,7 +4,7 @@ import gymnasium as gym
 import imageio
 import numpy as np
 import pytest
-import tomli_w
+import yaml
 from numpy.typing import NDArray
 
 import gym_multigrid
@@ -164,58 +164,9 @@ def test_rooms_episode() -> None:
 
 def test_random_spawn() -> None:
     """Test RoomsEnv with random spawn."""
-    layout_config = {
-        "field_map": [
-            "#############",
-            "#     #     #",
-            "#     #     #",
-            "#           #",
-            "#     #     #",
-            "#     #     #",
-            "## ####     #",
-            "#     ### ###",
-            "#     #     #",
-            "#     #     #",
-            "#           #",
-            "#     #     #",
-            "#############",
-        ],
-        "spawn_configs": [
-            {
-                "agent": ((1, 7), (5, 5)),
-                "goal": {"pos": ((7, 1), (5, 6)), "reward": 1.0, "absorbing": True},
-                "lavas": [
-                    {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((1, 7), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((1, 1), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": False},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                ],
-                "holes": [
-                    {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((1, 7), (5, 5)), "reward": 0, "absorbing": False},
-                    {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((1, 1), (5, 5)), "reward": -1, "absorbing": True},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
-                    {"pos": ((7, 1), (5, 6)), "reward": 0, "absorbing": True},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                    {"pos": ((7, 8), (5, 4)), "reward": -1, "absorbing": True},
-                ],
-            },
-        ],
-    }
-
+    layout_config_path: str = "tests/configs/fouroom/random.yaml"
+    with open(layout_config_path, "r") as f:
+        layout_config = yaml.safe_load(f)["layout_config"]
     env = gym.make("multigrid-rooms-v0", layout_config=layout_config)
     obs, info = env.reset()
     assert obs is not None
@@ -228,10 +179,10 @@ def test_random_spawn() -> None:
     imageio.imsave(image_path, image)
     assert os.path.exists(image_path)
 
-    # Convert layout to a TOML string
-    layout_toml = tomli_w.dumps(layout_config)
-    layout_path = "tests/out/layouts/test_rooms_random_spawn.toml"
+    # Convert layout to a YAML string
+    layout_yaml = yaml.dump(layout_config)
+    layout_path = "tests/out/layouts/test_rooms_random_spawn.yaml"
     os.makedirs(os.path.dirname(layout_path), exist_ok=True)
     with open(layout_path, "w") as f:
-        f.write(layout_toml)
+        f.write(layout_yaml)
     assert os.path.exists(layout_path)
