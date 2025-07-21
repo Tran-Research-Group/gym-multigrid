@@ -218,7 +218,7 @@ class SpawnConfig(BaseModel):
 
 
 class SpawnConfigDict(TypedDict, total=False):
-    agent: Position | None
+    agent: Position | tuple[Position, Size] | None
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
     holes: list[ObjConfigDict]
