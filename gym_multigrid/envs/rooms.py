@@ -3,6 +3,7 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 from gymnasium import spaces
+from gymnasium.envs.registration import EnvSpec
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -50,8 +51,8 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
             [
                 env.agents[0].pos[0],
                 env.agents[0].pos[1],
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos[0],
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos[1],
+                env.goal_pos[0],
+                env.goal_pos[1],
             ]
         )
         obs = obs / np.maximum(env.width, env.height)
@@ -257,6 +258,35 @@ class RoomsEnvInitDict(TypedDict, total=False):
     reward_config: RewardConfigDict
     tile_size: int
     render_mode: Literal["human", "rgb_array"]
+
+
+class RoomsEnvInit(BaseModel):
+    spawn_type: int = 0
+    layout_config: LayoutConfigDict = {
+        "field_map": [
+            "#############",
+            "#     #     #",
+            "#     #     #",
+            "#           #",
+            "#     #     #",
+            "#     #     #",
+            "## ####     #",
+            "#     ### ###",
+            "#     #     #",
+            "#     #     #",
+            "#           #",
+            "#     #     #",
+            "#############",
+        ],
+        "spawn_configs": [],
+    }
+    state_representation: str = "tensor"
+    reward_config: RewardConfigDict = {
+        "step_penalty": 0.01,
+        "sum_reward": True,
+    }
+    tile_size: int = 32
+    render_mode: Literal["human", "rgb_array"] = "rgb_array"
 
 
 class RoomsEnv(
