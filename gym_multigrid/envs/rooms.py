@@ -250,6 +250,15 @@ class ObjInitDict(TypedDict):
     size: Size | None
 
 
+class RoomsEnvInitDict(TypedDict, total=False):
+    spawn_type: int
+    layout_config: LayoutConfigDict
+    state_representation: str
+    reward_config: RewardConfigDict
+    tile_size: int
+    render_mode: Literal["human", "rgb_array"]
+
+
 class RoomsEnv(
     MultiGridEnv[
         NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]]
