@@ -262,8 +262,8 @@ class RoomsEnvInitDict(TypedDict, total=False):
 
 class RoomsEnvInit(BaseModel):
     spawn_type: int = 0
-    layout_config: LayoutConfigDict = {
-        "field_map": [
+    layout_config: LayoutConfig = LayoutConfig(
+        field_map=[
             "#############",
             "#     #     #",
             "#     #     #",
@@ -278,13 +278,13 @@ class RoomsEnvInit(BaseModel):
             "#     #     #",
             "#############",
         ],
-        "spawn_configs": [],
-    }
+        spawn_configs=[],
+    )
     state_representation: str = "tensor"
-    reward_config: RewardConfigDict = {
-        "step_penalty": 0.01,
-        "sum_reward": True,
-    }
+    reward_config: RewardConfig = RewardConfig(
+        step_penalty=0.01,
+        sum_reward=True,
+    )
     tile_size: int = 32
     render_mode: Literal["human", "rgb_array"] = "rgb_array"
 
