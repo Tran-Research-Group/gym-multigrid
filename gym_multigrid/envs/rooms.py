@@ -85,7 +85,12 @@ class PositionalDictObs(
                 "obs": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(len(env.agents) + len(env.lava_pos) + len(env.hole_pos), 2),
+                    shape=(
+                        len(env.agents)
+                        + len(env.layout_config.spawn_configs[0].lavas)
+                        + len(env.layout_config.spawn_configs[0].holes),
+                        2,
+                    ),
                     dtype=np.float32,
                 ),
                 "desired_goal": spaces.Box(
