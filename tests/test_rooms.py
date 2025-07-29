@@ -167,7 +167,11 @@ def test_random_spawn() -> None:
     layout_config_path: str = "tests/configs/fouroom/random.yaml"
     with open(layout_config_path, "r") as f:
         layout_config = yaml.safe_load(f)["layout_config"]
-    env = gym.make("multigrid-rooms-v0", layout_config=layout_config)
+    env = gym.make(
+        "multigrid-rooms-v0",
+        layout_config=layout_config,
+        state_representation="positional_dict",
+    )
     obs, info = env.reset()
     assert obs is not None
     assert isinstance(info, dict)
