@@ -3,7 +3,6 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 from gymnasium import spaces
-from gymnasium.envs.registration import EnvSpec
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -215,12 +214,56 @@ class ObjConfigDict(TypedDict, total=False):
 
 
 class SpawnConfig(BaseModel):
+    """
+    Configuration for spawning objects in the environment.
+
+    Attributes
+    ----------
+    agent: Position | tuple[Position, Size] | None
+        The position or size of the agent object.
+    goal: ObjConfig
+        The configuration for the goal object.
+    lavas: list[ObjConfig]
+        A list of configurations for lava objects.
+    holes: list[ObjConfig]
+        A list of configurations for hole objects.
+    cleared_doorways: list[Position]
+        A list of positions for cleared doorways, if any.
+        When specified, there will be no negative reward objects placed next to these doorways.
+    """
+
     agent: Position | tuple[Position, Size] | None = None
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
+    cleared_doorways: list[Position] = []  # List of cleared doorways, if any
+    cleared_doorway_neighbors: list[Position] = []  # Neighbors of cleared doorways
 
     model_config = {"arbitrary_types_allowed": True}
+
+    # Store the neighbor cells of the cleared doorways during initialization
+    def model_post_init(self, context: Any) -> None:
+        self.cleared_doorway_neighbors = [
+            (pos[0] + dx, pos[1] + dy)
+            for pos in self.cleared_doorways
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        ]
+
+    def pos_in_doorway_neighbors(self, env: MultiGridEnv, pos: Position) -> bool:
+        """
+        Check if the given position is in the cleared doorway neighbors.
+
+        Parameters
+        ----------
+        pos: Position
+            The position to check.
+
+        Returns
+        -------
+        bool
+            True if the position is in the cleared doorway neighbors, False otherwise.
+        """
+        return pos in self.cleared_doorway_neighbors
 
 
 class SpawnConfigDict(TypedDict, total=False):
@@ -228,6 +271,7 @@ class SpawnConfigDict(TypedDict, total=False):
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
     holes: list[ObjConfigDict]
+    cleared_doorways: list[Position]
 
 
 class LayoutConfig(BaseModel):
@@ -507,6 +551,7 @@ class RoomsEnv(
                         {"pos": (9, 10), "reward": -1, "absorbing": True},
                         {"pos": (11, 11), "reward": -1, "absorbing": True},
                     ],
+                    "cleared_doorways": [(2, 6), (6, 3), (9, 7), (6, 10)],
                 },
             ],
         },
@@ -685,7 +730,16 @@ class RoomsEnv(
                 reward=lava.reward,
                 absorbing=lava.absorbing,
             )
-            self.place_object(lava_obj, **self._parse_init_pos(lava.pos))
+            if lava.reward < 0:
+                self.place_object(
+                    lava_obj,
+                    **self._parse_init_pos(lava.pos),
+                    reject_fn=self.layout_config.spawn_configs[
+                        self.spawn_type
+                    ].pos_in_doorway_neighbors,
+                )
+            else:
+                self.place_object(lava_obj, **self._parse_init_pos(lava.pos))
             self.lava_pos.append(lava_obj.pos)
 
         # place holes
@@ -699,7 +753,16 @@ class RoomsEnv(
                 reward=hole.reward,
                 absorbing=hole.absorbing,
             )
-            self.place_object(hole_obj, **self._parse_init_pos(hole.pos))
+            if hole.reward < 0:
+                self.place_object(
+                    hole_obj,
+                    **self._parse_init_pos(hole.pos),
+                    reject_fn=self.layout_config.spawn_configs[
+                        self.spawn_type
+                    ].pos_in_doorway_neighbors,
+                )
+            else:
+                self.place_object(hole_obj, **self._parse_init_pos(hole.pos))
             self.hole_pos.append(hole_obj.pos)
 
         self.state_representation.save_static_obs(self)

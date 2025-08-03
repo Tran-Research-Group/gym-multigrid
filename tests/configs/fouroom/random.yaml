@@ -44,3 +44,8 @@ layout_config:
         - { "pos": [[7, 8], [5, 4]], "reward": -1, "absorbing": true }
         - { "pos": [[7, 8], [5, 4]], "reward": -1, "absorbing": true }
         - { "pos": [[7, 8], [5, 4]], "reward": -1, "absorbing": true }
+      cleared_doorways:
+        - [2, 6]
+        - [6, 3]
+        - [9, 7]
+        - [6, 10]

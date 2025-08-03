@@ -498,14 +498,13 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             )
 
             # Don't place the object on top of another object
-            if self.grid.get(*pos) != None:
+            if self.grid.get(*pos):
                 continue
-
             # Check if there is a filtering criterion
-            if reject_fn and reject_fn(self, pos):
+            elif reject_fn and reject_fn(self, pos):
                 continue
-
-            break
+            else:
+                break
 
         self.grid.set(*pos, obj)
 

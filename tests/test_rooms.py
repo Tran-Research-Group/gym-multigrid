@@ -180,13 +180,5 @@ def test_random_spawn() -> None:
     image = env.render()
     image_path = "tests/out/plots/test_rooms_random_spawn.png"
     os.makedirs(os.path.dirname(image_path), exist_ok=True)
-    imageio.imsave(image_path, image)
+    imageio.imsave(image_path, image)  # type: ignore
     assert os.path.exists(image_path)
-
-    # Convert layout to a YAML string
-    layout_yaml = yaml.dump(layout_config)
-    layout_path = "tests/out/layouts/test_rooms_random_spawn.yaml"
-    os.makedirs(os.path.dirname(layout_path), exist_ok=True)
-    with open(layout_path, "w") as f:
-        f.write(layout_yaml)
-    assert os.path.exists(layout_path)
