@@ -26,33 +26,31 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
 
     The object locations are scaled to [0, 1] by the grid width and height.
     The observation vector contains:
-    - Agent's x position
-    - Agent's y position
-    - Goal's x position
-    - Goal's y position
-    The observation space is a Box with shape (4,) and dtype float32, with values in the range [0, 1].
-    The agent's position is at index 0 and 1, and the goal's position is at index 2 and 3.
+    - Agent's x, y positions
+    - Goal's x, y positions
+    - Lavas' x, y positions
+    - Holes' x, y positions
 
     """
 
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
-            low=np.array([0, 0, 0, 0], dtype=np.float32),
-            high=np.array(
-                [env.width, env.height, env.width, env.height],
-                dtype=np.float32,
+            low=0,
+            high=1,
+            shape=(
+                len(env.agents)
+                + len(env.layout_config.spawn_configs[0].lavas)
+                + len(env.layout_config.spawn_configs[0].holes)
+                + 1,  # Goal position
+                2,
             ),
             dtype=np.float32,
         )
 
     def create_observation(self, env: "RoomsEnv") -> NDArray[np.float32]:
         obs = np.array(
-            [
-                env.agents[0].pos[0],
-                env.agents[0].pos[1],
-                env.goal_pos[0],
-                env.goal_pos[1],
-            ]
+            [env.agents[0].pos] + [env.goal_pos] + env.lava_pos + env.hole_pos,
+            dtype=np.float32,
         )
         obs = obs / np.maximum(env.width, env.height)
 
@@ -103,16 +101,14 @@ class PositionalDictObs(
 
     def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float32]]:
         # Scale the agent's position and goal position to [0, 1] by the grid width and height
-        grid_sizes: NDArray[np.float32] = np.array(
-            [env.width, env.height],
-            dtype=np.float32,
-        )
+        grid_size = np.maximum(env.width, env.height)
+
         return {
             "obs": np.array(
                 [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float32
             )
-            / grid_sizes,
-            "desired_goal": np.array(env.goal_pos, dtype=np.float32) / grid_sizes,
+            / grid_size,
+            "desired_goal": np.array(env.goal_pos, dtype=np.float32) / grid_size,
         }
 
 
