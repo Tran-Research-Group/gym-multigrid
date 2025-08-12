@@ -24,7 +24,7 @@ The Rooms environment features separate rooms where agents navigate to reach a g
 The environment supports multiple observation modes to accommodate different learning approaches:
 
 ### Positional Mode
-- **Space**: `Box(shape=(4,), dtype=float32)` 
+- **Space**: `Box(shape=(4,), dtype=float64)` 
 - **Description**: Agent and goal positions as normalized coordinates
 - **Contents**:
   - `[0-1]`: Agent's x, y position (scaled to [0,1])

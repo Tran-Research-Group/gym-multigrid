@@ -88,9 +88,9 @@ The details are [here](./docs/environments/maze.md).
 | Agent Action Space      | `Discrete(5)`                                                       |
 | Observations            | `Discrete`                                                          |
 | Observability           | `Fully observable`                                                  |
-| Agent Observation Space | `Box([0,...],[1,...],(shape depends on number of agents,),float32)` |
+| Agent Observation Space | `Box([0,...],[1,...],(shape depends on number of agents,),float64)` |
 | States                  | `Discrete`                                                          |
-| State Space             | `Box([0,...],[1,...],(shape depends on number of agents,),float32)` |
+| State Space             | `Box([0,...],[1,...],(shape depends on number of agents,),float64)` |
 | Agents                  | `Cooperative or Non-cooperative or Group`                           |
 | Number of Agents        | `>=1`                                                               |
 | Termination Condition   | `No trees on fire exist`                                            |

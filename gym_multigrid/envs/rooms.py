@@ -20,7 +20,7 @@ from gym_multigrid.multigrid import (
 from gym_multigrid.typing import Position, Size
 
 
-class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
+class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float64]]):
     """
     Observation mode that returns the agent's position and goal position as a vector.
 
@@ -44,13 +44,13 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
                 + 1,  # Goal position
                 2,
             ),
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
-    def create_observation(self, env: "RoomsEnv") -> NDArray[np.float32]:
+    def create_observation(self, env: "RoomsEnv") -> NDArray[np.float64]:
         obs = np.array(
             [env.agents[0].pos] + [env.goal_pos] + env.lava_pos + env.hole_pos,
-            dtype=np.float32,
+            dtype=np.float64,
         )
         obs = obs / np.maximum(env.width, env.height)
 
@@ -58,7 +58,7 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
 
 
 class PositionalDictObs(
-    ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+    ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float64]]]
 ):
     """
     Observation mode that returns the agent's position and goal position as a dictionary.
@@ -88,27 +88,27 @@ class PositionalDictObs(
                         + len(env.layout_config.spawn_configs[0].holes),
                         2,
                     ),
-                    dtype=np.float32,
+                    dtype=np.float64,
                 ),
                 "desired_goal": spaces.Box(
                     low=0,
                     high=1,
                     shape=(2,),
-                    dtype=np.float32,
+                    dtype=np.float64,
                 ),
             }
         )
 
-    def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float32]]:
+    def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float64]]:
         # Scale the agent's position and goal position to [0, 1] by the grid width and height
         grid_size = np.maximum(env.width, env.height)
 
         return {
             "obs": np.array(
-                [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float32
+                [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float64
             )
             / grid_size,
-            "desired_goal": np.array(env.goal_pos, dtype=np.float32) / grid_size,
+            "desired_goal": np.array(env.goal_pos, dtype=np.float64) / grid_size,
         }
 
 
@@ -336,7 +336,7 @@ class RoomsEnvInit(BaseModel):
 
 class RoomsEnv(
     MultiGridEnv[
-        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]]
+        NDArray[np.int64] | NDArray[np.float64] | dict[str, NDArray[np.float64]]
     ]
 ):
     """
@@ -472,9 +472,9 @@ class RoomsEnv(
     observation_modes: dict[
         str,
         type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]]
-        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]]
+        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float64]]]
         | type[
-            ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+            ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float64]]]
         ],
     ] = {
         "positional": PositionalObs,
@@ -806,7 +806,7 @@ class RoomsEnv(
     def step(
         self, action: np.int64 | NDArray[np.int64]
     ) -> tuple[
-        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]],
+        NDArray[np.int64] | NDArray[np.float64] | dict[str, NDArray[np.float64]],
         NDArray[np.float64] | float,
         bool,
         bool,
@@ -972,7 +972,7 @@ class RoomsEnv(
         return heatmaps
 
     def reward_map_to_rgb(self, reward_map: np.ndarray, mask) -> np.ndarray:
-        rgb_img = np.zeros((self.width, self.height, 3), dtype=np.float32)
+        rgb_img = np.zeros((self.width, self.height, 3), dtype=np.float64)
 
         pos_mask = np.logical_and(mask, (reward_map > 0))
         neg_mask = np.logical_and(mask, (reward_map < 0))
