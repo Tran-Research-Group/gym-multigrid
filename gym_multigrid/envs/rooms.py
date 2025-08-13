@@ -232,6 +232,7 @@ class SpawnConfig(BaseModel):
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
+    waypoints: list[ObjConfig] = []  # List of way point objects, if any
     cleared_doorways: list[Position] = []  # List of cleared doorways, if any
     cleared_doorway_neighbors: list[Position] = []  # Neighbors of cleared doorways
 
@@ -267,6 +268,7 @@ class SpawnConfigDict(TypedDict, total=False):
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
     holes: list[ObjConfigDict]
+    waypoints: list[ObjConfigDict]
     cleared_doorways: list[Position]
 
 
@@ -487,7 +489,7 @@ class RoomsEnv(
     def __init__(
         self,
         spawn_type: int = 0,
-        layout_config: LayoutConfigDict = {
+        layout_config: LayoutConfigDict | LayoutConfig = {
             "field_map": [
                 "#############",
                 "#     #     #",
@@ -552,7 +554,7 @@ class RoomsEnv(
             ],
         },
         state_representation: str = "tensor",
-        reward_config: RewardConfigDict = {
+        reward_config: RewardConfigDict | RewardConfig = {
             "step_penalty": 0.01,
             "sum_reward": True,
         },
@@ -589,8 +591,19 @@ class RoomsEnv(
         # spawn_configs: list[SpawnConfig] = [
         #     SpawnConfig(**conf) for conf in layout_config["spawn_configs"]
         # ]
-        self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
-        self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
+        if isinstance(layout_config, dict):
+            self.layout_config: LayoutConfig = LayoutConfig.model_validate(
+                layout_config
+            )
+        else:
+            self.layout_config = layout_config
+
+        if isinstance(reward_config, dict):
+            self.reward_config: RewardConfig = RewardConfig.model_validate(
+                reward_config
+            )
+        else:
+            self.reward_config = reward_config
 
         grid_size: tuple[int, int] = (
             len(self.layout_config.field_map[0]),
@@ -697,7 +710,7 @@ class RoomsEnv(
         for y, row in enumerate(self.layout_config.field_map):
             for x, cell in enumerate(row):
                 if cell == "#":
-                    self.grid.set(x, y, Wall(self.world))
+                    self.grid.set(x, y, Wall(self.world, type="wall", color="grey"))
                 else:
                     pass
 
@@ -712,6 +725,18 @@ class RoomsEnv(
         )
         self.place_object(goal_obj, **self._parse_init_pos(goal.pos))
         self.goal_pos: Position = goal_obj.pos
+
+        # Place Waypoints
+        self.waypoint_pos: list[Position] = []
+        for waypoint in self.layout_config.spawn_configs[self.spawn_type].waypoints:
+            waypoint_obj = Goal(
+                self.world,
+                color="dark_grey",
+                reward=waypoint.reward,
+                absorbing=waypoint.absorbing,
+            )
+            self.place_object(waypoint_obj, **self._parse_init_pos(waypoint.pos))
+            self.waypoint_pos.append(waypoint_obj.pos)
 
         self.lava_pos: list[Position] = []
         self.hole_pos: list[Position] = []
