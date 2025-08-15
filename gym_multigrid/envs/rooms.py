@@ -880,9 +880,9 @@ class RoomsEnv(
             if fwd_cell is not None:
                 if fwd_cell.can_overlap():
                     agent.move(fwd_pos, self.grid, self.init_grid)
+                    rewards[i] = fwd_cell.reward
                     if fwd_cell.absorbing:
                         terminated = True
-                        rewards[i] = fwd_cell.reward
                         if isinstance(fwd_cell, Goal):
                             info["is_success"] = True
                         else:
