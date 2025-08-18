@@ -63,6 +63,10 @@ def test_rooms_render_lava():
     imageio.imsave(image_path, img)
     assert os.path.exists(image_path)
     assert np.array_equal(obs, target_obs)
+
+    new_obs, _, _, _, _ = env.step(np.array(NavigationActions.STAY))
+    assert np.array_equal(new_obs, obs)
+
     env.close()
 
 
