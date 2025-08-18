@@ -62,7 +62,7 @@ def test_rooms_render_lava():
     os.makedirs(os.path.dirname(image_path), exist_ok=True)
     imageio.imsave(image_path, img)
     assert os.path.exists(image_path)
-    assert np.array_equal(obs, target_obs.flatten())
+    assert np.array_equal(obs, target_obs)
     env.close()
 
 
