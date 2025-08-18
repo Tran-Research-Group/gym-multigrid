@@ -144,23 +144,7 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
 
     def create_observation(self, env: "RoomsEnv") -> NDArray[np.int64]:
         obs = np.zeros((env.width, env.height), dtype=np.int64)
-        static_obs: NDArray[np.int64] = (
-            np.ones((env.width, env.height), dtype=np.int64)
-            * env.world.OBJECT_TO_IDX["empty"]
-        )
-        for y, row in enumerate(env.layout_config.field_map):
-            for x, cell in enumerate(row):
-                if cell == "#":
-                    static_obs[y, x] = env.world.OBJECT_TO_IDX["wall"]
-                else:
-                    pass
-        for lava in env.lava_pos:
-            static_obs[lava[1], lava[0]] = env.world.OBJECT_TO_IDX["lava"]
-        for hole in env.hole_pos:
-            static_obs[hole[1], hole[0]] = env.world.OBJECT_TO_IDX["hole"]
-        static_obs[env.goal_pos[1], env.goal_pos[0]] = env.world.OBJECT_TO_IDX["goal"]
-        # obs[:, :] = self.static_obs
-        obs[:, :] = static_obs
+        obs[:, :] = self.static_obs
         for agent in env.agents:
             obs[agent.pos[1], agent.pos[0]] = env.world.OBJECT_TO_IDX["agent"]
 
