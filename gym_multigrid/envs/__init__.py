@@ -7,3 +7,5 @@ from gym_multigrid.envs.one_step_coordination_no_groups import (
     OneStepCoordinationNoGroupsEnv,
 )
 from gym_multigrid.envs.maze import MazeEnv
+
+from gym_multigrid.envs.two_agent_two_task_small import TwoAgentTwoTaskSmallEnv
