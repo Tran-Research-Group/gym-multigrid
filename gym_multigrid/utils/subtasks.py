@@ -6,21 +6,24 @@ import numpy as np
 @dataclass
 class PositionDist:
     """
-    Discrete state distribution
+    Discrete distribution over states
 
     Parameters
     ----------
-    states : tuple[tuple[int, int], ...]
+    states : list[tuple[int, int]]
         States
     probs : list[float]
         Probabilities of each state
     """
 
-    states: tuple[tuple[int, int], ...]
+    states: list[tuple[tuple[int, int], ...]]
     probs: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        assert np.sum(self.probs) == 1
+        assert len(self.states) == len(self.probs)
+
+        if len(self.states) > 0:
+            assert np.sum(self.probs) == 1
 
 
 @dataclass

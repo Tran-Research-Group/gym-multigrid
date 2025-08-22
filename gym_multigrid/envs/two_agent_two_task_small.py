@@ -1,6 +1,6 @@
 from typing import Literal, Optional, TypedDict, TypeAlias
 from dataclasses import asdict, dataclass
-import pdb
+
 import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
@@ -13,13 +13,6 @@ from gym_multigrid.core.world import WorldT, TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
 from gym_multigrid.core.object_group import ObjectGroup, EnvObjectGroup, ObjGroupT
-from gym_multigrid.utils.subtasks import (
-    PositionDist,
-    SubtaskData,
-    StateData,
-    HLMDPConfig,
-)
-
 from gym_multigrid.utils.subtasks import (
     PositionDist,
     SubtaskData,
@@ -74,17 +67,21 @@ def get_hlmdp_config() -> HLMDPConfig:
             idx=0,
             outgoing_init_state_dist=PositionDist(
                 probs=(1.0,),
-                states=((1, 1), (1, 3)),
+                states=[((1, 1), (1, 3))],
             ),
         ),
-        StateData(
-            idx=1,
-            outgoing_init_state_dist=PositionDist(
-                probs=(1.0,), states=((2, 1), (2, 3))
-            ),
-        ),
+        # use this version to get basic things up and running
+        # StateData(
+        #     idx=1,
+        #     outgoing_init_state_dist=PositionDist(
+        #         probs=(1.0,), states=((2, 1), (2, 3))
+        #     ),
+        # ),
+        # this is how the real version would be structured
+        StateData(idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())),
     )
 
+    # final state will have to be optional here
     subtask_data_tuple = (
         SubtaskData(
             edge=(0, 1),
