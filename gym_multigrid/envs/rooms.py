@@ -6,7 +6,7 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from gym_multigrid.core.agent import Agent, NavigationActions
+from gym_multigrid.core.agent import Agent, GridActions, NavigationActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Hole, Lava, Wall
 from gym_multigrid.core.world import RoomsWorld
@@ -554,6 +554,7 @@ class RoomsEnv(
             ],
         },
         state_representation: str = "tensor",
+        allow_stay: bool = True,
         reward_config: RewardConfigDict | RewardConfig = {
             "step_penalty": 0.01,
             "sum_reward": True,
@@ -577,6 +578,8 @@ class RoomsEnv(
             - "positional_dict": Returns the agent's position, lava positions, and hole positions as a dictionary.
             - "tensor": Returns a 2D grid tensor where each cell contains an integer representing the object type.
             - "vectorized_tensor": Returns a flattened 1D array of the grid tensor.
+        allow_stay: bool
+            Whether to allow the agent to take the "stay" action.
         reward_config: RewardConfigDict
             The reward configuration for the environment.
         tile_size: int
@@ -613,7 +616,8 @@ class RoomsEnv(
 
         width, height = grid_size
         world = RoomsWorld
-        actions_set = NavigationActions
+        self.allow_stay: bool = allow_stay
+        actions_set = NavigationActions if allow_stay else GridActions
 
         # NOTE: currently only one agent is supported
         agents = [
