@@ -312,6 +312,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
             ]
         obs = [self.world.normalize_obs * ob for ob in obs]
         info = self._get_info()
+
         return obs, info
 
     def _get_info(self):

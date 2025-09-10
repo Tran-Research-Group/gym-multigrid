@@ -370,10 +370,13 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
 
         # Place the agents
         # pick the init_pos based on the subtask (assuming it is an init pos and not a distribution to sample from)
+        # TODO note the [0] indexing here is a hacky way to get this function to run before I properly extended it to consider state distributions
         init_pos = self.hlmdp_config.subtask_data[
             self.subtask_idx
-        ].init_state_dist.states
+        ].init_state_dist.states[0]
 
+        # issue is in here
+        ##########################
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
@@ -486,6 +489,10 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
                 obs[agent.index, :] = agent_obs
 
         return obs
+
+    def get_agent_positions(self) -> tuple[Position | None, ...]:
+        positions = [agent.pos for agent in self.agents]
+        return tuple(positions)
 
     def _get_map(self) -> NDArray[np.int_]:
 
@@ -761,7 +768,6 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
 
         for direction in agent.dir_to_vec:
             next_state: Position = agent.pos + direction
-
             if (
                 next_state[0] < 0
                 or next_state[1] < 0

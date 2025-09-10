@@ -219,6 +219,32 @@ register(
     },
 )
 
+
+# Maze environment
+# ----------------------------------------
+register(
+    id="multigrid-maze-v0",
+    entry_point="gym_multigrid.envs:MazeEnv",
+    max_episode_steps=100,
+    kwargs={
+        "num_agents": 1,
+        "layout_config": {
+            "width": 10,
+            "height": 10,
+            "flag_positions": [(9, 9)],
+            "init_agent_positions": [(5, 5)],
+            "wall_positions": [],
+        },
+        "reward_config": {
+            "flag_reward": 1.0,
+            "wall_penalty_ratio": 0.0,
+            "step_penalty_ratio": 0.01,
+        },
+        "observation_mode": "tensor",
+        "render_mode": "rgb_array",
+    },
+)
+
 # Wildfire environment
 # ----------------------------------------
 register(
@@ -248,27 +274,9 @@ register(
 )
 
 
-# Maze environment
+# TWo agent dependent subtask test env
 # ----------------------------------------
 register(
-    id="multigrid-maze-v0",
-    entry_point="gym_multigrid.envs:MazeEnv",
-    max_episode_steps=100,
-    kwargs={
-        "num_agents": 1,
-        "layout_config": {
-            "width": 10,
-            "height": 10,
-            "flag_positions": [(9, 9)],
-            "init_agent_positions": [(5, 5)],
-            "wall_positions": [],
-        },
-        "reward_config": {
-            "flag_reward": 1.0,
-            "wall_penalty_ratio": 0.0,
-            "step_penalty_ratio": 0.01,
-        },
-        "observation_mode": "tensor",
-        "render_mode": "rgb_array",
-    },
+    id="two_agent_two_task_small-v0",
+    entry_point="gym_multigrid.envs:TwoAgentTwoTaskSmallEnv",
 )
