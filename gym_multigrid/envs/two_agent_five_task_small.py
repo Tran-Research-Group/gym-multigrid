@@ -30,124 +30,91 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
     HLMDPConfig
         configuration for the high level MDP
     """
-
+    # state data
     if run_mode == "manual":
-        # has a manually-defined ISD for each subtask for manual running
+        # has a manually-defined, deterministic ISD for each subtask for manual running
         state_data_tuple = (
             StateData(
                 idx=0,
                 outgoing_init_state_dist=PositionDist(
-                    states=[((1, 1), (1, 3))], probs=(1.0,)
+                    states=[((1, 2), (1, 6))], probs=(1.0,)
                 ),
             ),
             StateData(
                 idx=1,
                 outgoing_init_state_dist=PositionDist(
-                    probs=(1.0,),
-                    states=[((2, 1), (2, 3))],
+                    states=[((1, 1), (1, 5))], probs=(1.0,)
+                ),
+            ),
+            StateData(
+                idx=2,
+                outgoing_init_state_dist=PositionDist(
+                    states=[((1, 2), (1, 6))], probs=(1.0,)
+                ),
+            ),
+            StateData(
+                idx=3,
+                outgoing_init_state_dist=PositionDist(
+                    states=[((1, 3), (1, 7))], probs=(1.0,)
                 ),
             ),
         )
 
     else:
-        #################
-        # deterministic ISD
-        # for debugging
-        #################
-        # state_data_tuple = (
-        #     StateData(
-        #         idx=0,
-        #         outgoing_init_state_dist=PositionDist(
-        #             states=[((1, 1), (1, 3))], probs=(1.0,)
-        #         ),
-        #     ),
-        #     StateData(
-        #         idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())
-        #     ),
-        # )
         # stochastic ISD
         state_data_tuple = (
             StateData(
                 idx=0,
                 outgoing_init_state_dist=PositionDist(
                     probs=(0.5, 0.5),
-                    states=[((1, 1), (1, 3)), ((1, 3), (1, 1))],
+                    states=[((1, 2), (1, 6)), ((2, 2), (2, 6))],
                 ),
             ),
             StateData(
                 idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())
             ),
+            StateData(
+                idx=2, outgoing_init_state_dist=PositionDist(states=(), probs=())
+            ),
+            StateData(
+                idx=3, outgoing_init_state_dist=PositionDist(states=(), probs=())
+            ),
         )
 
-    # version of the env used in the finite automaton, only has the structure of the HLMDP
+    # subtask data
     subtask_data_tuple = (
         SubtaskData(
             edge=(0, 1),
             idx=0,
             termination_condition="reach_goal_state_set",
-            goal_state_set=((2, 1), (2, 3)),
+            goal_state_set=((1, 1), (2, 1), (1, 5), (2, 5)),
         ),
         SubtaskData(
             edge=(1, 2),
             idx=1,
             termination_condition="reach_goal_state_set",
-            goal_state_set=((3, 1), (3, 3)),
-        ),
-    )
-
-    """
-    state_data_tuple = (
-        # stochastic ISD
-        StateData(
-            idx=0,
-            outgoing_init_state_dist=PositionDist(
-                probs=(0.5, 0.5),
-                states=[((1, 1), (1, 3)), ((1, 3), (1, 1))],
-            ),
-        ),
-        # deterministic ISD
-        # StateData(
-        #     idx=0,
-        #     outgoing_init_state_dist=PositionDist(
-        #         probs=(1.0,),
-        #         states=[((1, 1), (1, 3))],
-        #     ),
-        # ),
-        StateData(idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())),
-    )
-
-    # single final state set version
-    # subtask_data_tuple = (
-    #     SubtaskData(
-    #         edge=(0, 1),
-    #         idx=0,
-    #         goal_state_set=((2, 1), (2, 3)),
-    #         termination_condition="reach_assigned_goal_state",
-    #     ),
-    #     SubtaskData(
-    #         edge=(1, 2),
-    #         idx=1,
-    #         goal_state_set=((3, 1), (3, 3)),
-    #         termination_condition="reach_assigned_goal_state",
-    #     ),
-    # )
-
-    # version of the env used in the finite automaton, only has the structure of the HLMDP
-    subtask_data_tuple = (
-        SubtaskData(
-            edge=(0, 1),
-            idx=0,
-            termination_condition="reach_goal_state_set",
-            goal_state_set=((2, 1), (2, 3)),
+            goal_state_set=((1, 2), (2, 2), (1, 6), (2, 6)),
         ),
         SubtaskData(
-            edge=(1, 2),
-            idx=1,
+            edge=(0, 3),
+            idx=2,
             termination_condition="reach_goal_state_set",
-            goal_state_set=((3, 1), (3, 3)),
+            goal_state_set=((1, 3), (2, 3), (1, 7), (2, 7)),
         ),
+        SubtaskData(
+            edge=(3, 2),
+            idx=3,
+            termination_condition="reach_goal_state_set",
+            goal_state_set=((1, 2), (2, 2), (1, 6), (2, 6)),
+        ),
+        SubtaskData(
+            edge=(2, 4),
+            idx=4,
+            termination_condition="reach_goal_state_set",
+            goal_state_set=((1, 1), (2, 1), (1, 5), (2, 5)),
+        ),
+
     )
-    """
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
         state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
@@ -193,7 +160,7 @@ Observation: TypeAlias = (
 )
 
 
-class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
+class TwoAgentFiveTaskSmallEnv(MultiGridEnv):
     """team navigation environment"""
 
     metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
@@ -202,8 +169,8 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
     def __init__(
         self,
         init_state_dist: PositionDist,
-        height: int = 5,
-        width: int = 5,
+        height: int = 9,
+        width: int = 4,
         num_agents: int = 2,
         p_intended_movement: float = 1.0,
         comms_val: float = 1.0,
@@ -213,7 +180,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         observation_option: Literal[
             "all_goal_states_all_subtasks"
         ] = "all_goal_states_all_subtasks",
-        obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
+        obs_type: Literal["array", "array_scaled"] = "array_scaled",
         reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -273,7 +240,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         self.observation_option: Literal["all_goal_states_all_subtasks"] = (
             observation_option
         )
-        self.obs_type: Literal["dict", "array", "array_scaled"] = obs_type
+        self.obs_type: Literal["array", "array_scaled"] = obs_type
 
         # agent config
         agent_view_size: int | None = None
@@ -388,16 +355,16 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
                 group_index=0,
                 pos=((0, 0, self.width, self.height),),
                 color="grey",
-                spawned_subtask_indices=(0, 1),
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
             # middle wall
             EnvObjectGroup(
                 obj_type="wall",
                 group_index=1,
-                pos=((1, 2, 3, 1),),
+                pos=((1, 4, 3, 1),),
                 color="grey",
-                spawned_subtask_indices=(0, 1),
+                spawned_subtask_indices=(0, 1, 2, 3, 4),
                 fill_mode="empty",
             ),
         ]
@@ -406,7 +373,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         env_object_config.append(
             EnvObjectGroup(
                 obj_type="goal",
-                group_index=3,
+                group_index=2,
                 pos=self.goal_state_set,
                 color="green",
                 spawned_subtask_indices=(self.subtask_idx,),

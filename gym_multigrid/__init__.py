@@ -274,9 +274,15 @@ register(
 )
 
 
-# TWo agent dependent subtask test env
+# Two agent dependent subtask test envs
 # ----------------------------------------
 register(
     id="two_agent_two_task_small-v0",
     entry_point="gym_multigrid.envs:TwoAgentTwoTaskSmallEnv",
 )
+
+register(
+    id="two_agent_five_task_small-v0",
+    entry_point="gym_multigrid.envs:TwoAgentFiveTaskSmallEnv",
+)
+

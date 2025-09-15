@@ -57,13 +57,13 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                     edge=(0, 1),
                     idx=0,
                     final_state=((6, 3), (6, 6)),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(1, 2),
                     idx=1,
                     final_state=((5, 3), (5, 6)),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
             )
 
@@ -124,7 +124,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (6, 3),
                         (6, 4),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(1, 3),
@@ -134,7 +134,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (9, 7),
                         (9, 8),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(0, 2),
@@ -144,7 +144,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (6, 11),
                         (6, 12),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(2, 3),
@@ -154,7 +154,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (9, 7),
                         (9, 8),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(3, 4),
@@ -164,7 +164,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (12, 7),
                         (12, 8),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
             )
 
@@ -240,7 +240,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (6, 5),
                         (6, 6),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(1, 3),
@@ -253,7 +253,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (9, 8),
                         (9, 9),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(0, 2),
@@ -266,7 +266,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (6, 12),
                         (6, 13),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(2, 3),
@@ -279,7 +279,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (9, 8),
                         (9, 9),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
                 SubtaskData(
                     edge=(3, 4),
@@ -292,7 +292,7 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
                         (12, 8),
                         (12, 9),
                     ),
-                    termination_condition="reach_assigned_final_state",
+                    termination_condition="reach_assigned_goal_state",
                 ),
             )
 

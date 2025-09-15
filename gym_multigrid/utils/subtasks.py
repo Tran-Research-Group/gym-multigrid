@@ -1,4 +1,3 @@
-from typing import Literal
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -23,7 +22,9 @@ class PositionDist:
         assert len(self.states) == len(self.probs)
 
         if len(self.states) > 0:
-            assert np.sum(self.probs) == 1
+            # use allclose instead of == due to error
+            # in floating point calculations
+            assert np.allclose(np.sum(self.probs), 1)
 
 
 @dataclass
@@ -35,8 +36,10 @@ class SubtaskData:
         unique index for this subtask
     final_state: tuple[tuple[int, int], ...]
         final state the agents reach to complete the subtask
-    termination_condition: Literal["reach_assigned_final_state"]
-        possible conditions to end the subtask. "reach_assigned_final_state" is the only supported condition
+    termination_condition: Literal["reach_assigned_goal_state", "reach_goal_state_set"]
+        possible conditions to end the subtask.
+        "reach_assigned_goal_state" constructs a dict with keys as agent indices and values as the final state set for that agent, where that set only consists of a single state
+        "reach_goal_state_set" is similar, except it allows any agent to be in any of the final states in the specified set
     init_state_dist: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] | None
         initial state distribution for this subtask
     """
@@ -44,10 +47,10 @@ class SubtaskData:
     # directed edge, defines predecessor and successor state to this subtask
     edge: tuple[int, int]
     idx: int
-    final_state: tuple[tuple[int, int], ...]
-    termination_condition: Literal["reach_assigned_final_state"]
 
     # stuff that only needs to be specified when interfacing with a gymnasium env
+    termination_condition: str | None = None
+    goal_state_set: tuple[tuple[int, int], ...] | None = None
     init_state_dist: PositionDist | None = None
 
 
@@ -58,16 +61,6 @@ class StateData:
     # data for a single HLMDP state
     idx: int
     outgoing_init_state_dist: PositionDist
-
-    # incoming_subtask_indices: list | None = None
-    # outgoing_subtask_indices: list | None = None
-
-    # not necessary for training in independent subtasks
-    # def __post_init__(self):
-    #     # it is bad practice to have lists as default function args (say, in __init__), so we do that here instead
-    #     # __post_init__ is called after everything else in __init__ for dataclasses
-    #     self.incoming_subtask_indices = []
-    #     self.outgoing_subtask_indices = []
 
 
 @dataclass
@@ -82,7 +75,6 @@ class HLMDPConfig:
 
     def __post_init__(self) -> None:
         self._build_data_dicts()
-        # self._add_edge_data()
         self._add_init_state_dist_data()
 
     def _build_data_dicts(self) -> None:
@@ -92,19 +84,6 @@ class HLMDPConfig:
         self.subtask_data: dict[int, SubtaskData] = {
             subtask.idx: subtask for subtask in self.subtask_data_tuple
         }
-
-    # def _add_edge_data(self):
-    #     """adds outgoing and incoming edges to the state data
-    #     """
-    #     for subtask in self.subtask_data:
-    #         predecessor_state_index = subtask.edge[0]
-    #         successor_state_index = subtask.edge[1]
-
-    #         for state in self.state_data:
-    #             if state.idx == predecessor_state_index:
-    #                 state.outgoing_subtask_indices.append(subtask.idx)
-    #             elif state.idx == successor_state_index:
-    #                 state.incoming_subtask_indices.append(subtask.idx)
 
     def _add_init_state_dist_data(self) -> None:
         # adds initial state distribution data to the subtask data based on its outgoing edge
