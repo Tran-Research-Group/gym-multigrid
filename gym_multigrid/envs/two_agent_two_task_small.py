@@ -581,7 +581,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         # get observation from being in s_{t+1}
         obs: Observation = self.get_obs()
 
-        terminated = self._terminated(next_state=next_state)
+        terminated, all_at_goal= self._terminated(next_state=next_state)
 
         # truncated is handled by a Gymnasium wrapper
         truncated: bool = False
