@@ -13,7 +13,7 @@ from gymnasium.core import ObsType, ActType
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObjT
 from gym_multigrid.core.world import DefaultWorld, WorldT
-from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions
+from gym_multigrid.core.agent import ActionsT, AgentT, DefaultActions, Agent
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.window import Window
 from gym_multigrid.core.constants import TILE_PIXELS, OBJECT_TO_STR
@@ -660,6 +660,27 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
         img = grid.render(self.world, tile_size, highlight_mask=vis_mask)
 
         return img
+
+    def get_agent_positions(self) -> tuple[Position | None, ...]:
+        positions = [agent.pos for agent in self.agents]
+        return tuple(positions)
+
+    def build_goal_state_sets(self, agents: list[Agent]):
+        # outputs a dict with keys as ints and values as np array that represent the
+        # final state sets that are valid for each agent to terminate in
+
+        # termination condition should change how the goal_state_sets object is constructed
+        # but then the rest of the logic should be the same across the two cases
+
+        goal_state_sets: dict[int, NDArray] = {}
+
+        for agent in agents:
+            if self.termination_condition == "reach_assigned_goal_state":
+                goal_state_sets[agent.index] = np.array(self.goal_state_set[agent_idx])
+            elif self.termination_condition == "reach_goal_state_set":
+                goal_state_sets[agent.index] = np.array(self.goal_state_set)
+
+        self.agent_goal_state_sets = goal_state_sets
 
     # Randomizing
     def _rand_int(self, low, high):

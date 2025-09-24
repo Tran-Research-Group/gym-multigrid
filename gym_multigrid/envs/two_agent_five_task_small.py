@@ -32,7 +32,7 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
     """
     # state data
     if run_mode == "manual":
-        # has a manually-defined, deterministic ISD for each subtask for manual running
+        # have a pre-defined, deterministic ISD for each subtask
         state_data_tuple = (
             StateData(
                 idx=0,
@@ -113,7 +113,6 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
             termination_condition="reach_goal_state_set",
             goal_state_set=((1, 1), (2, 1), (1, 5), (2, 5)),
         ),
-
     )
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(

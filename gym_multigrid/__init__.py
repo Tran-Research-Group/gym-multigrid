@@ -252,13 +252,6 @@ register(
     entry_point="gym_multigrid.envs:WildfireEnv",
 )
 
-# Team Navigation environment
-# ----------------------------------------
-register(
-    id="multigrid-team-navigation-5-task-v0",
-    entry_point="gym_multigrid.envs:TeamNavigationEnv",
-)
-
 # One-step coordination environment (with groups)
 # ----------------------------------------
 register(
@@ -286,3 +279,13 @@ register(
     entry_point="gym_multigrid.envs:TwoAgentFiveTaskSmallEnv",
 )
 
+# Team Navigation environment
+# ----------------------------------------
+register(
+    id="five_task_team_navigation-v0",
+    entry_point="gym_multigrid.envs:FiveTaskTeamNavigationEnv",
+)
+
+
+# list of environments that need comms_val as a parameter
+comms_envs: list[str] = ["five_task_team_navigation-v0"]

@@ -95,59 +95,6 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
         ),
     )
 
-    """
-    state_data_tuple = (
-        # stochastic ISD
-        StateData(
-            idx=0,
-            outgoing_init_state_dist=PositionDist(
-                probs=(0.5, 0.5),
-                states=[((1, 1), (1, 3)), ((1, 3), (1, 1))],
-            ),
-        ),
-        # deterministic ISD
-        # StateData(
-        #     idx=0,
-        #     outgoing_init_state_dist=PositionDist(
-        #         probs=(1.0,),
-        #         states=[((1, 1), (1, 3))],
-        #     ),
-        # ),
-        StateData(idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())),
-    )
-
-    # single final state set version
-    # subtask_data_tuple = (
-    #     SubtaskData(
-    #         edge=(0, 1),
-    #         idx=0,
-    #         goal_state_set=((2, 1), (2, 3)),
-    #         termination_condition="reach_assigned_goal_state",
-    #     ),
-    #     SubtaskData(
-    #         edge=(1, 2),
-    #         idx=1,
-    #         goal_state_set=((3, 1), (3, 3)),
-    #         termination_condition="reach_assigned_goal_state",
-    #     ),
-    # )
-
-    # version of the env used in the finite automaton, only has the structure of the HLMDP
-    subtask_data_tuple = (
-        SubtaskData(
-            edge=(0, 1),
-            idx=0,
-            termination_condition="reach_goal_state_set",
-            goal_state_set=((2, 1), (2, 3)),
-        ),
-        SubtaskData(
-            edge=(1, 2),
-            idx=1,
-            termination_condition="reach_goal_state_set",
-            goal_state_set=((3, 1), (3, 3)),
-        ),
-    )
-    """
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
         state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
@@ -210,10 +157,8 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
-        observation_option: Literal[
-            "all_goal_states_all_subtasks"
-        ] = "all_goal_states_all_subtasks",
-        obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
+        observation_option: Literal["all_goal_states_all_subtasks"] = "all_goal_states_all_subtasks",
+        obs_type: Literal["array", "array_scaled"] = "array_scaled",
         reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -237,9 +182,8 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
             Should be in the range [0, 1].
         subtask_idx: int = 0
             The current subtask index.
-        observation_option : Literal["goal"] = "goal"
+        observation_option: Literal["all_goal_states_all_subtasks"] = "all_goal_states_all_subtasks"
             Observation option.
-            - "goal": The observation includes agent positions and position of the assigned goal.
         actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -270,10 +214,8 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         self.goal_state_set = subtask_data.goal_state_set
 
         # observation config
-        self.observation_option: Literal["all_goal_states_all_subtasks"] = (
-            observation_option
-        )
-        self.obs_type: Literal["dict", "array", "array_scaled"] = obs_type
+        self.observation_option = observation_option
+        self.obs_type = obs_type
 
         # agent config
         agent_view_size: int | None = None
@@ -322,23 +264,6 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
-
-    def build_goal_state_sets(self, agents: list[Agent]):
-        # outputs a dict with keys as ints and values as np array that represent the
-        # final state sets that are valid for each agent to terminate in
-
-        # termination condition should change how the goal_state_sets object is constructed
-        # but then the rest of the logic should be the same across the two cases
-
-        goal_state_sets: dict[int, NDArray] = {}
-
-        for agent in agents:
-            if self.termination_condition == "reach_assigned_goal_state":
-                goal_state_sets[agent.index] = np.array(self.goal_state_set[agent_idx])
-            elif self.termination_condition == "reach_goal_state_set":
-                goal_state_sets[agent.index] = np.array(self.goal_state_set)
-
-        self.agent_goal_state_sets = goal_state_sets
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -560,10 +485,6 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
 
         return env_map
 
-    def get_agent_positions(self) -> tuple[Position | None, ...]:
-        positions = [agent.pos for agent in self.agents]
-        return tuple(positions)
-
     def get_env_info(self) -> EnvInfo:
         # obs_shape should only be the shape of a single agent
         # self.observation_space.shape = (n_agents, dim_1_size, dim_2_size, ...)
@@ -660,7 +581,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         # get observation from being in s_{t+1}
         obs: Observation = self.get_obs()
 
-        terminated, all_at_goal = self._terminated(next_state=next_state)
+        terminated = self._terminated(next_state=next_state)
 
         # truncated is handled by a Gymnasium wrapper
         truncated: bool = False

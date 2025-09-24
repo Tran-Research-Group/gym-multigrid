@@ -21,7 +21,11 @@ from gym_multigrid.utils.subtasks import (
 )
 
 
-def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
+def get_initial_hlmdp_config(
+    num_agents: int = 3,
+    run_mode: Literal["manual"] | None = None,
+    subtask_type: Literal["dependent", "independent"] = "dependent",
+) -> HLMDPConfig:
     """gets the high level MDP configuration for this environment
 
     Parameters
@@ -34,265 +38,98 @@ def get_hlmdp_config(num_agents: int) -> HLMDPConfig:
     HLMDPConfig
         configuration for the high level MDP
     """
-    match num_agents:
-        case 2:
-            state_data_tuple = (
-                StateData(
-                    idx=0,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=((1, 3), (1, 6)),
-                    ),
-                ),
-                StateData(
-                    idx=1,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,), states=((3, 3), (3, 6))
-                    ),
-                ),
-            )
 
+    if subtask_type == "dependent":
+        termination_condition = "reach_goal_state_set"
+    else:
+        # independent subtasks
+        termination_condition = "reach_assigned_goal_state"
+
+    match num_agents:
+        case 3:
+            # state data
+            if run_mode == "manual" or subtask_type == "independent":
+                # have a pre-defined, deterministic ISD for each subtask
+                state_data_tuple = (
+                    StateData(
+                        idx=0,
+                        outgoing_init_state_dist=PositionDist(
+                            states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
+                        ),
+                    ),
+                    StateData(
+                        idx=1,
+                        outgoing_init_state_dist=PositionDist(
+                            states=[((6, 2), (6, 3), (6, 4))], probs=(1.0,)
+                        ),
+                    ),
+                    StateData(
+                        idx=2,
+                        outgoing_init_state_dist=PositionDist(
+                            states=[((9, 6), (9, 7), (9, 8))], probs=(1.0,)
+                        ),
+                    ),
+                    StateData(
+                        idx=3,
+                        outgoing_init_state_dist=PositionDist(
+                            states=[((6, 10), (6, 11), (6, 12))], probs=(1.0,)
+                        ),
+                    ),
+                )
+
+            else:
+                state_data_tuple = (
+                    StateData(
+                        idx=0,
+                        outgoing_init_state_dist=PositionDist(
+                            states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
+                        ),
+                    ),
+                    StateData(
+                        idx=1,
+                        outgoing_init_state_dist=PositionDist(states=(), probs=()),
+                    ),
+                    StateData(
+                        idx=2,
+                        outgoing_init_state_dist=PositionDist(states=(), probs=()),
+                    ),
+                    StateData(
+                        idx=3,
+                        outgoing_init_state_dist=PositionDist(states=(), probs=()),
+                    ),
+                )
+
+            # subtask data
             subtask_data_tuple = (
                 SubtaskData(
                     edge=(0, 1),
                     idx=0,
-                    final_state=((6, 3), (6, 6)),
-                    termination_condition="reach_assigned_goal_state",
+                    termination_condition=termination_condition,
+                    goal_state_set=((6, 2), (6, 3), (6, 4)),
                 ),
                 SubtaskData(
                     edge=(1, 2),
                     idx=1,
-                    final_state=((5, 3), (5, 6)),
-                    termination_condition="reach_assigned_goal_state",
+                    termination_condition=termination_condition,
+                    goal_state_set=((9, 6), (9, 7), (9, 8)),
                 ),
-            )
-
-        case 3:
-            state_data_tuple = (
-                StateData(
-                    idx=0,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (1, 6),
-                            (1, 7),
-                            (1, 8),
-                        ),
-                    ),
-                ),
-                StateData(
-                    idx=1,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (6, 2),
-                            (6, 3),
-                            (6, 4),
-                        ),
-                    ),
-                ),
-                StateData(
+                SubtaskData(
+                    edge=(0, 3),
                     idx=2,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (6, 10),
-                            (6, 11),
-                            (6, 12),
-                        ),
-                    ),
+                    termination_condition=termination_condition,
+                    goal_state_set=((6, 10), (6, 11), (6, 12)),
                 ),
-                StateData(
+                SubtaskData(
+                    edge=(3, 2),
                     idx=3,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (9, 6),
-                            (9, 7),
-                            (9, 8),
-                        ),
-                    ),
-                ),
-            )
-
-            subtask_data_tuple = (
-                SubtaskData(
-                    edge=(0, 1),
-                    idx=0,
-                    final_state=(
-                        (6, 2),
-                        (6, 3),
-                        (6, 4),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
+                    termination_condition=termination_condition,
+                    goal_state_set=((9, 6), (9, 7), (9, 8)),
                 ),
                 SubtaskData(
-                    edge=(1, 3),
-                    idx=1,
-                    final_state=(
-                        (9, 6),
-                        (9, 7),
-                        (9, 8),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(0, 2),
-                    idx=2,
-                    final_state=(
-                        (6, 10),
-                        (6, 11),
-                        (6, 12),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(2, 3),
-                    idx=3,
-                    final_state=(
-                        (9, 6),
-                        (9, 7),
-                        (9, 8),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(3, 4),
+                    edge=(2, 4),
                     idx=4,
-                    final_state=(
-                        (12, 6),
-                        (12, 7),
-                        (12, 8),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-            )
-
-        case 6:
-            state_data_tuple = (
-                StateData(
-                    idx=0,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (1, 4),
-                            (1, 5),
-                            (1, 6),
-                            (1, 7),
-                            (1, 8),
-                            (1, 9),
-                        ),
-                    ),
-                ),
-                StateData(
-                    idx=1,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (6, 1),
-                            (6, 2),
-                            (6, 3),
-                            (6, 4),
-                            (6, 5),
-                            (6, 6),
-                        ),
-                    ),
-                ),
-                StateData(
-                    idx=2,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (6, 8),
-                            (6, 9),
-                            (6, 10),
-                            (6, 11),
-                            (6, 12),
-                            (6, 13),
-                        ),
-                    ),
-                ),
-                StateData(
-                    idx=3,
-                    outgoing_init_state_dist=PositionDist(
-                        probs=(1.0,),
-                        states=(
-                            (9, 4),
-                            (9, 5),
-                            (9, 6),
-                            (9, 7),
-                            (9, 8),
-                            (9, 9),
-                        ),
-                    ),
-                ),
-            )
-
-            subtask_data_tuple = (
-                SubtaskData(
-                    edge=(0, 1),
-                    idx=0,
-                    final_state=(
-                        (6, 1),
-                        (6, 2),
-                        (6, 3),
-                        (6, 4),
-                        (6, 5),
-                        (6, 6),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(1, 3),
-                    idx=1,
-                    final_state=(
-                        (9, 4),
-                        (9, 5),
-                        (9, 6),
-                        (9, 7),
-                        (9, 8),
-                        (9, 9),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(0, 2),
-                    idx=2,
-                    final_state=(
-                        (6, 8),
-                        (6, 9),
-                        (6, 10),
-                        (6, 11),
-                        (6, 12),
-                        (6, 13),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(2, 3),
-                    idx=3,
-                    final_state=(
-                        (9, 4),
-                        (9, 5),
-                        (9, 6),
-                        (9, 7),
-                        (9, 8),
-                        (9, 9),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
-                ),
-                SubtaskData(
-                    edge=(3, 4),
-                    idx=4,
-                    final_state=(
-                        (12, 4),
-                        (12, 5),
-                        (12, 6),
-                        (12, 7),
-                        (12, 8),
-                        (12, 9),
-                    ),
-                    termination_condition="reach_assigned_goal_state",
+                    termination_condition=termination_condition,
+                    goal_state_set=((12, 6), (12, 7), (12, 8)),
                 ),
             )
 
@@ -331,14 +168,6 @@ class RewardConfig:
     agent_leave_goal_reward: float
     all_agents_at_goal_reward: float
 
-
-# Env config
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=0.2,
-#     agent_leave_goal_reward=-0.3,
-#     all_agents_at_goal_reward=1.0,
-# )
 
 reward_config = RewardConfig(
     movement_reward=0.0,
@@ -435,7 +264,7 @@ class Detector:
             return False
 
 
-class TeamNavigationEnv(MultiGridEnv):
+class FiveTaskTeamNavigationEnv(MultiGridEnv):
     """team navigation environment"""
 
     metadata = {"render_fps": 10, "render_modes": ["human", "rgb_array"]}
@@ -443,10 +272,11 @@ class TeamNavigationEnv(MultiGridEnv):
     # setup and env properties
     def __init__(
         self,
-        height: int = 10,
-        width: int = 7,
+        init_state_dist: PositionDist,
+        height: int = 15,
+        width: int = 14,
         num_agents: int = 2,
-        p_intended_movement: float = 0.95,
+        p_intended_movement: float = 1.0,
         p_detect_visual: float = 0.005,
         zone_width: int = 1,
         comms_val: float = 1.0,
@@ -454,7 +284,7 @@ class TeamNavigationEnv(MultiGridEnv):
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["goal", "all_goals"] = "all_goals",
-        obs_type: Literal["dict", "array", "array_scaled"] = "array_scaled",
+        obs_type: Literal["array", "array_scaled"] = "array_scaled",
         reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -494,18 +324,29 @@ class TeamNavigationEnv(MultiGridEnv):
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
         """
+        # Do not read the init state dists from HLMDP config b/c
+        # the distribution changes during the CM training algorithm.
+        # init_state_dist has to be an arg pass into this env's init method
+        self.init_state_dist: PositionDist = init_state_dist
         self.num_agents: int = num_agents
         self.p_intended_movement: float = p_intended_movement
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
-        self.hlmdp_config: HLMDPConfig = get_hlmdp_config(num_agents=num_agents)
         self.reward_config: RewardConfig = reward_config
+        print(f"p_detect_visual: {p_detect_visual}")
+        __import__("ipdb").set_trace(context=3)
         self.p_detect_visual = p_detect_visual
         self.zone_width = int(zone_width)
 
+        # get the hlmdp data that doesn't change during the CM training algorithm
+        self.hlmdp_config: HLMDPConfig = get_initial_hlmdp_config()
+        subtask_data = self.hlmdp_config.subtask_data[subtask_idx]
+        self.termination_condition = subtask_data.termination_condition
+        self.goal_state_set = subtask_data.goal_state_set
+
         # observation config
-        self.observation_option: Literal["goal"] = observation_option
-        self.obs_type: Literal["array", "array_scaled"] = obs_type
+        self.observation_option = observation_option
+        self.obs_type = obs_type
 
         # agent config
         agent_view_size: int | None = None
@@ -521,11 +362,12 @@ class TeamNavigationEnv(MultiGridEnv):
         ]
         uncached_object_types: list[str] = ["agent"]
 
-        self.goals: tuple[tuple[int, int], ...] = ()
-
-        self.detectors: list[Detector]
+        # have to init this after the set of agents is constructed
+        self.agent_goal_state_sets: dict[int, NDArray]
+        self.build_goal_state_sets(agents)
 
         # basic grid init
+        self.detectors: list[Detector]
         self.object_options: dict[str, WorldObjT] = {
             "goal": AgentGoal,
             "zone": Zone,
@@ -573,13 +415,6 @@ class TeamNavigationEnv(MultiGridEnv):
                 dtype=np.float32,
             )
 
-        elif self.obs_type in ["one_hot_array"]:
-            observation_space = spaces.Box(
-                low=np.zeros(obs_shape),
-                high=np.ones(obs_shape),
-                dtype=np.float32,
-            )
-
         else:
             raise ValueError(f"Invalid observation option: {self.observation_option}")
 
@@ -595,7 +430,7 @@ class TeamNavigationEnv(MultiGridEnv):
         super().reset(seed=seed, options=options)
 
         obs: Observation = self.get_obs()
-        info: StepInfo = self._get_step_info(reach_goal=False)
+        info: StepInfo = self._get_step_info()
 
         return obs, info
 
@@ -664,8 +499,8 @@ class TeamNavigationEnv(MultiGridEnv):
                 env_object_config.append(
                     EnvObjectGroup(
                         obj_type="goal",
-                        group_index=subtask_idx,
-                        pos=data.final_state,
+                        group_index=0,
+                        pos=self.goal_state_set,
                         color="green",
                         spawned_subtask_indices=(subtask_idx,),
                         fill_mode="empty",
@@ -694,11 +529,10 @@ class TeamNavigationEnv(MultiGridEnv):
         # init_grid has to be defined before the agents are placed
         self.init_grid: Grid = self.grid.copy()
 
-        # Place the agents
-        # pick the init_pos based on the subtask (assuming it is an init pos and not a distribution to sample from)
-        init_pos = self.hlmdp_config.subtask_data[
-            self.subtask_idx
-        ].init_state_dist.states
+        # Place the agents by sampling a state from the initial state distribution
+        init_pos = self.np_random.choice(
+            self.init_state_dist.states, p=self.init_state_dist.probs
+        )
 
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
@@ -706,92 +540,29 @@ class TeamNavigationEnv(MultiGridEnv):
 
     def get_obs(self) -> Observation:
         # get empty map of the env
-        map_obs: NDArray[np.int_] = self._get_map()
+        map_obs: NDArray[np.int_] = self._get_map_obs()
+        goal_obs: NDArray[np.int_] = self._get_goal_obs()
 
-        # for one-hot, start with the empty map
-        # then, for each agent add in its obs data
-
+        # get the agent's x-y coordinates
         for agent_idx, agent in enumerate(self.agents):
+            agent_obs = (agent.pos[0], agent.pos[1], self.world.OBJECT_TO_IDX["agent"])
+
             if self.obs_type == "array_scaled":
                 agent_obs = np.array(
                     (
-                        agent.pos[0] / self.obs_scaling["x"],
-                        agent.pos[1] / self.obs_scaling["y"],
-                        self.world.OBJECT_TO_IDX["agent"]
-                        / self.obs_scaling["obj_encoding"],
+                        agent_obs[0] / self.obs_scaling["x"],
+                        agent_obs[1] / self.obs_scaling["y"],
+                        agent_obs[2] / self.obs_scaling["obj_encoding"],
                     ),
                     dtype=np.float32,
                 )
 
-            elif self.obs_type in ["one_hot_array"]:
-                agent_x, agent_y = np.zeros(self.width), np.zeros(self.height)
-                agent_x[agent.pos[0]], agent_y[agent.pos[1]] = 1, 1
-                agent_obs = np.concatenate((agent_x, agent_y))
-
-                agent_obs_map = map_obs.copy()
-                agent_obs_map_flat = []
-
-            else:
-                agent_obs = np.array(agent.pos, dtype=np.float32)
-
-            # add each agent's goals to its obs
-            if self.observation_option == "goal":
-                goal_state = self.hlmdp_config.subtask_data[
-                    self.subtask_idx
-                ].final_state[agent.index]
-                if self.obs_type == "array_scaled":
-                    goal_state = (
-                        goal_state[0] / self.obs_scaling["x"],
-                        goal_state[1] / self.obs_scaling["y"],
-                        self.world.OBJECT_TO_IDX["goal"]
-                        / self.obs_scaling["obj_encoding"],
-                    )
-
-                if self.obs_type in ["array", "array_scaled"]:
-                    agent_obs = np.append(agent_obs, goal_state)
-
-                elif self.obs_type in ["one_hot_array"]:
-                    agent_obs_map[
-                        goal_state[0], goal_state[1], self.world.OBJECT_TO_IDX["goal"]
-                    ] = 1
-
-            elif self.observation_option == "all_goals":
-                goal_states: list[tuple[float, float]] = []
-                for _, data in self.hlmdp_config.subtask_data.items():
-                    goal_state = data.final_state[agent_idx]
-                    if self.obs_type == "array_scaled":
-                        goal_state = (
-                            goal_state[0] / self.obs_scaling["x"],
-                            goal_state[1] / self.obs_scaling["y"],
-                            self.world.OBJECT_TO_IDX["goal"]
-                            / self.obs_scaling["obj_encoding"],
-                        )
-                    goal_states.append(goal_state)
-
-                if self.obs_type in ["array", "array_scaled"]:
-                    agent_obs = np.append(agent_obs, goal_states)
-
-                elif self.obs_type in ["one_hot_array"]:
-                    for goal_state in goal_states:
-                        agent_obs_map[
-                            goal_state[1],
-                            goal_state[0],
-                            self.world.OBJECT_TO_IDX["goal"],
-                        ] = 1
-
-                    # # remove states that are empty in the agent map
-                    # this didn't end up working b/c when an agent would walk over a Zone space, the zone is removed from the map causing the observation to change size throughout the episode
-                    # for x in range(self.width):
-                    #     for y in range(self.height):
-                    #         zeros = np.zeros(len(self.world.OBJECT_TO_IDX))
-
-                    #         if not np.array_equal(agent_obs_map[y, x, :], zeros):
-                    #             agent_obs_map_flat += agent_obs_map[y, x, :].tolist()
-
             if self.obs_type in ["array", "array_scaled"]:
-                # add the static map to agent obs
-                agent_obs = np.append(agent_obs, map_obs.flatten())
+                agent_obs = np.concat(
+                    (agent_obs, goal_obs.flatten(), map_obs.flatten())
+                )
 
+                # set the size of the team-level obs
                 if agent_idx == 0:
                     obs: NDArray[np.int_] = np.zeros(
                         (self.num_agents, len(agent_obs)), dtype=np.float32
@@ -799,21 +570,49 @@ class TeamNavigationEnv(MultiGridEnv):
 
                 obs[agent.index, :] = agent_obs.flatten()
 
-            elif self.obs_type in ["one_hot_array"]:
-                agent_obs = agent_obs.flatten()
-
-                agent_obs = np.concatenate((agent_obs, agent_obs_map_flat))
-
-                if agent_idx == 0:
-                    obs: NDArray[np.int_] = np.zeros(
-                        (self.num_agents, len(agent_obs)), dtype=np.int_
-                    )
-
-                obs[agent.index, :] = agent_obs
-
         return obs
 
-    def _get_map(self) -> NDArray[np.int_]:
+    def _get_goal_obs(self) -> NDArray[np.int_]:
+        """get agent observation of goal objects
+
+        Returns
+        -------
+        NDArray[np.int_]
+            a 2D array of goal observations
+        """
+        goal_obs: NDArray[np.int_]
+
+        if self.observation_option == "all_goal_states_all_subtasks":
+            # each agent will have the same obs of the goal states
+            # they can see all the goal states of all the subtasks
+
+            # set of goal states across all subtasks
+            goal_state_set_all_subtasks: list[tuple[float, float]] = []
+
+            for _, data in self.hlmdp_config.subtask_data.items():
+                goal_state_set_single_subtask = data.goal_state_set
+
+                for goal_state in goal_state_set_single_subtask:
+                    goal_obs_single = (
+                        goal_state[0],
+                        goal_state[1],
+                        self.world.OBJECT_TO_IDX["goal"],
+                    )
+
+                    # scale the observation to have entries in [0, 1]
+                    if self.obs_type == "array_scaled":
+                        goal_obs_single = (
+                            goal_obs_single[0] / self.obs_scaling["x"],
+                            goal_obs_single[1] / self.obs_scaling["y"],
+                            goal_obs_single[2] / self.obs_scaling["obj_encoding"],
+                        )
+
+                    goal_state_set_all_subtasks.append(goal_obs_single)
+
+        goal_obs = np.array(goal_state_set_all_subtasks)
+        return goal_obs
+
+    def _get_map_obs(self) -> NDArray[np.int_]:
 
         # I want a (max_width, max_height, encode_dim) size np array that represents the map without any agents or goals in it
         ## If the env doesn't change, I just need to run this function once at the start of the episode
@@ -848,22 +647,6 @@ class TeamNavigationEnv(MultiGridEnv):
 
                     else:
                         env_map[y, x, :] = np.array([x, y, obj_encoding])
-
-        elif self.obs_type in ["one_hot_array"]:
-            env_map: NDArray[np.int_] = np.zeros(
-                (self.height, self.width, len(self.world.OBJECT_TO_IDX)), dtype=np.int_
-            )
-
-            for x in range(self.width):
-                for y in range(self.height):
-                    obj = self.grid.get(x, y)
-
-                    if (obj is None) or obj.type in ["goal", "agent"]:
-                        pass
-
-                    else:
-                        idx = self.world.OBJECT_TO_IDX[obj.type]
-                        env_map[y, x, idx] = 1
 
         else:
             raise NotImplementedError
@@ -964,12 +747,12 @@ class TeamNavigationEnv(MultiGridEnv):
         # get observation from being in s_{t+1}
         obs: Observation = self.get_obs()
 
-        terminated, reach_goal = self._terminated(next_state)
+        terminated, all_at_goal = self._terminated(next_state=next_state)
 
         # truncated is handled by a Gymnasium wrapper
         truncated: bool = False
 
-        info: StepInfo = self._get_step_info(reach_goal)
+        info: StepInfo = self._get_step_info(all_at_goal)
 
         return obs, reward, terminated, truncated, info
 
@@ -1114,16 +897,26 @@ class TeamNavigationEnv(MultiGridEnv):
         actions: NDArray[np.int_],
         next_state: NDArray[np.int_],
     ) -> float:
+        """
+        Parameters
+        ----------
+        curr_state : NDArray[np.int_]
+            current joint state
+        actions : NDArray[np.int_]
+            current agent actions
+        next_state : NDArray[np.int_]
+            next joint state
+        Returns
+        -------
+        float
+            reward
+        """
         reward: float = 0.0
 
         reward += self._reward_movement(actions)
-
-        final_state = np.array(
-            self.hlmdp_config.subtask_data[self.subtask_idx].final_state
-        )
-        reward += self._reward_reach_goal(curr_state, next_state, final_state)
-        reward += self._reward_leave_goal(curr_state, next_state, final_state)
-        reward += self._reward_all_at_goal(next_state, final_state)
+        reward += self._reward_reach_goal(curr_state, next_state)
+        reward += self._reward_leave_goal(curr_state, next_state)
+        reward += self._reward_all_at_goal(next_state)
 
         return reward
 
@@ -1140,7 +933,7 @@ class TeamNavigationEnv(MultiGridEnv):
             reward
         """
 
-        reward = 0
+        reward = 0.0
         reward += self.reward_config.movement_reward * np.sum(
             actions != self.actions.stay
         )
@@ -1151,7 +944,6 @@ class TeamNavigationEnv(MultiGridEnv):
         self,
         curr_state: NDArray[np.int_],
         next_state: NDArray[np.int_],
-        final_state: NDArray[np.int_],
     ) -> float:
         """Reward for an agent reaching its assigned final goal state
 
@@ -1161,28 +953,34 @@ class TeamNavigationEnv(MultiGridEnv):
             current state
         next_state : NDArray[np.int_]
             next state
-        final_state : NDArray[np.int_]
-            final assigned state for the agents for this subtask
-
         Returns
         -------
         float
             reward
         """
-        reward = 0
-
-        n_agents_reach_goal = 0
+        reward: float = 0.0
+        n_agents_reach_goal: int = 0
 
         for agent in self.agents:
-            # agent's next state is its goal state AND
-            # agent is not currently in its goal state
-            if (
-                np.array_equal(next_state[agent.index, :], final_state[agent.index, :])
-            ) and (
-                not np.array_equal(
-                    curr_state[agent.index, :], final_state[agent.index, :]
+            # agent's next state is one of its valid goal states
+            condition_1 = np.any(
+                np.all(
+                    next_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
                 )
-            ):
+            )
+
+            # agent is not currently in a goal state
+            condition_2 = not np.any(
+                np.all(
+                    curr_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
+                )
+            )
+
+            if condition_1 and condition_2:
                 # print(f"Agent {agent.index} reached its goal state")
                 n_agents_reach_goal += 1
 
@@ -1194,7 +992,6 @@ class TeamNavigationEnv(MultiGridEnv):
         self,
         curr_state: NDArray[np.int_],
         next_state: NDArray[np.int_],
-        final_state: NDArray[np.int_],
     ) -> float:
         """Reward for an agent leaving its assigned final goal state
 
@@ -1204,28 +1001,35 @@ class TeamNavigationEnv(MultiGridEnv):
             current state
         next_state : NDArray[np.int_]
             next state
-        final_state : NDArray[np.int_]
-            final assigned state for the agents for this subtask
 
         Returns
         -------
         float
             reward
         """
-        reward = 0
-
-        n_agents_leave_goal = 0
+        reward: float = 0
+        n_agents_leave_goal: int = 0
 
         for agent in self.agents:
-            # agent's current state is its goal state AND
-            # agent's next state is not its goal state
-            if (
-                np.array_equal(curr_state[agent.index, :], final_state[agent.index, :])
-            ) and (
-                not np.array_equal(
-                    next_state[agent.index, :], final_state[agent.index, :]
+            # agent's current state is a valid goal state
+            condition_1 = np.any(
+                np.all(
+                    curr_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
                 )
-            ):
+            )
+
+            # agent's next state is not a valid goal state
+            condition_2 = not np.any(
+                np.all(
+                    next_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
+                )
+            )
+
+            if condition_1 and condition_2:
                 # print(f"Agent {agent.index} left its goal state")
                 n_agents_leave_goal += 1
 
@@ -1233,65 +1037,93 @@ class TeamNavigationEnv(MultiGridEnv):
 
         return reward
 
-    def _reward_all_at_goal(
-        self, next_state: NDArray[np.int_], final_state: NDArray[np.int_]
-    ) -> float:
+    def _reward_all_at_goal(self, next_state: NDArray[np.int_]) -> float:
         """Reward the team for all being at their final assigned states
 
         Parameters
         ----------
         next_state : NDArray[np.int_]
             next state
-        final_state : NDArray[np.int_]
-            final assigned state for the agents for this subtask
 
         Returns
         -------
         float
             reward
         """
-        reward = 0
+        reward = 0.0
+        all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
 
-        reward += (
-            np.array_equal(next_state, final_state)
-            * self.reward_config.all_agents_at_goal_reward
-        )
+        reward += all_at_goal_flag * self.reward_config.all_agents_at_goal_reward
 
         return reward
 
     # termination function
     def _terminated(self, next_state: NDArray[np.int_]) -> tuple[bool, bool]:
+        """check terminated conditions
+
+        Parameters
+        ----------
+        next_state : NDArray[np.int_]
+            next state
+
+        Returns
+        -------
+        tuple[bool, bool]
+            terminated status, flag that's true when all agents are at a goal state
         """
+        # I define two different variables here b/c we may consider other conditions
+        # in defining "terminated" in the future or in other envs
+        terminated = (self._check_all_agents_reached_goal(next_state=next_state)) or (
+            self._check_any_agent_detected()
+        )
+
+        all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
+
+        return terminated, all_at_goal_flag
+
+    def _check_all_agents_reached_goal(self, next_state: NDArray[np.int_]) -> bool:
+        """check if each agent is in a valid goal state"""
+
+        reached_goal: NDArray = np.zeros(len(self.agents))
+
+        for i, agent in enumerate(self.agents):
+            reached_goal[i] = np.any(
+                np.all(
+                    next_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
+                )
+            )
+
+        # Convert from np bool to python bool b/c
+        # np bools cannot be interpreted as integers.
+        # This is an issue that comes up later in the training pipeline.
+        all_at_goal_flag = bool(np.all(reached_goal))
+
+        return all_at_goal_flag
+
+    def _check_any_agent_detected(self) -> bool:
+        """check whether any agent was detected by the detection zones in the environment
+
         Returns
         -------
         bool
-            terminated tells whether the env is terminated or not
+            True if any agent was detected
         """
-        terminated = (
-            self._agents_reached_terminal_goal(next_state) | self._agents_detected()
-        )
-
-        return terminated, self._agents_reached_terminal_goal(next_state)
-
-    def _agents_detected(self) -> bool:
         detected: bool = False
-        for detector in self.detectors:
+        for i, detector in enumerate(self.detectors):
+            print(f"Detector {i}")
             if detector.detect_agents(
                 self.agents, self.comms_val, self.obj_group_dict, self.np_random
             ):
                 detected = True
-            else:
-                pass
+                break
 
         return detected
 
-    def _agents_reached_terminal_goal(self, next_state: NDArray[np.int_]) -> bool:
-        final_state = self.hlmdp_config.subtask_data[self.subtask_idx].final_state
-        return np.array_equal(next_state, final_state)
-
     # step info
-    def _get_step_info(self, reach_goal: bool) -> StepInfo:
-        """get info to be returned in the step function"""
-        step_info: StepInfo = {"success": reach_goal}
+    def _get_step_info(self, all_at_goal: bool = False) -> StepInfo:
+        """other env info to be returned by the env's step method"""
+        step_info: StepInfo = {"success": all_at_goal}
 
         return step_info
