@@ -333,8 +333,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
         self.reward_config: RewardConfig = reward_config
-        print(f"p_detect_visual: {p_detect_visual}")
-        __import__("ipdb").set_trace(context=3)
         self.p_detect_visual = p_detect_visual
         self.zone_width = int(zone_width)
 
@@ -1112,7 +1110,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         """
         detected: bool = False
         for i, detector in enumerate(self.detectors):
-            print(f"Detector {i}")
             if detector.detect_agents(
                 self.agents, self.comms_val, self.obj_group_dict, self.np_random
             ):
