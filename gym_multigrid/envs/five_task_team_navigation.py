@@ -169,10 +169,18 @@ class RewardConfig:
     all_agents_at_goal_reward: float
 
 
+# reward_config = RewardConfig(
+#     movement_reward=0.0,
+#     agent_reach_goal_reward=0.9,
+#     agent_leave_goal_reward=-1.0,
+#     all_agents_at_goal_reward=1.0,
+# )
+
+
 reward_config = RewardConfig(
     movement_reward=0.0,
-    agent_reach_goal_reward=0.9,
-    agent_leave_goal_reward=-1.0,
+    agent_reach_goal_reward=0.4,
+    agent_leave_goal_reward=-0.5,
     all_agents_at_goal_reward=1.0,
 )
 
@@ -960,8 +968,17 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         n_agents_reach_goal: int = 0
 
         for agent in self.agents:
+            # agent is not currently in a goal state
+            condition_1 = not np.any(
+                np.all(
+                    curr_state[agent.index, :]
+                    == self.agent_goal_state_sets[agent.index],
+                    axis=1,
+                )
+            )
+
             # agent's next state is one of its valid goal states
-            condition_1 = np.any(
+            condition_2 = np.any(
                 np.all(
                     next_state[agent.index, :]
                     == self.agent_goal_state_sets[agent.index],
@@ -969,14 +986,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 )
             )
 
-            # agent is not currently in a goal state
-            condition_2 = not np.any(
-                np.all(
-                    curr_state[agent.index, :]
-                    == self.agent_goal_state_sets[agent.index],
-                    axis=1,
-                )
-            )
 
             if condition_1 and condition_2:
                 # print(f"Agent {agent.index} reached its goal state")
@@ -1018,17 +1027,21 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 )
             )
 
-            # agent's next state is not a valid goal state
-            condition_2 = not np.any(
-                np.all(
-                    next_state[agent.index, :]
-                    == self.agent_goal_state_sets[agent.index],
-                    axis=1,
-                )
-            )
+            # # agent's next state is not a valid goal state
+            # condition_2 = not np.any(
+            #     np.all(
+            #         next_state[agent.index, :]
+            #         == self.agent_goal_state_sets[agent.index],
+            #         axis=1,
+            #     )
+            # )
+
+            # # agent's next state is different from its current state
+            condition_2 = not np.array_equal(curr_state[agent.index, :], next_state[agent.index, :])
+
 
             if condition_1 and condition_2:
-                # print(f"Agent {agent.index} left its goal state")
+                # print(f"Agent {agent.index} left a goal state")
                 n_agents_leave_goal += 1
 
         reward += n_agents_leave_goal * self.reward_config.agent_leave_goal_reward
