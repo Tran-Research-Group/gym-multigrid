@@ -169,20 +169,50 @@ class RewardConfig:
     all_agents_at_goal_reward: float
 
 
+# scenario 1 - recreate MRS setup
+reward_config = RewardConfig(
+    movement_reward=0.0,
+    agent_reach_goal_reward=0.9,
+    agent_leave_goal_reward=-1.0,
+    all_agents_at_goal_reward=1.0,
+)
+
+# scenario 2 - larger "final" reward
 # reward_config = RewardConfig(
 #     movement_reward=0.0,
 #     agent_reach_goal_reward=0.9,
 #     agent_leave_goal_reward=-1.0,
-#     all_agents_at_goal_reward=1.0,
+#     all_agents_at_goal_reward=5.0,
 # )
 
 
-reward_config = RewardConfig(
-    movement_reward=0.0,
-    agent_reach_goal_reward=0.4,
-    agent_leave_goal_reward=-0.5,
-    all_agents_at_goal_reward=1.0,
-)
+# scenario 3 - much larger "final" reward
+# reward_config = RewardConfig(
+#     movement_reward=0.0,
+#     agent_reach_goal_reward=0.9,
+#     agent_leave_goal_reward=-1.0,
+#     all_agents_at_goal_reward=10.0,
+# )
+
+# scenario 4 - larger "final" reward w/ larger penalty for leaving a goal state
+# reward_config = RewardConfig(
+#     movement_reward=0.0,
+#     agent_reach_goal_reward=1.0,
+#     agent_leave_goal_reward=-2.0,
+#     all_agents_at_goal_reward=5.0,
+# )
+
+
+# scenario 5 - much larger "final" reward w/ larger penalty for leaving a goal state
+# reward_config = RewardConfig(
+#     movement_reward=0.0,
+#     agent_reach_goal_reward=1.0,
+#     agent_leave_goal_reward=-2.0,
+#     all_agents_at_goal_reward=10.0,
+# )
+
+
+
 
 
 Observation: TypeAlias = (
