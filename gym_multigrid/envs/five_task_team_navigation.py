@@ -379,8 +379,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
 
         # need to read experimental scenario to get this for dependent_subtasks_exp_3
         self.reward_config: RewardConfig = get_reward_config(scenario=scenario)
-        print(self.reward_config)
-        __import__('ipdb').set_trace(context=3)
 
         self.p_detect_visual = p_detect_visual
         self.zone_width = int(zone_width)
