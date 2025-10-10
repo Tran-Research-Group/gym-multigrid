@@ -169,50 +169,56 @@ class RewardConfig:
     all_agents_at_goal_reward: float
 
 
-# scenario 1 - recreate MRS setup
-reward_config = RewardConfig(
-    movement_reward=0.0,
-    agent_reach_goal_reward=0.9,
-    agent_leave_goal_reward=-1.0,
-    all_agents_at_goal_reward=1.0,
-)
+# reward configs for different experimental scenarios
+#TODO remove for other experiments beyond dependent_subtasks_exp_3
+def get_reward_config(scenario: str) -> RewardConfig:
+    match scenario:
+        case "scenario_1":
+            # scenario 1 - recreate MRS setup
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=0.9,
+                agent_leave_goal_reward=-1.0,
+                all_agents_at_goal_reward=1.0,
+            )
 
-# scenario 2 - larger "final" reward
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=0.9,
-#     agent_leave_goal_reward=-1.0,
-#     all_agents_at_goal_reward=5.0,
-# )
+        case "scenario_2":
+            # scenario 2 - larger "final" reward
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=0.9,
+                agent_leave_goal_reward=-1.0,
+                all_agents_at_goal_reward=5.0,
+            )
 
+        case "scenario_3":
+            # scenario 3 - much larger "final" reward
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=0.9,
+                agent_leave_goal_reward=-1.0,
+                all_agents_at_goal_reward=10.0,
+            )
 
-# scenario 3 - much larger "final" reward
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=0.9,
-#     agent_leave_goal_reward=-1.0,
-#     all_agents_at_goal_reward=10.0,
-# )
+        case "scenario_4":
+            # scenario 4 - larger "final" reward w/ larger penalty for leaving a goal state
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=1.0,
+                agent_leave_goal_reward=-2.0,
+                all_agents_at_goal_reward=5.0,
+            )
 
-# scenario 4 - larger "final" reward w/ larger penalty for leaving a goal state
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=1.0,
-#     agent_leave_goal_reward=-2.0,
-#     all_agents_at_goal_reward=5.0,
-# )
+        case "scenario_5":
+            # scenario 5 - much larger "final" reward w/ larger penalty for leaving a goal state
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=1.0,
+                agent_leave_goal_reward=-2.0,
+                all_agents_at_goal_reward=10.0,
+            )
 
-
-# scenario 5 - much larger "final" reward w/ larger penalty for leaving a goal state
-# reward_config = RewardConfig(
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=1.0,
-#     agent_leave_goal_reward=-2.0,
-#     all_agents_at_goal_reward=10.0,
-# )
-
-
-
+    return reward_config
 
 
 Observation: TypeAlias = (
@@ -322,8 +328,8 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["goal", "all_goals"] = "all_goals",
+        scenario: int = 1,
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
-        reward_config: RewardConfig = reward_config,
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -370,7 +376,12 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.p_intended_movement: float = p_intended_movement
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
-        self.reward_config: RewardConfig = reward_config
+
+        # need to read experimental scenario to get this for dependent_subtasks_exp_3
+        self.reward_config: RewardConfig = get_reward_config(scenario=scenario)
+        print(self.reward_config)
+        __import__('ipdb').set_trace(context=3)
+
         self.p_detect_visual = p_detect_visual
         self.zone_width = int(zone_width)
 
