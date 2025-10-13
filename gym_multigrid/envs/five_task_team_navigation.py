@@ -170,7 +170,8 @@ class RewardConfig:
 
 
 # reward configs for different experimental scenarios
-#TODO remove for other experiments beyond dependent_subtasks_exp_3
+# dependent_subtasks_exp_3
+'''
 def get_reward_config(scenario: str) -> RewardConfig:
     match scenario:
         case "scenario_1":
@@ -219,6 +220,66 @@ def get_reward_config(scenario: str) -> RewardConfig:
             )
 
     return reward_config
+'''
+
+# dependent_subtasks_exp_4
+def get_reward_config(scenario: str) -> RewardConfig:
+    match scenario:
+        case "scenario_1":
+            # scenario 1 - larger "final" reward (same as scenario 2 from exp 3)
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=0.9,
+                agent_leave_goal_reward=-1.0,
+                all_agents_at_goal_reward=5.0,
+            )
+        case "scenario_2":
+            # scenario 2 - larger "final" reward w/ larger reward + penalty for individual agent
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=2.0,
+                agent_leave_goal_reward=-2.1,
+                all_agents_at_goal_reward=5.0,
+            )
+
+        case "scenario_3":
+            # scenario 3 - larger "final" reward w/ even larger reward + penalty for individual agent
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=3.0,
+                agent_leave_goal_reward=-3.1,
+                all_agents_at_goal_reward=5.0,
+            )
+
+        case "scenario_4":
+            # scenario 4 - much larger "final" reward (same as scenario 3 from exp 3)
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=0.9,
+                agent_leave_goal_reward=-1.0,
+                all_agents_at_goal_reward=10.0,
+            )
+        case "scenario_5":
+            # scenario 5
+            reward_config = RewardConfig(
+                movement_reward=0.0,
+                agent_reach_goal_reward=2.0,
+                agent_leave_goal_reward=-2.1,
+                all_agents_at_goal_reward=10.0,
+            )    
+        case "scenario_6":
+           reward_config = RewardConfig(
+            movement_reward=0.0,
+            agent_reach_goal_reward=3.0,
+            agent_leave_goal_reward=-3.1,
+            all_agents_at_goal_reward=10.0,
+        )
+ 
+            
+            
+    return reward_config
+
+
 
 
 Observation: TypeAlias = (
