@@ -587,12 +587,29 @@ class SaveTheCityAgent(Agent):
     Base class for Save The City agents.
     """
 
-    def __init__(self, world, agent_type: str, move_speed: int, build_speed: int, firefight_speed: int):
-        super().__init__(world, type=agent_type, color=self.get_color(agent_type))
+    def __init__(
+        self,
+        world,
+        agent_type: str,
+        move_speed: int,
+        build_speed: int,
+        firefight_speed: int,
+        policy_name: str | None = None,
+        policy_dict: dict[str, Type[AgentPolicyT]] | None = None,
+    ):
+        super().__init__(world, type=agent_type, color=self.get_color(agent_type), actions=SaveTheCityActions)
         self.agent_type = agent_type  # "firefighter", "builder", or "generalist"
         self.move_speed = move_speed  # Movement speed (Generalists move faster)
         self.build_speed = build_speed  # How fast agent builds
         self.firefight_speed = firefight_speed  # How fast agent extinguishes fires
+
+        # Policy setup (similar to prey_pred pattern)
+        self.policy_name = policy_name
+        self.policy_class: Type[AgentPolicyT] | None = None
+        self.policy: AgentPolicyT | None = None
+
+        if policy_name is not None and policy_dict is not None:
+            self.policy_class = policy_dict[policy_name]
 
     def get_color(self, agent_type: str):
         """Assign a unique color for each agent type."""
@@ -603,6 +620,25 @@ class SaveTheCityAgent(Agent):
         elif agent_type == "generalist":
             return "yellow"  # Generalists are yellow
         return "white"  # Default (should not happen)
+
+    def reset(self, env_generator: np.random.Generator | None = None) -> None:
+        """Reset the agent and instantiate its policy if applicable."""
+        super().reset()
+        if self.policy_class is not None and env_generator is not None:
+            self.policy = self.policy_class(
+                action_set=self.actions,
+                random_generator=env_generator,
+            )
+
+    def act(self, observation, options: dict) -> int:
+        """Get action from the agent's policy."""
+        if self.policy is None:
+            raise ValueError(
+                f"Agent {self.agent_type} has no policy. "
+                "Either this is an ego agent (policy should not be called), "
+                "or the agent was not properly initialized with a policy."
+            )
+        return self.policy.act(observation, options)
     
     def render(self, img):
         """
@@ -634,20 +670,61 @@ class SaveTheCityAgent(Agent):
 class Firefighter(SaveTheCityAgent):
     """Firefighters specialize in putting out fires (20× faster)."""
 
-    def __init__(self, world):
-        super().__init__(world, agent_type="firefighter", move_speed=1, build_speed=1, firefight_speed=20)
+    def __init__(
+        self,
+        world,
+        policy_name: str | None = None,
+        policy_dict: dict[str, Type[AgentPolicyT]] | None = None,
+    ):
+        super().__init__(
+            world,
+            agent_type="firefighter",
+            move_speed=1,
+            build_speed=1,
+            firefight_speed=20,
+            policy_name=policy_name,
+            policy_dict=policy_dict,
+        )
+
 
 class Builder(SaveTheCityAgent):
     """Builders specialize in construction (20× faster)."""
 
-    def __init__(self, world):
-        super().__init__(world, agent_type="builder", move_speed=1, build_speed=20, firefight_speed=1)
+    def __init__(
+        self,
+        world,
+        policy_name: str | None = None,
+        policy_dict: dict[str, Type[AgentPolicyT]] | None = None,
+    ):
+        super().__init__(
+            world,
+            agent_type="builder",
+            move_speed=1,
+            build_speed=20,
+            firefight_speed=1,
+            policy_name=policy_name,
+            policy_dict=policy_dict,
+        )
+
 
 class Generalist(SaveTheCityAgent):
     """Generalists can do both (5× build and fire, 2× move speed)."""
 
-    def __init__(self, world):
-        super().__init__(world, agent_type="generalist", move_speed=2, build_speed=5, firefight_speed=5)
+    def __init__(
+        self,
+        world,
+        policy_name: str | None = None,
+        policy_dict: dict[str, Type[AgentPolicyT]] | None = None,
+    ):
+        super().__init__(
+            world,
+            agent_type="generalist",
+            move_speed=2,
+            build_speed=5,
+            firefight_speed=5,
+            policy_name=policy_name,
+            policy_dict=policy_dict,
+        )
 
 
 

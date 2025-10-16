@@ -10,3 +10,5 @@ ppo_random_collect_tensorboard/*
 
 tests/out
 out
+
+CLAUDE.md
