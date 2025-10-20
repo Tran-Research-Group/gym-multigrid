@@ -169,9 +169,10 @@ class RewardConfig:
     all_agents_at_goal_reward: float
 
 
+"""
 # reward configs for different experimental scenarios
 # dependent_subtasks_exp_3
-'''
+
 def get_reward_config(scenario: str) -> RewardConfig:
     match scenario:
         case "scenario_1":
@@ -220,8 +221,9 @@ def get_reward_config(scenario: str) -> RewardConfig:
             )
 
     return reward_config
-'''
+"""
 
+"""
 # dependent_subtasks_exp_4
 def get_reward_config(scenario: str) -> RewardConfig:
     match scenario:
@@ -275,11 +277,48 @@ def get_reward_config(scenario: str) -> RewardConfig:
             all_agents_at_goal_reward=10.0,
         )
 
-
-
     return reward_config
+"""
 
 
+def get_p_detect(scenario: str) -> tuple[float, float]:
+    match scenario:
+        case "scenario_1":
+            # baseline
+            p_detect_visual = 0.005
+            p_detect_radio = 0.1
+
+        case "scenario_2":
+            # higher values might give an edge to higher comms
+            p_detect_visual = 0.025
+            p_detect_radio = 0.1
+
+        case "scenario_3":
+            # higher values of p_detect_visual might give an edge to higher comms
+            p_detect_visual = 0.05
+            p_detect_radio = 0.1
+
+        case "scenario_4":
+            p_detect_visual = 0.005
+            p_detect_radio = 0.05
+
+        case "scenario_5":
+            p_detect_visual = 0.025
+            p_detect_radio = 0.05
+
+        case "scenario_6":
+            p_detect_visual = 0.05
+            p_detect_radio = 0.05
+
+    return p_detect_visual, p_detect_radio
+
+
+reward_config = RewardConfig(
+    movement_reward=0.0,
+    agent_reach_goal_reward=0.9,
+    agent_leave_goal_reward=-1.0,
+    all_agents_at_goal_reward=10.0,
+)
 
 
 Observation: TypeAlias = (
@@ -439,9 +478,12 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.subtask_idx: int = subtask_idx
 
         # need to read experimental scenario to get this for dependent_subtasks_exp_3
-        self.reward_config: RewardConfig = get_reward_config(scenario=scenario)
+        # self.reward_config: RewardConfig = get_reward_config(scenario=scenario)
+        self.reward_config: RewardConfig = reward_config
 
-        self.p_detect_visual = p_detect_visual
+        # self.p_detect_visual = p_detect_visual
+        self.p_detect_visual, self.p_detect_radio = get_p_detect(scenario=scenario)
+
         self.zone_width = int(zone_width)
 
         # get the hlmdp data that doesn't change during the CM training algorithm
@@ -595,7 +637,8 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 obj_type="zone",
                 group_index=1,
                 visual_detect_prob=self.p_detect_visual,
-                radio_detect_prob=0.1,
+                # radio_detect_prob=0.1,
+                radio_detect_prob=self.p_detect_radio,
             ),
         ]
 
@@ -1086,7 +1129,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 )
             )
 
-
             if condition_1 and condition_2:
                 # print(f"Agent {agent.index} reached its goal state")
                 n_agents_reach_goal += 1
@@ -1137,8 +1179,9 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             # )
 
             # # agent's next state is different from its current state
-            condition_2 = not np.array_equal(curr_state[agent.index, :], next_state[agent.index, :])
-
+            condition_2 = not np.array_equal(
+                curr_state[agent.index, :], next_state[agent.index, :]
+            )
 
             if condition_1 and condition_2:
                 # print(f"Agent {agent.index} left a goal state")
