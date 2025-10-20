@@ -21,9 +21,11 @@ from gym_multigrid.utils.subtasks import (
 )
 
 
-def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDPConfig:
-    """gets the high level MDP configuration for this environment before starting
-    the optimization algorithm for dependent subtasks
+def get_initial_hlmdp_config(
+    run_mode: Literal["manual"] | None = None,
+    subtask_type: Literal["dependent", "independent"] = "dependent",
+) -> HLMDPConfig:
+    """gets the high level MDP configuration for this environment
 
     Returns
     -------
@@ -31,8 +33,15 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
         configuration for the high level MDP
     """
 
-    if run_mode == "manual":
-        # has a manually-defined ISD for each subtask for manual running
+    if subtask_type == "dependent":
+        termination_condition = "reach_goal_state_set"
+    else:
+        # independent subtasks
+        termination_condition = "reach_assigned_goal_state"
+
+
+    if run_mode == "manual" or subtask_type == "independent":
+        # has a manually-defined ISD for each subtask
         state_data_tuple = (
             StateData(
                 idx=0,
@@ -50,51 +59,47 @@ def get_initial_hlmdp_config(run_mode: Literal["manual"] | None = None) -> HLMDP
         )
 
     else:
-        #################
         # deterministic ISD
-        # for debugging
-        #################
-        # state_data_tuple = (
-        #     StateData(
-        #         idx=0,
-        #         outgoing_init_state_dist=PositionDist(
-        #             states=[((1, 1), (1, 3))], probs=(1.0,)
-        #         ),
-        #     ),
-        #     StateData(
-        #         idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())
-        #     ),
-        # )
-        # stochastic ISD
         state_data_tuple = (
             StateData(
                 idx=0,
                 outgoing_init_state_dist=PositionDist(
-                    probs=(0.5, 0.5),
-                    states=[((1, 1), (1, 3)), ((1, 3), (1, 1))],
+                    states=[((1, 1), (1, 3))], probs=(1.0,)
                 ),
             ),
             StateData(
                 idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())
             ),
         )
+        # # stochastic ISD
+        # state_data_tuple = (
+        #     StateData(
+        #         idx=0,
+        #         outgoing_init_state_dist=PositionDist(
+        #             probs=(0.5, 0.5),
+        #             states=[((1, 1), (1, 3)), ((1, 3), (1, 1))],
+        #         ),
+        #     ),
+        #     StateData(
+        #         idx=1, outgoing_init_state_dist=PositionDist(states=(), probs=())
+        #     ),
+        # )
 
-    # version of the env used in the finite automaton, only has the structure of the HLMDP
+    # version of the env used in the high-level MDP, only has the structure of the HLMDP
     subtask_data_tuple = (
         SubtaskData(
             edge=(0, 1),
             idx=0,
-            termination_condition="reach_goal_state_set",
+            termination_condition=termination_condition,
             goal_state_set=((2, 1), (2, 3)),
         ),
         SubtaskData(
             edge=(1, 2),
             idx=1,
-            termination_condition="reach_goal_state_set",
+            termination_condition=termination_condition,
             goal_state_set=((3, 1), (3, 3)),
         ),
     )
-
 
     hlmdp_config: HLMDPConfig = HLMDPConfig(
         state_data_tuple=state_data_tuple, subtask_data_tuple=subtask_data_tuple
@@ -129,9 +134,9 @@ class RewardConfig:
 
 reward_config = RewardConfig(
     movement_reward=0.0,
-    agent_reach_goal_reward=0.9,
-    agent_leave_goal_reward=-1.0,
-    all_agents_at_goal_reward=1.0,
+    agent_reach_goal_reward=1.0,
+    agent_leave_goal_reward=-1.2,
+    all_agents_at_goal_reward=5.0,
 )
 
 
@@ -156,6 +161,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
+        scenario: str = "scenario_1",
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["all_goal_states_all_subtasks"] = "all_goal_states_all_subtasks",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",

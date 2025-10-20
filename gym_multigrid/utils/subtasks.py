@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -92,3 +93,26 @@ class HLMDPConfig:
             data.init_state_dist = self.state_data[
                 outgoing_state_index
             ].outgoing_init_state_dist
+
+
+def get_initial_hlmdp_config_function(env: str) -> Callable:
+    """
+    Get the correct get_initial_hlmdp_config function for the current environment
+
+    Parameters
+    ----------
+    env : str
+        name of the environment
+    """
+    match env:
+        case "two_agent_two_task_small-v0":
+            from gym_multigrid.envs.two_agent_two_task_small import get_initial_hlmdp_config
+        case "two_agent_five_task_small-v0":
+            from gym_multigrid.envs.two_agent_five_task_small import get_initial_hlmdp_config
+        case "five_task_team_navigation-v0":
+            from gym_multigrid.envs.five_task_team_navigation import get_initial_hlmdp_config
+        case _:
+            raise ValueError(f"{env} may not have a get_initial_hlmdp_config function or may not be included in gym-multigrid's subtasks.py file")
+
+    return get_initial_hlmdp_config
+

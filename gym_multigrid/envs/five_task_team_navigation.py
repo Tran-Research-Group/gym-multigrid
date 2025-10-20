@@ -266,7 +266,7 @@ def get_reward_config(scenario: str) -> RewardConfig:
                 agent_reach_goal_reward=2.0,
                 agent_leave_goal_reward=-2.1,
                 all_agents_at_goal_reward=10.0,
-            )    
+            )
         case "scenario_6":
            reward_config = RewardConfig(
             movement_reward=0.0,
@@ -274,9 +274,9 @@ def get_reward_config(scenario: str) -> RewardConfig:
             agent_leave_goal_reward=-3.1,
             all_agents_at_goal_reward=10.0,
         )
- 
-            
-            
+
+
+
     return reward_config
 
 
@@ -389,7 +389,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["goal", "all_goals"] = "all_goals",
-        scenario: int = 1,
+        scenario: str = "scenario_1",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
