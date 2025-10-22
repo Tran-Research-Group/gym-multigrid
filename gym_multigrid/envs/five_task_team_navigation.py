@@ -107,30 +107,30 @@ def get_initial_hlmdp_config(
                     termination_condition=termination_condition,
                     goal_state_set=((6, 2), (6, 3), (6, 4)),
                 ),
-                SubtaskData(
-                    edge=(1, 2),
-                    idx=1,
-                    termination_condition=termination_condition,
-                    goal_state_set=((9, 6), (9, 7), (9, 8)),
-                ),
+                # SubtaskData(
+                #     edge=(1, 2),
+                #     idx=1,
+                #     termination_condition=termination_condition,
+                #     goal_state_set=((9, 6), (9, 7), (9, 8)),
+                # ),
                 SubtaskData(
                     edge=(0, 3),
                     idx=2,
                     termination_condition=termination_condition,
                     goal_state_set=((6, 10), (6, 11), (6, 12)),
                 ),
-                SubtaskData(
-                    edge=(3, 2),
-                    idx=3,
-                    termination_condition=termination_condition,
-                    goal_state_set=((9, 6), (9, 7), (9, 8)),
-                ),
-                SubtaskData(
-                    edge=(2, 4),
-                    idx=4,
-                    termination_condition=termination_condition,
-                    goal_state_set=((12, 6), (12, 7), (12, 8)),
-                ),
+                # SubtaskData(
+                #     edge=(3, 2),
+                #     idx=3,
+                #     termination_condition=termination_condition,
+                #     goal_state_set=((9, 6), (9, 7), (9, 8)),
+                # ),
+                # SubtaskData(
+                #     edge=(2, 4),
+                #     idx=4,
+                #     termination_condition=termination_condition,
+                #     goal_state_set=((12, 6), (12, 7), (12, 8)),
+                # ),
             )
 
         case _:
