@@ -22,6 +22,7 @@ from gym_multigrid.utils.subtasks import (
 
 
 def get_initial_hlmdp_config(
+    num_agents: int = 2,
     run_mode: Literal["manual"] | None = None,
     subtask_type: Literal["dependent", "independent"] = "dependent",
 ) -> HLMDPConfig:

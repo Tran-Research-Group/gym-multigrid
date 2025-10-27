@@ -674,7 +674,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         goal_state_sets: dict[int, NDArray] = {}
 
-        for agent in agents:
+        for agent_idx, agent in enumerate(agents):
             if self.termination_condition == "reach_assigned_goal_state":
                 goal_state_sets[agent.index] = np.array(self.goal_state_set[agent_idx])
             elif self.termination_condition == "reach_goal_state_set":
