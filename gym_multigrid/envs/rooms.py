@@ -6,7 +6,7 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from gym_multigrid.core.agent import Agent, NavigationActions
+from gym_multigrid.core.agent import Agent, GridActions, NavigationActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Hole, Lava, Wall
 from gym_multigrid.core.world import RoomsWorld
@@ -20,39 +20,37 @@ from gym_multigrid.multigrid import (
 from gym_multigrid.typing import Position, Size
 
 
-class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]):
+class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float64]]):
     """
     Observation mode that returns the agent's position and goal position as a vector.
 
     The object locations are scaled to [0, 1] by the grid width and height.
     The observation vector contains:
-    - Agent's x position
-    - Agent's y position
-    - Goal's x position
-    - Goal's y position
-    The observation space is a Box with shape (4,) and dtype float32, with values in the range [0, 1].
-    The agent's position is at index 0 and 1, and the goal's position is at index 2 and 3.
+    - Agent's x, y positions
+    - Goal's x, y positions
+    - Lavas' x, y positions
+    - Holes' x, y positions
 
     """
 
     def observation_space(self, env: "RoomsEnv") -> spaces.Box:
         return spaces.Box(
-            low=np.array([0, 0, 0, 0], dtype=np.float32),
-            high=np.array(
-                [env.width, env.height, env.width, env.height],
-                dtype=np.float32,
+            low=0,
+            high=1,
+            shape=(
+                len(env.agents)
+                + len(env.layout_config.spawn_configs[0].lavas)
+                + len(env.layout_config.spawn_configs[0].holes)
+                + 1,  # Goal position
+                2,
             ),
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
-    def create_observation(self, env: "RoomsEnv") -> NDArray[np.float32]:
+    def create_observation(self, env: "RoomsEnv") -> NDArray[np.float64]:
         obs = np.array(
-            [
-                env.agents[0].pos[0],
-                env.agents[0].pos[1],
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos[0],
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos[1],
-            ]
+            [env.agents[0].pos] + [env.goal_pos] + env.lava_pos + env.hole_pos,
+            dtype=np.float64,
         )
         obs = obs / np.maximum(env.width, env.height)
 
@@ -60,7 +58,7 @@ class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]
 
 
 class PositionalDictObs(
-    ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+    ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float64]]]
 ):
     """
     Observation mode that returns the agent's position and goal position as a dictionary.
@@ -84,34 +82,33 @@ class PositionalDictObs(
                 "obs": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(len(env.agents) + len(env.lava_pos) + len(env.hole_pos), 2),
-                    dtype=np.float32,
+                    shape=(
+                        len(env.agents)
+                        + len(env.layout_config.spawn_configs[0].lavas)
+                        + len(env.layout_config.spawn_configs[0].holes),
+                        2,
+                    ),
+                    dtype=np.float64,
                 ),
                 "desired_goal": spaces.Box(
                     low=0,
                     high=1,
                     shape=(2,),
-                    dtype=np.float32,
+                    dtype=np.float64,
                 ),
             }
         )
 
-    def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float32]]:
+    def create_observation(self, env: "RoomsEnv") -> dict[str, NDArray[np.float64]]:
         # Scale the agent's position and goal position to [0, 1] by the grid width and height
-        grid_sizes: NDArray[np.float32] = np.array(
-            [env.width, env.height],
-            dtype=np.float32,
-        )
+        grid_size = np.maximum(env.width, env.height)
+
         return {
             "obs": np.array(
-                [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float32
+                [env.agents[0].pos] + env.lava_pos + env.hole_pos, dtype=np.float64
             )
-            / grid_sizes,
-            "desired_goal": np.array(
-                env.layout_config.spawn_configs[env.spawn_type].goal.pos,
-                dtype=np.float32,
-            )
-            / grid_sizes,
+            / grid_size,
+            "desired_goal": np.array(env.goal_pos, dtype=np.float64) / grid_size,
         }
 
 
@@ -166,12 +163,11 @@ class TensorObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]):
                     static_obs[y, x] = env.world.OBJECT_TO_IDX["wall"]
                 else:
                     pass
-        for lava in env.layout_config.spawn_configs[env.spawn_type].lavas:
-            static_obs[lava.pos[1], lava.pos[0]] = env.world.OBJECT_TO_IDX["lava"]
-        for hole in env.layout_config.spawn_configs[env.spawn_type].holes:
-            static_obs[hole.pos[1], hole.pos[0]] = env.world.OBJECT_TO_IDX["hole"]
-        goal = env.layout_config.spawn_configs[env.spawn_type].goal
-        static_obs[goal.pos[1], goal.pos[0]] = env.world.OBJECT_TO_IDX["goal"]
+        for lava in env.lava_pos:
+            static_obs[lava[1], lava[0]] = env.world.OBJECT_TO_IDX["lava"]
+        for hole in env.hole_pos:
+            static_obs[hole[1], hole[0]] = env.world.OBJECT_TO_IDX["hole"]
+        static_obs[env.goal_pos[1], env.goal_pos[0]] = env.world.OBJECT_TO_IDX["goal"]
         self.static_obs = static_obs
 
 
@@ -200,33 +196,80 @@ class VectorizedTensorObs(TensorObs):
 
 
 class ObjConfig(BaseModel):
-    pos: Position = (-1, -1)  # Default position indicating no specific position
+    pos: Position | tuple[Position, Size] | None = (
+        None  # Default position indicating no specific position
+    )
     reward: float = 0.0
     absorbing: bool = True
-    random_init_range: tuple[Position, Size] | None = None
 
 
 class ObjConfigDict(TypedDict, total=False):
-    pos: Position
+    pos: Position | tuple[Position, Size] | None
     reward: float
     absorbing: bool
-    random_init_range: tuple[Position, Size] | None
 
 
 class SpawnConfig(BaseModel):
-    agent: Position | None = None
+    """
+    Configuration for spawning objects in the environment.
+
+    Attributes
+    ----------
+    agent: Position | tuple[Position, Size] | None
+        The position or size of the agent object.
+    goal: ObjConfig
+        The configuration for the goal object.
+    lavas: list[ObjConfig]
+        A list of configurations for lava objects.
+    holes: list[ObjConfig]
+        A list of configurations for hole objects.
+    cleared_doorways: list[Position]
+        A list of positions for cleared doorways, if any.
+        When specified, there will be no negative reward objects placed next to these doorways.
+    """
+
+    agent: Position | tuple[Position, Size] | None = None
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
+    waypoints: list[ObjConfig] = []  # List of way point objects, if any
+    cleared_doorways: list[Position] = []  # List of cleared doorways, if any
+    cleared_doorway_neighbors: list[Position] = []  # Neighbors of cleared doorways
 
     model_config = {"arbitrary_types_allowed": True}
 
+    # Store the neighbor cells of the cleared doorways during initialization
+    def model_post_init(self, context: Any) -> None:
+        self.cleared_doorway_neighbors = [
+            (pos[0] + dx, pos[1] + dy)
+            for pos in self.cleared_doorways
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        ]
+
+    def pos_in_doorway_neighbors(self, env: MultiGridEnv, pos: Position) -> bool:
+        """
+        Check if the given position is in the cleared doorway neighbors.
+
+        Parameters
+        ----------
+        pos: Position
+            The position to check.
+
+        Returns
+        -------
+        bool
+            True if the position is in the cleared doorway neighbors, False otherwise.
+        """
+        return pos in self.cleared_doorway_neighbors
+
 
 class SpawnConfigDict(TypedDict, total=False):
-    agent: Position | None
+    agent: Position | tuple[Position, Size] | None
     goal: ObjConfigDict
     lavas: list[ObjConfigDict]
     holes: list[ObjConfigDict]
+    waypoints: list[ObjConfigDict]
+    cleared_doorways: list[Position]
 
 
 class LayoutConfig(BaseModel):
@@ -249,9 +292,53 @@ class RewardConfigDict(TypedDict):
     sum_reward: bool
 
 
+class ObjInitDict(TypedDict):
+    pos: Position | None
+    top: Position | None
+    size: Size | None
+
+
+class RoomsEnvInitDict(TypedDict, total=False):
+    spawn_type: int
+    layout_config: LayoutConfigDict
+    state_representation: str
+    reward_config: RewardConfigDict
+    tile_size: int
+    render_mode: Literal["human", "rgb_array"]
+
+
+class RoomsEnvInit(BaseModel):
+    spawn_type: int = 0
+    layout_config: LayoutConfig = LayoutConfig(
+        field_map=[
+            "#############",
+            "#     #     #",
+            "#     #     #",
+            "#           #",
+            "#     #     #",
+            "#     #     #",
+            "## ####     #",
+            "#     ### ###",
+            "#     #     #",
+            "#     #     #",
+            "#           #",
+            "#     #     #",
+            "#############",
+        ],
+        spawn_configs=[],
+    )
+    state_representation: str = "tensor"
+    reward_config: RewardConfig = RewardConfig(
+        step_penalty=0.01,
+        sum_reward=True,
+    )
+    tile_size: int = 32
+    render_mode: Literal["human", "rgb_array"] = "rgb_array"
+
+
 class RoomsEnv(
     MultiGridEnv[
-        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]]
+        NDArray[np.int64] | NDArray[np.float64] | dict[str, NDArray[np.float64]]
     ]
 ):
     """
@@ -387,9 +474,9 @@ class RoomsEnv(
     observation_modes: dict[
         str,
         type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.int64]]]
-        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float32]]]
+        | type[ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float64]]]
         | type[
-            ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float32]]]
+            ObservationMode["RoomsEnv", spaces.Dict, dict[str, NDArray[np.float64]]]
         ],
     ] = {
         "positional": PositionalObs,
@@ -402,7 +489,7 @@ class RoomsEnv(
     def __init__(
         self,
         spawn_type: int = 0,
-        layout_config: LayoutConfigDict = {
+        layout_config: LayoutConfigDict | LayoutConfig = {
             "field_map": [
                 "#############",
                 "#     #     #",
@@ -462,15 +549,16 @@ class RoomsEnv(
                         {"pos": (9, 10), "reward": -1, "absorbing": True},
                         {"pos": (11, 11), "reward": -1, "absorbing": True},
                     ],
+                    "cleared_doorways": [(2, 6), (6, 3), (9, 7), (6, 10)],
                 },
             ],
         },
         state_representation: str = "tensor",
-        reward_config: RewardConfigDict = {
+        allow_stay: bool = True,
+        reward_config: RewardConfigDict | RewardConfig = {
             "step_penalty": 0.01,
             "sum_reward": True,
         },
-        random_init_pos: bool = False,
         tile_size: int = 32,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
     ) -> None:
@@ -490,11 +578,10 @@ class RoomsEnv(
             - "positional_dict": Returns the agent's position, lava positions, and hole positions as a dictionary.
             - "tensor": Returns a 2D grid tensor where each cell contains an integer representing the object type.
             - "vectorized_tensor": Returns a flattened 1D array of the grid tensor.
+        allow_stay: bool
+            Whether to allow the agent to take the "stay" action.
         reward_config: RewardConfigDict
             The reward configuration for the environment.
-        random_init_pos: bool
-            If True, the agent's initial position is randomly selected from the grid.
-            If False, the agent's initial position is set to the position specified in `layout_config.spawn_configs`.
         tile_size: int
             The size of each tile in the grid for rendering.
         render_mode: Literal["human", "rgb_array"]
@@ -507,9 +594,19 @@ class RoomsEnv(
         # spawn_configs: list[SpawnConfig] = [
         #     SpawnConfig(**conf) for conf in layout_config["spawn_configs"]
         # ]
-        self.layout_config: LayoutConfig = LayoutConfig.model_validate(layout_config)
-        self.reward_config: RewardConfig = RewardConfig.model_validate(reward_config)
-        self.random_init_pos: bool = random_init_pos
+        if isinstance(layout_config, dict):
+            self.layout_config: LayoutConfig = LayoutConfig.model_validate(
+                layout_config
+            )
+        else:
+            self.layout_config = layout_config
+
+        if isinstance(reward_config, dict):
+            self.reward_config: RewardConfig = RewardConfig.model_validate(
+                reward_config
+            )
+        else:
+            self.reward_config = reward_config
 
         grid_size: tuple[int, int] = (
             len(self.layout_config.field_map[0]),
@@ -519,7 +616,8 @@ class RoomsEnv(
 
         width, height = grid_size
         world = RoomsWorld
-        actions_set = NavigationActions
+        self.allow_stay: bool = allow_stay
+        actions_set = NavigationActions if allow_stay else GridActions
 
         # NOTE: currently only one agent is supported
         agents = [
@@ -554,6 +652,60 @@ class RoomsEnv(
 
         return observation_space
 
+    def _parse_init_pos(
+        self, init_pos: Position | tuple[Position, Size] | None
+    ) -> ObjInitDict:
+        """
+        Parse the initial position for the agent.
+
+        Parameters
+        ----------
+        init_pos: Position | tuple[Position, Size] | None
+            The initial position for the agent.
+
+        Returns
+        -------
+        obj_init_dict: ObjInitDict
+        A dictionary containing the parsed position, top left corner, and size for the agent's initial position.
+        The dictionary contains the following keys:
+        - pos: Position | None
+           - The position to place the agent.
+        - top: Position | None
+            - The top left corner of the range to position to place the agent.
+        - size: Size | None
+           - The size of the range to position the agent.
+
+        """
+        pos: Position | None
+        size: Size | None
+        top: Position | None
+        match init_pos:
+            case None:
+                pos = None
+                top = None
+                size = None
+            case (x, y) if isinstance(x, int) and isinstance(y, int):
+                pos = (x, y)
+                top = None
+                size = None
+            case (a, b) if isinstance(a, tuple) and isinstance(b, tuple):
+                pos = None
+                top = a
+                size = b
+            case _:
+                raise ValueError(
+                    f"Invalid initial position: {init_pos}. ",
+                    "Expected None, a tuple of (x, y), or a tuple of (top, size)",
+                )
+
+        obj_init_dict: ObjInitDict = {
+            "pos": pos,
+            "top": top,
+            "size": size,
+        }
+
+        return obj_init_dict
+
     def _gen_grid(self, width: int, height: int):
         # Create the grid
         self.grid = Grid(width, height, self.world)
@@ -562,7 +714,7 @@ class RoomsEnv(
         for y, row in enumerate(self.layout_config.field_map):
             for x, cell in enumerate(row):
                 if cell == "#":
-                    self.grid.set(x, y, Wall(self.world))
+                    self.grid.set(x, y, Wall(self.world, type="wall", color="grey"))
                 else:
                     pass
 
@@ -575,9 +727,20 @@ class RoomsEnv(
             reward=goal.reward,
             absorbing=goal.absorbing,
         )
-        assert isinstance(goal_obj, Goal), "Goal object must be of type Goal"
+        self.place_object(goal_obj, **self._parse_init_pos(goal.pos))
+        self.goal_pos: Position = goal_obj.pos
 
-        self.put_obj(goal_obj, *goal.pos)
+        # Place Waypoints
+        self.waypoint_pos: list[Position] = []
+        for waypoint in self.layout_config.spawn_configs[self.spawn_type].waypoints:
+            waypoint_obj = Goal(
+                self.world,
+                color="dark_grey",
+                reward=waypoint.reward,
+                absorbing=waypoint.absorbing,
+            )
+            self.place_object(waypoint_obj, **self._parse_init_pos(waypoint.pos))
+            self.waypoint_pos.append(waypoint_obj.pos)
 
         self.lava_pos: list[Position] = []
         self.hole_pos: list[Position] = []
@@ -592,20 +755,17 @@ class RoomsEnv(
                 reward=lava.reward,
                 absorbing=lava.absorbing,
             )
-            if lava.pos == (-1, -1):
-                top: Position | None = None
-                size: Size | None = None
-                if lava.random_init_range:
-                    top, size = lava.random_init_range
-                lava.pos = self.place_obj(
+            if lava.reward < 0:
+                self.place_object(
                     lava_obj,
-                    top=top,
-                    size=size,
+                    **self._parse_init_pos(lava.pos),
+                    reject_fn=self.layout_config.spawn_configs[
+                        self.spawn_type
+                    ].pos_in_doorway_neighbors,
                 )
             else:
-                self.put_obj(lava_obj, *lava.pos)
-
-            self.lava_pos.append(lava.pos)
+                self.place_object(lava_obj, **self._parse_init_pos(lava.pos))
+            self.lava_pos.append(lava_obj.pos)
 
         # place holes
         for i, hole in enumerate(
@@ -618,27 +778,17 @@ class RoomsEnv(
                 reward=hole.reward,
                 absorbing=hole.absorbing,
             )
-
-            if hole.pos == (-1, -1):
-                top: Position | None = None
-                size: Size | None = None
-                if hole.random_init_range:
-                    top, size = hole.random_init_range
-                hole.pos = self.place_obj(
+            if hole.reward < 0:
+                self.place_object(
                     hole_obj,
-                    top=top,
-                    size=size,
+                    **self._parse_init_pos(hole.pos),
+                    reject_fn=self.layout_config.spawn_configs[
+                        self.spawn_type
+                    ].pos_in_doorway_neighbors,
                 )
             else:
-                self.put_obj(hole_obj, *hole.pos)
-
-            self.hole_pos.append(hole.pos)
-
-        self.state_representation.save_static_obs(self, {})
-
-        self.goal_pos: Position = self.layout_config.spawn_configs[
-            self.spawn_type
-        ].goal.pos
+                self.place_object(hole_obj, **self._parse_init_pos(hole.pos))
+            self.hole_pos.append(hole_obj.pos)
 
     def _reset_agents(self):
         """
@@ -646,10 +796,11 @@ class RoomsEnv(
         If random_init_pos is True, randomly select a position from the grid.
         """
         for agent in self.agents:
-            agent_positions = self.layout_config.spawn_configs[self.spawn_type].agent
-            if self.random_init_pos:
-                agent_positions = None
-            self.place_agent(agent, pos=agent_positions, reset_agent_status=True)
+            agent_pos = self.layout_config.spawn_configs[self.spawn_type].agent
+
+            self.place_agent(
+                agent, **self._parse_init_pos(agent_pos), reset_agent_status=True
+            )
 
     def reset(
         self,
@@ -682,7 +833,7 @@ class RoomsEnv(
     def step(
         self, action: np.int64 | NDArray[np.int64]
     ) -> tuple[
-        NDArray[np.int64] | NDArray[np.float32] | dict[str, NDArray[np.float32]],
+        NDArray[np.int64] | NDArray[np.float64] | dict[str, NDArray[np.float64]],
         NDArray[np.float64] | float,
         bool,
         bool,
@@ -731,9 +882,9 @@ class RoomsEnv(
             if fwd_cell is not None:
                 if fwd_cell.can_overlap():
                     agent.move(fwd_pos, self.grid, self.init_grid)
+                    rewards[i] = fwd_cell.reward
                     if fwd_cell.absorbing:
                         terminated = True
-                        rewards[i] = fwd_cell.reward
                         if isinstance(fwd_cell, Goal):
                             info["is_success"] = True
                         else:
@@ -848,7 +999,7 @@ class RoomsEnv(
         return heatmaps
 
     def reward_map_to_rgb(self, reward_map: np.ndarray, mask) -> np.ndarray:
-        rgb_img = np.zeros((self.width, self.height, 3), dtype=np.float32)
+        rgb_img = np.zeros((self.width, self.height, 3), dtype=np.float64)
 
         pos_mask = np.logical_and(mask, (reward_map > 0))
         neg_mask = np.logical_and(mask, (reward_map < 0))
