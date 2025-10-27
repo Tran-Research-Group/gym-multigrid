@@ -464,9 +464,33 @@ def get_reward_config(scenario: str, num_agents: int) -> RewardConfig:
                 max_dense_reach_goal_proportion=0.1,
             )
 
+        # same reward scenarios, but with 6-agent setting instead of 3-agent
+        # yes this is jank, don't @ me
+        case "scenario_5":
+            reward_config = RewardConfig(
+                num_agents=num_agents,
+                max_dense_reach_goal_proportion=0.01,
+            )
+        case "scenario_6":
+            reward_config = RewardConfig(
+                num_agents=num_agents,
+                max_dense_reach_goal_proportion=0.025,
+            )
+        case "scenario_7":
+            reward_config = RewardConfig(
+                num_agents=num_agents,
+                max_dense_reach_goal_proportion=0.05,
+            )
+        case "scenario_8":
+            reward_config = RewardConfig(
+                num_agents=num_agents,
+                max_dense_reach_goal_proportion=0.1,
+            )
+
     return reward_config
 
-
+"""
+# for independent_subtasks_exp_2
 def get_p_detect(scenario: str) -> tuple[float, float]:
     match scenario:
         case "scenario_1":
@@ -501,7 +525,7 @@ def get_p_detect(scenario: str) -> tuple[float, float]:
             p_detect_radio = 0.0
 
     return p_detect_visual, p_detect_radio
-
+"""
 
 # reward_config = RewardConfig(
 
@@ -678,9 +702,10 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         #     num_agents=num_agents,
         #     max_dense_reach_goal_proportion=0.05,
         # )
-
-        # self.p_detect_visual = p_detect_visual
-        self.p_detect_visual, self.p_detect_radio = get_p_detect(scenario=scenario)
+        
+        self.p_detect_visual = p_detect_visual
+        self.p_detect_radio = 0.1
+        # self.p_detect_visual, self.p_detect_radio = get_p_detect(scenario=scenario)
 
         self.zone_width = int(zone_width)
 
@@ -885,7 +910,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 obj_type="zone",
                 group_index=1,
                 visual_detect_prob=self.p_detect_visual,
-                # radio_detect_prob=0.1,
                 radio_detect_prob=self.p_detect_radio,
             ),
         ]
