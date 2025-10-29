@@ -54,9 +54,7 @@ def get_initial_hlmdp_config(
                     StateData(
                         idx=0,
                         outgoing_init_state_dist=PositionDist(
-                            states=[((1, 6), (6, 2), (1, 8))],
-                            probs=(1.0,),
-                            # states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
+                            states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
                         ),
                     ),
                     StateData(
@@ -328,6 +326,7 @@ class RewardConfig:
             * num_agents
         )
 
+
 """
 # reward configs for different experimental scenarios
 # dependent_subtasks_exp_3
@@ -488,6 +487,7 @@ def get_reward_config(scenario: str, num_agents: int) -> RewardConfig:
             )
 
     return reward_config
+
 
 """
 # for independent_subtasks_exp_2
@@ -697,12 +697,14 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.subtask_idx: int = subtask_idx
 
         # uncomment to read experimental scenarios
-        self.reward_config: RewardConfig = get_reward_config(scenario=scenario, num_agents=self.num_agents)
+        self.reward_config: RewardConfig = get_reward_config(
+            scenario=scenario, num_agents=self.num_agents
+        )
         # self.reward_config = RewardConfig(
         #     num_agents=num_agents,
         #     max_dense_reach_goal_proportion=0.05,
         # )
-        
+
         self.p_detect_visual = p_detect_visual
         self.p_detect_radio = 0.1
         # self.p_detect_visual, self.p_detect_radio = get_p_detect(scenario=scenario)
@@ -1434,7 +1436,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             # get agent's set of goal states
             goal_state_set = self.agent_goal_state_sets[agent.index]
             if len(goal_state_set.shape) == 1:
-                goal_state_set = np.expand_dims(goal_state_set, 1)
+                goal_state_set = np.expand_dims(goal_state_set, 0)
 
             # if this agent is in a goal state, skip the rest of this logic for the dense reward
             if np.any(
@@ -1446,15 +1448,21 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 pass
 
             else:
-                # remove goal states from goal_state_set that are occupied by an agent
-                rows_remove = []
-                for state in curr_state:
-                    row_indices_remove = np.where(
-                        (state == goal_state_set).all(axis=1)
-                    )[0]
-                    if len(row_indices_remove) > 0:
-                        rows_remove += [row_indices_remove.item()]
-                filtered_goal_state_set = np.delete(goal_state_set, rows_remove, axis=0)
+                # filter out goal states that are occupied by another agent
+                # which also has the occupied state as a goal state
+                # only run this if there's more than 1 entry in goal state set (dependent subtasks)
+                if len(goal_state_set) > 1:
+                    rows_remove = []
+                    for state in curr_state:
+                        row_indices_remove = np.where(
+                            (state == goal_state_set).all(axis=1)
+                        )[0]
+                        if len(row_indices_remove) > 0:
+                            rows_remove += [row_indices_remove.item()]
+                    filtered_goal_state_set = np.delete(goal_state_set, rows_remove, axis=0)
+
+                else:
+                    filtered_goal_state_set = goal_state_set
 
                 # compute distances to all valid goal states
                 agent_state_arr = np.stack([agent_state] * len(filtered_goal_state_set))
