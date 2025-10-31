@@ -1,5 +1,5 @@
 from typing import Literal, Optional, TypedDict, TypeAlias
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -107,30 +107,30 @@ def get_initial_hlmdp_config(
                     termination_condition=termination_condition,
                     goal_state_set=((6, 2), (6, 3), (6, 4)),
                 ),
-                # SubtaskData(
-                #     edge=(1, 2),
-                #     idx=1,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=((9, 6), (9, 7), (9, 8)),
-                # ),
+                SubtaskData(
+                    edge=(1, 2),
+                    idx=1,
+                    termination_condition=termination_condition,
+                    goal_state_set=((9, 6), (9, 7), (9, 8)),
+                ),
                 SubtaskData(
                     edge=(0, 3),
                     idx=2,
                     termination_condition=termination_condition,
                     goal_state_set=((6, 10), (6, 11), (6, 12)),
                 ),
-                # SubtaskData(
-                #     edge=(3, 2),
-                #     idx=3,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=((9, 6), (9, 7), (9, 8)),
-                # ),
-                # SubtaskData(
-                #     edge=(2, 4),
-                #     idx=4,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=((12, 6), (12, 7), (12, 8)),
-                # ),
+                SubtaskData(
+                    edge=(3, 2),
+                    idx=3,
+                    termination_condition=termination_condition,
+                    goal_state_set=((9, 6), (9, 7), (9, 8)),
+                ),
+                SubtaskData(
+                    edge=(2, 4),
+                    idx=4,
+                    termination_condition=termination_condition,
+                    goal_state_set=((12, 6), (12, 7), (12, 8)),
+                ),
             )
 
         case 6:
@@ -190,58 +190,58 @@ def get_initial_hlmdp_config(
                     termination_condition=termination_condition,
                     goal_state_set=((8, 2), (8, 3), (8, 4), (8, 5), (8, 6), (8, 7)),
                 ),
-                # SubtaskData(
-                #     edge=(1, 2),
-                #     idx=1,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=(
-                #         (12, 4),
-                #         (12, 6),
-                #         (12, 8),
-                #         (12, 10),
-                #         (12, 12),
-                #         (12, 14),
-                #     ),
-                # ),
-                # SubtaskData(
-                #     edge=(0, 3),
-                #     idx=2,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=(
-                #         (8, 11),
-                #         (8, 12),
-                #         (8, 13),
-                #         (8, 14),
-                #         (8, 15),
-                #         (8, 16),
-                #     ),
-                # ),
-                # SubtaskData(
-                #     edge=(3, 2),
-                #     idx=3,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=(
-                #         (12, 4),
-                #         (12, 6),
-                #         (12, 8),
-                #         (12, 10),
-                #         (12, 12),
-                #         (12, 14),
-                #     ),
-                # ),
-                # SubtaskData(
-                #     edge=(2, 4),
-                #     idx=4,
-                #     termination_condition=termination_condition,
-                #     goal_state_set=(
-                #         (15, 6),
-                #         (15, 7),
-                #         (15, 8),
-                #         (15, 9),
-                #         (15, 10),
-                #         (15, 11),
-                #     ),
-                # ),
+                SubtaskData(
+                    edge=(1, 2),
+                    idx=1,
+                    termination_condition=termination_condition,
+                    goal_state_set=(
+                        (12, 4),
+                        (12, 6),
+                        (12, 8),
+                        (12, 10),
+                        (12, 12),
+                        (12, 14),
+                    ),
+                ),
+                SubtaskData(
+                    edge=(0, 3),
+                    idx=2,
+                    termination_condition=termination_condition,
+                    goal_state_set=(
+                        (8, 11),
+                        (8, 12),
+                        (8, 13),
+                        (8, 14),
+                        (8, 15),
+                        (8, 16),
+                    ),
+                ),
+                SubtaskData(
+                    edge=(3, 2),
+                    idx=3,
+                    termination_condition=termination_condition,
+                    goal_state_set=(
+                        (12, 4),
+                        (12, 6),
+                        (12, 8),
+                        (12, 10),
+                        (12, 12),
+                        (12, 14),
+                    ),
+                ),
+                SubtaskData(
+                    edge=(2, 4),
+                    idx=4,
+                    termination_condition=termination_condition,
+                    goal_state_set=(
+                        (15, 6),
+                        (15, 7),
+                        (15, 8),
+                        (15, 9),
+                        (15, 10),
+                        (15, 11),
+                    ),
+                ),
             )
 
         case _:
@@ -325,217 +325,6 @@ class RewardConfig:
             * all_agents_reach_goal_proportion_per_agent
             * num_agents
         )
-
-
-"""
-# reward configs for different experimental scenarios
-# dependent_subtasks_exp_3
-
-def get_reward_config(scenario: str) -> RewardConfig:
-    match scenario:
-        case "scenario_1":
-            # scenario 1 - recreate MRS setup
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=0.9,
-                agent_leave_goal_reward=-1.0,
-                all_agents_at_goal_reward=1.0,
-            )
-
-        case "scenario_2":
-            # scenario 2 - larger "final" reward
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=0.9,
-                agent_leave_goal_reward=-1.0,
-                all_agents_at_goal_reward=5.0,
-            )
-
-        case "scenario_3":
-            # scenario 3 - much larger "final" reward
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=0.9,
-                agent_leave_goal_reward=-1.0,
-                all_agents_at_goal_reward=10.0,
-            )
-
-        case "scenario_4":
-            # scenario 4 - larger "final" reward w/ larger penalty for leaving a goal state
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=1.0,
-                agent_leave_goal_reward=-2.0,
-                all_agents_at_goal_reward=5.0,
-            )
-
-        case "scenario_5":
-            # scenario 5 - much larger "final" reward w/ larger penalty for leaving a goal state
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=1.0,
-                agent_leave_goal_reward=-2.0,
-                all_agents_at_goal_reward=10.0,
-            )
-
-    return reward_config
-"""
-
-"""
-# dependent_subtasks_exp_4
-def get_reward_config(scenario: str) -> RewardConfig:
-    match scenario:
-        case "scenario_1":
-            # scenario 1 - larger "final" reward (same as scenario 2 from exp 3)
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=0.9,
-                agent_leave_goal_reward=-1.0,
-                all_agents_at_goal_reward=5.0,
-            )
-        case "scenario_2":
-            # scenario 2 - larger "final" reward w/ larger reward + penalty for individual agent
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=2.0,
-                agent_leave_goal_reward=-2.1,
-                all_agents_at_goal_reward=5.0,
-            )
-
-        case "scenario_3":
-            # scenario 3 - larger "final" reward w/ even larger reward + penalty for individual agent
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=3.0,
-                agent_leave_goal_reward=-3.1,
-                all_agents_at_goal_reward=5.0,
-            )
-
-        case "scenario_4":
-            # scenario 4 - much larger "final" reward (same as scenario 3 from exp 3)
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=0.9,
-                agent_leave_goal_reward=-1.0,
-                all_agents_at_goal_reward=10.0,
-            )
-        case "scenario_5":
-            # scenario 5
-            reward_config = RewardConfig(
-                movement_reward=0.0,
-                agent_reach_goal_reward=2.0,
-                agent_leave_goal_reward=-2.1,
-                all_agents_at_goal_reward=10.0,
-            )
-        case "scenario_6":
-           reward_config = RewardConfig(
-            movement_reward=0.0,
-            agent_reach_goal_reward=3.0,
-            agent_leave_goal_reward=-3.1,
-            all_agents_at_goal_reward=10.0,
-        )
-
-    return reward_config
-"""
-
-
-# for independent_subtasks_exp_4 and dependent_subtasks_exp_5
-def get_reward_config(scenario: str, num_agents: int) -> RewardConfig:
-    match scenario:
-        case "scenario_1":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.01,
-            )
-        case "scenario_2":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.025,
-            )
-        case "scenario_3":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.05,
-            )
-        case "scenario_4":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.1,
-            )
-
-        # same reward scenarios, but with 6-agent setting instead of 3-agent
-        # yes this is jank, don't @ me
-        case "scenario_5":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.01,
-            )
-        case "scenario_6":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.025,
-            )
-        case "scenario_7":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.05,
-            )
-        case "scenario_8":
-            reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=0.1,
-            )
-
-    return reward_config
-
-
-"""
-# for independent_subtasks_exp_2
-def get_p_detect(scenario: str) -> tuple[float, float]:
-    match scenario:
-        case "scenario_1":
-            # baseline
-            p_detect_visual = 0.005
-            p_detect_radio = 0.1
-
-        case "scenario_2":
-            # higher values might give an edge to higher comms
-            p_detect_visual = 0.025
-            p_detect_radio = 0.1
-
-        case "scenario_3":
-            # higher values of p_detect_visual might give an edge to higher comms
-            p_detect_visual = 0.05
-            p_detect_radio = 0.1
-
-        case "scenario_4":
-            p_detect_visual = 0.005
-            p_detect_radio = 0.05
-
-        case "scenario_5":
-            p_detect_visual = 0.025
-            p_detect_radio = 0.05
-
-        case "scenario_6":
-            p_detect_visual = 0.05
-            p_detect_radio = 0.05
-
-        case "scenario_7":
-            p_detect_visual = 0.0
-            p_detect_radio = 0.0
-
-    return p_detect_visual, p_detect_radio
-"""
-
-# reward_config = RewardConfig(
-
-
-#     movement_reward=0.0,
-#     agent_reach_goal_reward=0.9,
-#     agent_leave_goal_reward=-1.0,
-#     all_agents_at_goal_reward=10.0,
-#     max_dense_reward=0.2,
-# )
 
 
 Observation: TypeAlias = (
@@ -635,18 +424,17 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self,
         init_state_dist: PositionDist,
         subtask_type: Literal["dependent", "independent"],
-        height: int = 15,
-        width: int = 14,
         num_agents: int = 3,
         p_intended_movement: float = 1.0,
         p_detect_visual: float = 0.005,
-        zone_width: int = 1,
+        p_detect_radio: float = 0.1,
+        max_dense_reach_goal_proportion: float = 0.025,
+        zone_width: int = 2,
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
-        observation_option: Literal["goal", "all_goals"] = "all_goals",
-        scenario: str = "scenario_1",
+        observation_option: Literal["all_goal_states_all_subtasks"] = "all_goal_states_all_subtasks",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -656,10 +444,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
 
         Parameters
         ----------
-        height : int = 9
-            Height of the grid.
-        width : int = 10
-            Width of the grid.
         num_agents : int = 3
             number of agents in the environment.
         p_intended_movement : float = 0.95
@@ -686,6 +470,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
             Render mode for the environment.
         """
+
         # Do not read the init state dists from HLMDP config b/c
         # the distribution changes during the CM training algorithm.
         # init_state_dist has to be an arg pass into this env's init method
@@ -696,20 +481,23 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.comms_val: float = comms_val
         self.subtask_idx: int = subtask_idx
 
-        # uncomment to read experimental scenarios
-        self.reward_config: RewardConfig = get_reward_config(
-            scenario=scenario, num_agents=self.num_agents
-        )
-        # self.reward_config = RewardConfig(
-        #     num_agents=num_agents,
-        #     max_dense_reach_goal_proportion=0.05,
-        # )
+        self.reward_config = RewardConfig(
+                num_agents=num_agents,
+                max_dense_reach_goal_proportion=max_dense_reach_goal_proportion,
+            )
 
-        self.p_detect_visual = p_detect_visual
-        self.p_detect_radio = 0.1
-        # self.p_detect_visual, self.p_detect_radio = get_p_detect(scenario=scenario)
+        self.p_detect_visual: float = p_detect_visual
+        self.p_detect_radio: float = p_detect_radio
+        self.zone_width: int = int(zone_width)
 
-        self.zone_width = int(zone_width)
+        # set env height and width
+        match self.num_agents:
+            case 3:
+                height = 15
+                width = 14
+            case 6:
+                height = 19
+                width = 17
 
         # get the hlmdp data that doesn't change during the CM training algorithm
         self.hlmdp_config: HLMDPConfig = get_initial_hlmdp_config(
@@ -792,7 +580,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             )
 
         else:
-            raise ValueError(f"Invalid observation option: {self.observation_option}")
+            raise ValueError(f"Invalid observation type: {self.obs_type}")
 
         return observation_space
 
@@ -1066,6 +854,9 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     # this is the goal obs for a single subtask
                     agent_obs_goal = np.concat((pos_set, encoding_vec), axis=1)
                     agent_obs[agent.index].append(agent_obs_goal)
+
+        else:
+            raise ValueError(f"Invalid observation option: {self.observation_option}")
 
         # reshape the obs to size (n_agents, n_subtasks, n_goals_per_subtask, n_goal_features)
         num_goals_per_subtask, num_goal_features = (
@@ -1459,7 +1250,9 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                         )[0]
                         if len(row_indices_remove) > 0:
                             rows_remove += [row_indices_remove.item()]
-                    filtered_goal_state_set = np.delete(goal_state_set, rows_remove, axis=0)
+                    filtered_goal_state_set = np.delete(
+                        goal_state_set, rows_remove, axis=0
+                    )
 
                 else:
                     filtered_goal_state_set = goal_state_set
