@@ -340,7 +340,8 @@ class Detector:
         obj_type: str,
         group_index: int,
         visual_detect_prob: float,
-        radio_detect_prob: float,
+        radio_detect_prob: float = 0.0,
+        radio_detector_type: Literal["binary", "linear"] = "binary",
     ) -> None:
         """
         Parameters
@@ -358,6 +359,7 @@ class Detector:
         self.group_index: int = group_index
         self.visual_detect_prob: float = visual_detect_prob
         self.radio_detect_prob: float = radio_detect_prob
+        self.radio_detector_type = radio_detector_type
 
     def detect_agents(
         self,
@@ -404,10 +406,20 @@ class Detector:
             visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
 
             radio_detect: bool
-            if comms_val > 0:
-                radio_detect = random_generator.uniform() < self.radio_detect_prob
-            else:
-                radio_detect = False
+
+            if self.radio_detector_type == "binary":
+                # same detection probability for all comms levels > 0
+                if comms_val > 0:
+                    radio_detect = random_generator.uniform() < self.radio_detect_prob
+                else:
+                    radio_detect = False
+
+            elif self.radio_detector_type == "linear":
+                # detection prob is linearly proportional to comms value
+                radio_detect_prob_tmp = comms_val * self.radio_detect_prob
+                radio_detect = random_generator.uniform() < radio_detect_prob_tmp
+                print(comms_val, radio_detect_prob_tmp)
+                __import__('ipdb').set_trace(context=3)
 
             return visual_detect or radio_detect
         else:
@@ -428,13 +440,16 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         p_intended_movement: float = 1.0,
         p_detect_visual: float = 0.005,
         p_detect_radio: float = 0.1,
+        radio_detector_type: Literal["binary", "linear"] = "binary",
         max_dense_reach_goal_proportion: float = 0.025,
         zone_width: int = 2,
         comms_val: float = 1.0,
         actions_set: type[ActionsT] = NavigationActions,
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
-        observation_option: Literal["all_goal_states_all_subtasks"] = "all_goal_states_all_subtasks",
+        observation_option: Literal[
+            "all_goal_states_all_subtasks"
+        ] = "all_goal_states_all_subtasks",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -482,12 +497,13 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.subtask_idx: int = subtask_idx
 
         self.reward_config = RewardConfig(
-                num_agents=num_agents,
-                max_dense_reach_goal_proportion=max_dense_reach_goal_proportion,
-            )
+            num_agents=num_agents,
+            max_dense_reach_goal_proportion=max_dense_reach_goal_proportion,
+        )
 
         self.p_detect_visual: float = p_detect_visual
         self.p_detect_radio: float = p_detect_radio
+        self.radio_detector_type = radio_detector_type
         self.zone_width: int = int(zone_width)
 
         # set env height and width
@@ -694,13 +710,13 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 obj_type="zone",
                 group_index=0,
                 visual_detect_prob=self.p_detect_visual,
-                radio_detect_prob=0.0,
             ),
             Detector(
                 obj_type="zone",
                 group_index=1,
                 visual_detect_prob=self.p_detect_visual,
                 radio_detect_prob=self.p_detect_radio,
+                radio_detector_type=self.radio_detector_type,
             ),
         ]
 
