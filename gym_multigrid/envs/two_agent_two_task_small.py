@@ -155,6 +155,7 @@ class TwoAgentTwoTaskSmallEnv(MultiGridEnv):
     def __init__(
         self,
         init_state_dist: PositionDist,
+        subtask_type: Literal["dependent", "independent"],
         height: int = 5,
         width: int = 5,
         num_agents: int = 2,
