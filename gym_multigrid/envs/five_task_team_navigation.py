@@ -419,7 +419,6 @@ class Detector:
                 radio_detect_prob_tmp = comms_val * self.radio_detect_prob
                 radio_detect = random_generator.uniform() < radio_detect_prob_tmp
                 print(comms_val, radio_detect_prob_tmp)
-                __import__('ipdb').set_trace(context=3)
 
             return visual_detect or radio_detect
         else:
