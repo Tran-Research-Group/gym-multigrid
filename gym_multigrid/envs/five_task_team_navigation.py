@@ -270,6 +270,7 @@ class StepInfo(TypedDict):
     """info used in the env's step function"""
 
     success: bool
+    position: tuple
 
 
 class RewardConfig:
@@ -1488,6 +1489,9 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
     # step info
     def _get_step_info(self, all_at_goal: bool = False) -> StepInfo:
         """other env info to be returned by the env's step method"""
-        step_info: StepInfo = {"success": all_at_goal}
+        step_info: StepInfo = {
+            "success": all_at_goal,
+            "position": self.get_agent_positions(),
+        }
 
         return step_info

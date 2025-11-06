@@ -445,14 +445,14 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         return pos
 
-    def put_obj(self, obj: WorldObjT, i: int, j: int):
+    def put_obj(self, obj: WorldObjT, pos: Position):
         """
         Put an object at a specific position in the grid
         """
 
-        self.grid.set(i, j, obj)
-        obj.init_pos = (i, j)
-        obj.pos = (i, j)
+        self.grid.set(pos[0], pos[1], obj)
+        obj.init_pos = pos
+        obj.pos = pos
 
     def place_agent(
         self,
@@ -474,7 +474,7 @@ class MultiGridEnv(gym.Env[ObsType, ActType]):
 
         if pos is not None:
             agent.pos = pos
-            self.put_obj(agent, i=pos[0], j=pos[1])
+            self.put_obj(agent, pos=pos)
         else:
             agent.pos = None
             pos = self.place_obj(agent, top, size, max_tries=max_tries)
