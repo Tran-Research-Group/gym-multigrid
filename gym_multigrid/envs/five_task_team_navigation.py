@@ -151,7 +151,7 @@ def get_initial_hlmdp_config(
                     StateData(
                         idx=1,
                         outgoing_init_state_dist=PositionDist(
-                            states=[((8, 2), (8, 3), (8, 4), (8, 5), (8, 6), (8, 7))],
+                            states=[((6, 2), (6, 3), (6, 4), (6, 5), (6, 6), (6, 7))],
                             probs=(1.0,),
                         ),
                     ),
@@ -160,12 +160,12 @@ def get_initial_hlmdp_config(
                         outgoing_init_state_dist=PositionDist(
                             states=[
                                 (
-                                    (12, 4),
-                                    (12, 6),
-                                    (12, 8),
-                                    (12, 10),
-                                    (12, 12),
-                                    (12, 14),
+                                    (9, 6),
+                                    (9, 7),
+                                    (9, 8),
+                                    (9, 9),
+                                    (9, 10),
+                                    (9, 11),
                                 )
                             ],
                             probs=(1.0,),
@@ -175,7 +175,7 @@ def get_initial_hlmdp_config(
                         idx=3,
                         outgoing_init_state_dist=PositionDist(
                             states=[
-                                ((8, 11), (8, 12), (8, 13), (8, 14), (8, 15), (8, 16))
+                                ((6, 11), (6, 12), (6, 13), (6, 14), (6, 15), (6, 16))
                             ],
                             probs=(1.0,),
                         ),
@@ -188,19 +188,19 @@ def get_initial_hlmdp_config(
                     edge=(0, 1),
                     idx=0,
                     termination_condition=termination_condition,
-                    goal_state_set=((8, 2), (8, 3), (8, 4), (8, 5), (8, 6), (8, 7)),
+                    goal_state_set=((6, 2), (6, 3), (6, 4), (6, 5), (6, 6), (6, 7)),
                 ),
                 SubtaskData(
                     edge=(1, 2),
                     idx=1,
                     termination_condition=termination_condition,
                     goal_state_set=(
-                        (12, 4),
-                        (12, 6),
-                        (12, 8),
-                        (12, 10),
-                        (12, 12),
-                        (12, 14),
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                        (9, 9),
+                        (9, 10),
+                        (9, 11),
                     ),
                 ),
                 SubtaskData(
@@ -208,12 +208,12 @@ def get_initial_hlmdp_config(
                     idx=2,
                     termination_condition=termination_condition,
                     goal_state_set=(
-                        (8, 11),
-                        (8, 12),
-                        (8, 13),
-                        (8, 14),
-                        (8, 15),
-                        (8, 16),
+                        (6, 11),
+                        (6, 12),
+                        (6, 13),
+                        (6, 14),
+                        (6, 15),
+                        (6, 16),
                     ),
                 ),
                 SubtaskData(
@@ -221,12 +221,12 @@ def get_initial_hlmdp_config(
                     idx=3,
                     termination_condition=termination_condition,
                     goal_state_set=(
-                        (12, 4),
-                        (12, 6),
-                        (12, 8),
-                        (12, 10),
-                        (12, 12),
-                        (12, 14),
+                        (9, 6),
+                        (9, 7),
+                        (9, 8),
+                        (9, 9),
+                        (9, 10),
+                        (9, 11),
                     ),
                 ),
                 SubtaskData(
@@ -234,12 +234,12 @@ def get_initial_hlmdp_config(
                     idx=4,
                     termination_condition=termination_condition,
                     goal_state_set=(
-                        (15, 6),
-                        (15, 7),
-                        (15, 8),
-                        (15, 9),
-                        (15, 10),
-                        (15, 11),
+                        (12, 6),
+                        (12, 7),
+                        (12, 8),
+                        (12, 9),
+                        (12, 10),
+                        (12, 11),
                     ),
                 ),
             )
@@ -517,7 +517,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                 width = 14
             case 6:
                 height = 19
-                width = 17
+                width = 14
 
         # get the hlmdp data that doesn't change during the CM training algorithm
         self.hlmdp_config: HLMDPConfig = get_initial_hlmdp_config(
@@ -679,7 +679,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     EnvObjectGroup(
                         obj_type="wall",
                         group_index=1,
-                        pos=((6, 9, 3, 1),),
+                        pos=((4, 9, 3, 1),),
                         color="grey",
                         spawned_subtask_indices=(0, 1, 2, 3, 4),
                         fill_mode="empty",
@@ -688,7 +688,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     EnvObjectGroup(
                         obj_type="zone",
                         group_index=0,
-                        pos=((6, 1, self.zone_width, 8),),
+                        pos=((4, 1, self.zone_width, 8),),
                         color="blue",
                         spawned_subtask_indices=(0, 1, 2, 3, 4),
                         fill_mode="empty",
@@ -697,7 +697,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     EnvObjectGroup(
                         obj_type="zone",
                         group_index=1,
-                        pos=((6, 10, self.zone_width, 8),),
+                        pos=((4, 10, self.zone_width, 8),),
                         color="red",
                         spawned_subtask_indices=(0, 1, 2, 3, 4),
                         fill_mode="empty",
