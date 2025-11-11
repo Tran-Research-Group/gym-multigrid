@@ -342,7 +342,7 @@ class Detector:
         group_index: int,
         visual_detect_prob: float,
         radio_detect_prob: float = 0.0,
-        radio_detector_type: Literal["binary", "linear"] = "binary",
+        radio_detector_type: Literal["binary", "linear", "quadratic"] = "quadratic",
     ) -> None:
         """
         Parameters
@@ -417,9 +417,13 @@ class Detector:
 
             elif self.radio_detector_type == "linear":
                 # detection prob is linearly proportional to comms value
-                radio_detect_prob_tmp = comms_val * self.radio_detect_prob
+                radio_detect_prob_tmp = self.radio_detect_prob * comms_val
                 radio_detect = random_generator.uniform() < radio_detect_prob_tmp
                 # print(comms_val, radio_detect_prob_tmp)
+
+            elif self.radio_detector_type == "quadratic":
+                radio_detect_prob_tmp = self.radio_detect_prob * comms_val**2
+                radio_detect = random_generator.uniform() < radio_detect_prob_tmp
 
             return visual_detect or radio_detect
         else:
@@ -440,7 +444,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         p_intended_movement: float = 1.0,
         p_detect_visual: float = 0.005,
         p_detect_radio: float = 0.1,
-        radio_detector_type: Literal["binary", "linear"] = "binary",
+        radio_detector_type: Literal["binary", "linear", "quadratic"] = "quadratic",
         max_dense_reach_goal_proportion: float = 0.025,
         zone_width: int = 2,
         comms_val: float = 1.0,
