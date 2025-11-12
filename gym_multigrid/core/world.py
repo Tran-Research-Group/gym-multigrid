@@ -129,7 +129,7 @@ MazeWorld = World(
 )
 
 TeamNavigationWorld = World(
-    encode_dim=3,
+    encode_dim=2,
     normalize_obs=1,
     COLORS=TEAM_NAVIGATION_COLORS,
     OBJECT_TO_IDX={
@@ -137,6 +137,7 @@ TeamNavigationWorld = World(
         "wall": 1,
         "agent": 2,
         "goal": 3,
-        "zone": 4,
+        "blue_zone": 4,
+        "red_zone": 5,
     },
 )

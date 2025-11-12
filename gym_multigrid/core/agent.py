@@ -220,7 +220,13 @@ class Agent(WorldObj):
         current_agent : bool, optional
             whether the agent is the current agent, by default False
         """
-        if self.world.encode_dim == 3:
+        if self.world.encode_dim == 2:
+            return (
+                self.world.OBJECT_TO_IDX[self.type],
+                self.index
+                )
+
+        elif self.world.encode_dim == 3:
             return (
                 self.world.OBJECT_TO_IDX[self.type],
                 self.world.COLOR_TO_IDX[self.color],

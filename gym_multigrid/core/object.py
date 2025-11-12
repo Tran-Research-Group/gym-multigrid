@@ -162,7 +162,14 @@ class WorldObj:
 
     def encode(self, current_agent: bool = False) -> tuple[int, ...]:
         """Encode the a description of this object as a 3-tuple of integers"""
-        if self.world.encode_dim == 3:
+        if self.world.encode_dim == 2:
+            return (
+                self.world.OBJECT_TO_IDX[self.type],
+                # this dim is reserved for objects w/ unique indices
+                0,
+            )
+
+        elif self.world.encode_dim == 3:
             return (
                 self.world.OBJECT_TO_IDX[self.type],
                 self.world.COLOR_TO_IDX[self.color],
@@ -253,12 +260,20 @@ class Floor(WorldObj):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
 
 
-class Zone(Floor):
+class BlueZone(Floor):
     """
     Alias for Floor
     """
 
-    def __init__(self, world: WorldT, color: str = "blue", type: str = "zone"):
+    def __init__(self, world: WorldT, color: str = "blue", type: str = "blue_zone"):
+        super().__init__(world, color, type)
+
+class RedZone(Floor):
+    """
+    Alias for Floor
+    """
+
+    def __init__(self, world: WorldT, color: str = "red", type: str = "red_zone"):
         super().__init__(world, color, type)
 
 

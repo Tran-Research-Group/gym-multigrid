@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.world import WorldT
-from gym_multigrid.core.object import WorldObjT, AgentGoal, Door, Zone, Wall
+from gym_multigrid.core.object import WorldObjT, AgentGoal, Door, BlueZone, RedZone, Wall
 
 
 class ObjectGroup(ABC):
@@ -21,7 +21,8 @@ class ObjectGroup(ABC):
         object_options: dict[str, WorldObjT] = {
             "goal": AgentGoal,
             "door": Door,
-            "zone": Zone,
+            "blue_zone": BlueZone,
+            "red_zone": RedZone,
             "wall": Wall,
         },
     ) -> None:

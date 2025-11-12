@@ -8,7 +8,7 @@ from gymnasium import spaces
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent
 from gym_multigrid.core.agent import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, BlueZone, RedZone
 from gym_multigrid.core.world import WorldT, TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
@@ -54,7 +54,9 @@ def get_initial_hlmdp_config(
                     StateData(
                         idx=0,
                         outgoing_init_state_dist=PositionDist(
-                            states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
+                            states=[((1, 6), (6, 2), (1, 8))],
+                            probs=(1.0,),
+                            # states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
                         ),
                     ),
                     StateData(
@@ -452,8 +454,8 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         subtask_idx: int = 0,
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal[
-            "all_goal_states_all_subtasks"
-        ] = "all_goal_states_all_subtasks",
+            "pos_map_goal", "agent_centered_toroidal"
+        ] = "agent_centered_toroidal",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
@@ -554,17 +556,25 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.detectors: list[Detector]
         self.object_options: dict[str, WorldObjT] = {
             "goal": AgentGoal,
-            "zone": Zone,
+            "blue_zone": BlueZone,
+            "red_zone": RedZone,
             "wall": Wall,
         }
         self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
         self.init_grid: Grid
-        # subtract 2 here b/c we assume an outer wall around the env that don't contribute to the height + width of the environment the agents can access
-        self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
-            "x": width - 2,
-            "y": height - 2,
-            "obj_encoding": max(world.OBJECT_TO_IDX.values()),
-        }
+
+        if self.observation_option == "pos_map_goal":
+            # subtract 2 here b/c we assume an outer wall around the env that don't contribute to the height + width of the environment the agents can access
+            self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
+                "x": width - 2,
+                "y": height - 2,
+                "obj_encoding": max(world.OBJECT_TO_IDX.values()),
+            }
+        elif self.observation_option == "agent_centered_toroidal":
+            if world.encode_dim == 2:
+                self.obs_scaling = np.array([len(world.OBJECT_TO_IDX) - 1, self.num_agents - 1])
+            else:
+                raise NotImplementedError
 
         super().__init__(
             agents=agents,
@@ -645,7 +655,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     ),
                     # blue zone
                     EnvObjectGroup(
-                        obj_type="zone",
+                        obj_type="blue_zone",
                         group_index=0,
                         pos=((4, 1, self.zone_width, 6),),
                         color="blue",
@@ -654,7 +664,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     ),
                     # red zone
                     EnvObjectGroup(
-                        obj_type="zone",
+                        obj_type="red_zone",
                         group_index=1,
                         pos=((4, 8, self.zone_width, 6),),
                         color="red",
@@ -686,7 +696,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     ),
                     # blue zone
                     EnvObjectGroup(
-                        obj_type="zone",
+                        obj_type="blue_zone",
                         group_index=0,
                         pos=((4, 1, self.zone_width, 8),),
                         color="blue",
@@ -695,7 +705,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     ),
                     # red zone
                     EnvObjectGroup(
-                        obj_type="zone",
+                        obj_type="red_zone",
                         group_index=1,
                         pos=((4, 10, self.zone_width, 8),),
                         color="red",
@@ -711,12 +721,12 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         # initialize the detectors
         self.detectors: list[Detector] = [
             Detector(
-                obj_type="zone",
+                obj_type="blue_zone",
                 group_index=0,
                 visual_detect_prob=self.p_detect_visual,
             ),
             Detector(
-                obj_type="zone",
+                obj_type="red_zone",
                 group_index=1,
                 visual_detect_prob=self.p_detect_visual,
                 radio_detect_prob=self.p_detect_radio,
@@ -770,6 +780,110 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             self.place_agent(agent, pos)
 
     def get_obs(self) -> Observation:
+        match self.observation_option:
+            case "pos_map_goal":
+                obs = self._get_pos_map_goal_obs()
+
+            case "agent_centered_toroidal":
+                obs = self._get_agent_centered_toroidal_obs()
+
+            case _:
+                raise NotImplementedError
+
+        return obs
+
+    def _get_agent_centered_toroidal_obs(self) -> NDArray:
+        state = self.grid.encode()
+        filtered_obs: list[NDArray] = self._filter_obs(state=state)
+        toroid_obs: list[NDArray] = self._get_toroid_obs(obs=filtered_obs)
+
+        # construct the final observation
+        for agent in self.agents:
+            agent_obs = toroid_obs[agent.index].flatten()
+
+            if agent.index == 0:
+                obs: NDArray = np.zeros((self.num_agents, len(agent_obs)))
+
+            obs[agent.index, :] = agent_obs
+
+        return obs
+
+    def _filter_obs(self, state: NDArray) -> list[NDArray]:
+        # always observe its own goal set, but cannot observe the goal sets of other agents
+        # it can see whether other agents are on its goal set or not, and get that other agent's unique index
+        # get the set of goal positions for this agent
+        obs: list[NDArray] = []
+
+        null_obs: NDArray = np.zeros(self.world.encode_dim)
+        data = self.hlmdp_config.subtask_data[self.subtask_idx]
+
+        for agent in self.agents:
+            agent_obs = state.copy()
+            # print(data.termination_condition)
+            # __import__('ipdb').set_trace(context=3)
+            if data.termination_condition == "reach_goal_state_set":
+                goal_state_pos = np.array(data.goal_state_set)
+
+            elif data.termination_condition == "reach_assigned_goal_state":
+                goal_state_pos = np.array((data.goal_state_set[agent.index],))
+
+            # get the positions of other agents so we exclude those from current agent's obs
+            for other_agent in self.agents:
+                if agent != other_agent:
+                    other_pos = other_agent.pos
+                    other_pos_expand = np.expand_dims(other_pos, 0)
+
+                    # if the other agent is not in a goal state, filter the other agent from the obs
+                    occupied_goal_idx = np.where(
+                        (other_pos_expand == goal_state_pos).all(axis=1)
+                    )[0]
+
+                    # other agent not occupying a goal state
+                    if len(occupied_goal_idx) == 0:
+                        agent_obs[other_pos[0], other_pos[1], :] = null_obs
+
+                    # exclude other agent's goal states from current agent's obs
+                    # only do for independent subtasks, in the dependent case
+                    # the agents have a shared goal set
+                    if data.termination_condition == "reach_assigned_goal_state":
+                        for pos in np.array((data.goal_state_set[other_agent.index],)):
+                            agent_obs[pos[0], pos[1], :] = null_obs
+
+            # scale the obs
+            agent_obs = self._scale_agent_obs(agent_obs=agent_obs)
+
+            obs.append(agent_obs)
+
+        return obs
+
+    def _get_toroid_obs(self, obs: list[NDArray]) -> list[NDArray]:
+        # get the toroidal, agent-centered version of the state for each agent
+        # list of np arrays, each np array is size (self.width, self.height, encode_dim)
+        toroid_obs: list[NDArray] = []
+
+        for agent_idx, agent in enumerate(self.agents):
+            pos = agent.pos
+            curr_obs = obs[agent_idx]
+            tor_obs = np.zeros_like(curr_obs)
+
+            # set the agent's pos as the top left (0, 0) entry in the new obs array
+            for i in range(self.width):
+                for j in range(self.height):
+                    new_coords = np.array([i, j]) - pos
+                    if new_coords[0] < 0:
+                        new_coords += np.array([self.width, 0])
+                    if new_coords[0] < 0:
+                        new_coords += np.array([0, self.height])
+                    tor_obs[new_coords[0], new_coords[1], :] = curr_obs[i, j, :]
+
+            toroid_obs.append(tor_obs)
+
+        return toroid_obs
+
+    def _scale_agent_obs(self, agent_obs: NDArray) -> NDArray:
+        return agent_obs / self.obs_scaling
+
+    def _get_pos_map_goal_obs(self) -> NDArray:
         # get agent x-y coordinates and put them all in an array
         agent_pos_arr = np.zeros(shape=(self.num_agents, 2))
         agent_pos_obs = np.zeros(shape=(self.num_agents, 3))
@@ -821,6 +935,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
                     )
 
                 obs[agent_idx, :] = agent_obs.flatten()
+
         return obs
 
     def _get_goal_obs(self, agent_pos: NDArray[np.float32]) -> NDArray:
@@ -832,51 +947,47 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             tensor of size (self.num_agents, num_subtasks, num_goals_per_subtask, num_goal_features)
             where each row is each agent's non-flattened observation of all its goal states for all subtasks
         """
-        if self.observation_option == "all_goal_states_all_subtasks":
-            # each agent can see all of its goal states for all subtasks
-            # for independent subtasks, they cannot see the goal states of other agents
-            # they can see all the goal states of all the subtasks
+        # each agent can see all of its goal states for all subtasks
+        # for independent subtasks, they cannot see the goal states of other agents
+        # they can see all the goal states of all the subtasks
 
-            # set of goal states across all subtasks
-            goal_state_obs_all_subtasks: list[tuple[float, float]] = []
+        # set of goal states across all subtasks
+        goal_state_obs_all_subtasks: list[tuple[float, float]] = []
 
-            # input data = G goal points with (x, y, object_encoding) data
-            # goal: produce an array of size (N, F) where N is the number of agents, F is the number of agent goal states (per agent)
-            agent_obs = [[] for i in range(self.num_agents)]
+        # input data = G goal points with (x, y, object_encoding) data
+        # goal: produce an array of size (N, F) where N is the number of agents, F is the number of agent goal states (per agent)
+        agent_obs = [[] for i in range(self.num_agents)]
 
-            for _, data in self.hlmdp_config.subtask_data.items():
-                for agent in self.agents:
-                    # in the dependent case, you can just run this once and use for all agents
-                    if data.termination_condition == "reach_goal_state_set":
-                        goal_state_pos = data.goal_state_set
+        for _, data in self.hlmdp_config.subtask_data.items():
+            for agent in self.agents:
+                # in the dependent case, you can just run this once and use for all agents
+                if data.termination_condition == "reach_goal_state_set":
+                    goal_state_pos = data.goal_state_set
 
-                    elif data.termination_condition == "reach_assigned_goal_state":
-                        goal_state_pos = (data.goal_state_set[agent.index],)
+                elif data.termination_condition == "reach_assigned_goal_state":
+                    goal_state_pos = (data.goal_state_set[agent.index],)
 
-                    # the agent can see whether another agent is on its assigned goal state
-                    encoding_vec = np.expand_dims(
-                        self.world.OBJECT_TO_IDX["goal"] * np.ones(len(goal_state_pos)),
-                        1,
-                    )
+                # the agent can see whether another agent is on its assigned goal state
+                encoding_vec = np.expand_dims(
+                    self.world.OBJECT_TO_IDX["goal"] * np.ones(len(goal_state_pos)),
+                    1,
+                )
 
-                    # agents can tell the state is occupied, but can't tell by who
-                    # if any agent is at this goal, encode the goal position as an agent type
-                    pos_set = np.array(goal_state_pos)
-                    for pos in agent_pos:
-                        pos_arr = np.expand_dims(pos, 0)
-                        occupied_goal_indices = np.where(
-                            (pos_arr == pos_set).all(axis=1)
-                        )[0]
-                        encoding_vec[occupied_goal_indices] = self.world.OBJECT_TO_IDX[
-                            "agent"
-                        ]
+                # agents can tell the state is occupied, but can't tell by who
+                # if any agent is at this goal, encode the goal position as an agent type
+                pos_set = np.array(goal_state_pos)
+                for pos in agent_pos:
+                    pos_arr = np.expand_dims(pos, 0)
+                    occupied_goal_indices = np.where((pos_arr == pos_set).all(axis=1))[
+                        0
+                    ]
+                    encoding_vec[occupied_goal_indices] = self.world.OBJECT_TO_IDX[
+                        "agent"
+                    ]
 
-                    # this is the goal obs for a single subtask
-                    agent_obs_goal = np.concat((pos_set, encoding_vec), axis=1)
-                    agent_obs[agent.index].append(agent_obs_goal)
-
-        else:
-            raise ValueError(f"Invalid observation option: {self.observation_option}")
+                # this is the goal obs for a single subtask
+                agent_obs_goal = np.concat((pos_set, encoding_vec), axis=1)
+                agent_obs[agent.index].append(agent_obs_goal)
 
         # reshape the obs to size (n_agents, n_subtasks, n_goals_per_subtask, n_goal_features)
         num_goals_per_subtask, num_goal_features = (
@@ -907,7 +1018,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         return agent_obs_ten
 
     def _get_map_obs(self) -> NDArray[np.int_]:
-
         # I want a (max_width, max_height, encode_dim) size np array that represents the map without any agents or goals in it
         ## If the env doesn't change, I just need to run this function once at the start of the episode
         ## eh, just run it each step in get_obs

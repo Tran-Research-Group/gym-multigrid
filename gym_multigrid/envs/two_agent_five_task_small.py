@@ -8,7 +8,7 @@ from gymnasium import spaces
 from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent
 from gym_multigrid.core.agent import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT, Zone
+from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT
 from gym_multigrid.core.world import WorldT, TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing import Position
@@ -262,7 +262,6 @@ class TwoAgentFiveTaskSmallEnv(MultiGridEnv):
         # basic grid init
         self.object_options: dict[str, WorldObjT] = {
             "goal": AgentGoal,
-            "zone": Zone,
             "wall": Wall,
         }
         self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
