@@ -819,8 +819,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
 
         for agent in self.agents:
             agent_obs = state.copy()
-            # print(data.termination_condition)
-            # __import__('ipdb').set_trace(context=3)
             if data.termination_condition == "reach_goal_state_set":
                 goal_state_pos = np.array(data.goal_state_set)
 
