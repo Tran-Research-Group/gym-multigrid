@@ -54,9 +54,7 @@ def get_initial_hlmdp_config(
                     StateData(
                         idx=0,
                         outgoing_init_state_dist=PositionDist(
-                            states=[((1, 6), (6, 2), (1, 8))],
-                            probs=(1.0,),
-                            # states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
+                            states=[((1, 6), (1, 7), (1, 8))], probs=(1.0,)
                         ),
                     ),
                     StateData(
