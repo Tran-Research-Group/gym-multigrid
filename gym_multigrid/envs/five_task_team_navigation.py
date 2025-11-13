@@ -453,7 +453,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal[
             "pos_map_goal", "agent_centered_toroidal"
-        ] = "agent_centered_toroidal",
+        ] = "pos_map_goal",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
         agent_dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
