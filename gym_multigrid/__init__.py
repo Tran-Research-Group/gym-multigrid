@@ -1,11 +1,40 @@
 from gymnasium.envs.registration import register
 
-# Save the City
+# Save the City - 1 ego agent
 # ---------------------------------------------
 register(
     id="SaveTheCity-v0",
     entry_point="gym_multigrid.envs.save_the_city:SaveTheCityEnv",
     max_episode_steps=3000,
+)
+
+# Save the City - 1 ego agent + 2 teammate agents
+# ---------------------------------------------
+register(
+    id="SaveTheCity-v1",
+    entry_point="gym_multigrid.envs.save_the_city:SaveTheCityEnv",
+    max_episode_steps=3000,
+    kwargs={
+        "size": 15,
+        "num_buildings": 5,
+        "agent_configs": [
+            {
+                "agent_type": "firefighter",
+                "policy_type": "ego",
+                "policy_name": None,
+            },
+            {
+                "agent_type": "builder",
+                "policy_type": "teammate",
+                "policy_name": "random",
+            },
+            {
+                "agent_type": "generalist",
+                "policy_type": "teammate",
+                "policy_name": "random",
+            },
+        ],
+    },
 )
 
 
