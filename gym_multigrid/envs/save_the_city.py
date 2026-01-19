@@ -319,7 +319,7 @@ class SaveTheCityEnv(MultiGridEnv):
         # Generate actions for non-ego (teammate) agents using their policies
         obs = self.grid.encode()
         non_ego_actions = [
-            self.agents[i].act(obs, {})
+            self.agents[i].act(obs, {'agent_pos': self.agents[i].pos})
             for i in self.non_ego_agent_indices
         ]
 

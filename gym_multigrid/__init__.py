@@ -37,6 +37,40 @@ register(
     },
 )
 
+# Save the City - 1 ego agent + 3 teammate agents using teammate policies
+# ---------------------------------------------
+register(
+    id="SaveTheCity-v2",
+    entry_point="gym_multigrid.envs.save_the_city:SaveTheCityEnv",
+    max_episode_steps=20000,
+    kwargs={
+        "size": 15,
+        "num_buildings": 5,
+        "agent_configs": [
+            {
+                "agent_type": "firefighter",
+                "policy_type": "ego",
+                "policy_name": None,
+            },
+            {
+                "agent_type": "builder",
+                "policy_type": "teammate",
+                "policy_name": "builder",
+            },
+            {
+                "agent_type": "generalist",
+                "policy_type": "teammate",
+                "policy_name": "generalist",
+            },
+            {
+                "agent_type": "firefighter",
+                "policy_type": "teammate",
+                "policy_name": "firefighter",
+            },
+        ],
+    },
+)
+
 
 # Collect game with 4 agents and 4 object types
 # ---------------------------------------------

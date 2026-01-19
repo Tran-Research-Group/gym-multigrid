@@ -337,6 +337,287 @@ def test_policy_reproducibility():
     print("✓ Reproducibility test passed")
 
 
+# ============================================================================
+# Tests for BuilderPolicy, FirefighterPolicy, GeneralistPolicy
+# ============================================================================
+
+def test_builder_policy_runs():
+    """Test BuilderPolicy runs without errors."""
+    agent_configs = [
+        {
+            "agent_type": "firefighter",
+            "policy_type": "ego",
+            "policy_name": None,
+        },
+        {
+            "agent_type": "builder",
+            "policy_type": "teammate",
+            "policy_name": "builder",
+        },
+    ]
+
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, info = env.reset(seed=42)
+
+    # Verify builder policy is assigned
+    builder_idx = env.non_ego_agent_indices[0]
+    assert env.agents[builder_idx].policy.name == "builder"
+
+    # Run for multiple steps
+    for _ in range(30):
+        actions = [env.actions_set.STILL]
+        obs, reward, terminated, truncated, info = env.step(actions)
+        if terminated or truncated:
+            break
+
+    print("✓ BuilderPolicy runs test passed")
+
+
+def test_firefighter_policy_runs():
+    """Test FirefighterPolicy runs without errors."""
+    agent_configs = [
+        {
+            "agent_type": "builder",
+            "policy_type": "ego",
+            "policy_name": None,
+        },
+        {
+            "agent_type": "firefighter",
+            "policy_type": "teammate",
+            "policy_name": "firefighter",
+        },
+    ]
+
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, info = env.reset(seed=42)
+
+    # Verify firefighter policy is assigned
+    ff_idx = env.non_ego_agent_indices[0]
+    assert env.agents[ff_idx].policy.name == "firefighter"
+
+    # Run for multiple steps
+    for _ in range(30):
+        actions = [env.actions_set.STILL]
+        obs, reward, terminated, truncated, info = env.step(actions)
+        if terminated or truncated:
+            break
+
+    print("✓ FirefighterPolicy runs test passed")
+
+
+def test_generalist_policy_runs():
+    """Test GeneralistPolicy runs without errors."""
+    agent_configs = [
+        {
+            "agent_type": "firefighter",
+            "policy_type": "ego",
+            "policy_name": None,
+        },
+        {
+            "agent_type": "generalist",
+            "policy_type": "teammate",
+            "policy_name": "generalist",
+        },
+    ]
+
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, info = env.reset(seed=42)
+
+    # Verify generalist policy is assigned
+    gen_idx = env.non_ego_agent_indices[0]
+    assert env.agents[gen_idx].policy.name == "generalist"
+
+    # Run for multiple steps
+    for _ in range(30):
+        actions = [env.actions_set.STILL]
+        obs, reward, terminated, truncated, info = env.step(actions)
+        if terminated or truncated:
+            break
+
+    print("✓ GeneralistPolicy runs test passed")
+
+
+def test_all_intelligent_policies():
+    """Test all three intelligent policies working together."""
+    agent_configs = [
+        {
+            "agent_type": "firefighter",
+            "policy_type": "ego",
+            "policy_name": None,
+        },
+        {
+            "agent_type": "builder",
+            "policy_type": "teammate",
+            "policy_name": "builder",
+        },
+        {
+            "agent_type": "firefighter",
+            "policy_type": "teammate",
+            "policy_name": "firefighter",
+        },
+        {
+            "agent_type": "generalist",
+            "policy_type": "teammate",
+            "policy_name": "generalist",
+        },
+    ]
+
+    env = SaveTheCityEnv(size=12, num_buildings=5, agent_configs=agent_configs)
+    obs, info = env.reset(seed=42)
+
+    # Run full episode
+    total_reward = 0
+    for step in range(100):
+        actions = [np.random.choice(list(env.actions_set))]
+        obs, reward, terminated, truncated, info = env.step(actions)
+        total_reward += reward
+
+        if terminated or truncated:
+            print(f"  Episode ended at step {step + 1}, total reward: {total_reward}")
+            break
+
+    print("✓ All intelligent policies test passed")
+
+
+def test_deterministic_with_epsilon_zero():
+    """Test policies are deterministic with epsilon=0."""
+    from gym_multigrid.policy.save_the_city import BuilderPolicy
+    from gym_multigrid.envs.save_the_city import SaveTheCityActions
+
+    # Create two policies with same seed and epsilon=0
+    rng1 = np.random.default_rng(42)
+    rng2 = np.random.default_rng(42)
+
+    policy1 = BuilderPolicy(
+        action_set=SaveTheCityActions,
+        random_generator=rng1,
+        epsilon=0.0,
+    )
+    policy2 = BuilderPolicy(
+        action_set=SaveTheCityActions,
+        random_generator=rng2,
+        epsilon=0.0,
+    )
+
+    # Create environment to get observation
+    agent_configs = [
+        {"agent_type": "builder", "policy_type": "ego", "policy_name": None},
+    ]
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, _ = env.reset(seed=42)
+
+    # Both policies should produce same action
+    options = {'agent_pos': (5, 5)}
+    action1 = policy1.act(obs, options)
+    action2 = policy2.act(obs, options)
+
+    assert action1 == action2, f"Actions differ: {action1} vs {action2}"
+    print("✓ Deterministic with epsilon=0 test passed")
+
+
+def test_policy_reset():
+    """Test that policy reset clears internal state."""
+    from gym_multigrid.policy.save_the_city import BuilderPolicy
+    from gym_multigrid.envs.save_the_city import SaveTheCityActions
+
+    policy = BuilderPolicy(
+        action_set=SaveTheCityActions,
+        random_generator=np.random.default_rng(42),
+        epsilon=0.0,
+    )
+
+    # Set some internal state
+    policy.current_target = (3, 4)
+    policy.current_path = [(1, 1), (2, 2), (3, 3)]
+    policy.path_index = 2
+
+    # Reset
+    policy.reset()
+
+    # Verify state is cleared
+    assert policy.current_target is None
+    assert policy.current_path is None
+    assert policy.path_index == 0
+
+    print("✓ Policy reset test passed")
+
+
+def test_builder_policy_with_epsilon():
+    """Test BuilderPolicy randomness with different epsilon values."""
+    from gym_multigrid.policy.save_the_city import BuilderPolicy
+    from gym_multigrid.envs.save_the_city import SaveTheCityActions
+
+    # Create environment to get observation
+    agent_configs = [
+        {"agent_type": "builder", "policy_type": "ego", "policy_name": None},
+    ]
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, _ = env.reset(seed=42)
+    options = {'agent_pos': (5, 5)}
+
+    # With epsilon=1.0, should always take random actions
+    policy_random = BuilderPolicy(
+        action_set=SaveTheCityActions,
+        random_generator=np.random.default_rng(42),
+        epsilon=1.0,
+    )
+
+    # Collect many actions - with epsilon=1.0 they should vary
+    actions = [policy_random.act(obs, options) for _ in range(20)]
+    unique_actions = set(actions)
+    # Should have variety in actions (statistically very likely with 20 samples)
+    assert len(unique_actions) > 1, "Expected variety in random actions"
+
+    print("✓ BuilderPolicy epsilon test passed")
+
+
+def test_utils_functions():
+    """Test utility functions directly."""
+    from gym_multigrid.policy.save_the_city import utils
+    from gym_multigrid.core.world import SaveTheCityWorld
+
+    world = SaveTheCityWorld  # Already an instance, not a class
+
+    # Create environment to get observation
+    agent_configs = [
+        {"agent_type": "builder", "policy_type": "ego", "policy_name": None},
+    ]
+    env = SaveTheCityEnv(size=10, num_buildings=3, agent_configs=agent_configs)
+    obs, _ = env.reset(seed=42)
+
+    # Test extract_buildings_from_obs
+    buildings = utils.extract_buildings_from_obs(obs, world)
+    assert isinstance(buildings, list)
+    # Should have found some buildings
+    assert len(buildings) > 0
+
+    # Test each building has required keys
+    for b in buildings:
+        assert 'pos' in b
+        assert 'type' in b
+        assert 'building_state' in b
+        assert 'fire_rate' in b
+        assert 'alive' in b
+
+    # Test manhattan_distance
+    assert utils.manhattan_distance((0, 0), (3, 4)) == 7
+    assert utils.manhattan_distance((5, 5), (5, 5)) == 0
+
+    # Test is_adjacent_to_target
+    assert utils.is_adjacent_to_target((1, 1), (1, 2)) == True
+    assert utils.is_adjacent_to_target((1, 1), (2, 2)) == False
+
+    # Test get_adjacent_positions
+    adj = utils.get_adjacent_positions((5, 5))
+    assert len(adj) == 4
+    assert (5, 4) in adj  # North
+    assert (6, 5) in adj  # East
+    assert (5, 6) in adj  # South
+    assert (4, 5) in adj  # West
+
+    print("✓ Utils functions test passed")
+
+
 if __name__ == "__main__":
     test_ego_only_agent()
     test_ego_with_random_actions()
@@ -349,4 +630,13 @@ if __name__ == "__main__":
     test_all_random_policies()
     test_teammate_missing_policy_name()
     test_policy_reproducibility()
+    # New policy tests
+    test_builder_policy_runs()
+    test_firefighter_policy_runs()
+    test_generalist_policy_runs()
+    test_all_intelligent_policies()
+    test_deterministic_with_epsilon_zero()
+    test_policy_reset()
+    test_builder_policy_with_epsilon()
+    test_utils_functions()
     print("\n✅ All tests passed!")
