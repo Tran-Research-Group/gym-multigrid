@@ -328,6 +328,8 @@ class RewardConfig:
         )
 
 
+State: TypeAlias = NDArray[np.int_] | NDArray[np.float32] | NDArray[np.float64]
+
 Observation: TypeAlias = (
     dict[str, NDArray[np.int_]] | NDArray[np.int_] | NDArray[np.float32]
 )
@@ -561,16 +563,20 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
         self.init_grid: Grid
 
+        obj_encoding_scaling = len(world.OBJECT_TO_IDX) - 1
+
         if self.observation_option == "pos_map_goal":
             # subtract 2 here b/c we assume an outer wall around the env that don't contribute to the height + width of the environment the agents can access
             self.obs_scaling: dict[Literal["x", "y", "obj_encoding"], np.int_] = {
                 "x": width - 2,
                 "y": height - 2,
-                "obj_encoding": max(world.OBJECT_TO_IDX.values()),
+                "obj_encoding": obj_encoding_scaling,
             }
         elif self.observation_option == "agent_centered_toroidal":
             if world.encode_dim == 2:
-                self.obs_scaling = np.array([len(world.OBJECT_TO_IDX) - 1, self.num_agents - 1])
+                self.obs_scaling = np.array(
+                    [obj_encoding_scaling, self.num_agents - 1]
+                )
             else:
                 raise NotImplementedError
 
@@ -776,6 +782,20 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         assert len(self.agents) == len(init_pos)
         for agent, pos in zip(self.agents, init_pos):
             self.place_agent(agent, pos)
+
+    def get_state(self) -> State:
+        """get state with full information about all objects in the env
+        """
+        state = self.grid.encode()
+
+        # scale to range of [0, 1]
+        if self.observation_option == "agent_centered_toroidal":
+            if (self.world.encode_dim == 2):
+                state = np.divide(state, self.obs_scaling)
+        else:
+            raise NotImplementedError
+
+        return state
 
     def get_obs(self) -> Observation:
         match self.observation_option:
