@@ -384,7 +384,6 @@ class Building(WorldObj):
 
     def step(self):
         """Update building state per timestep"""
-        print(self.fire_rate, self.building_state)
         if not self.alive:
             return None
         

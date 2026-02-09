@@ -91,7 +91,7 @@ if __name__ == "__main__":
         '--env',
         type=str,
         default='SaveTheCity-v0',
-        choices=['SaveTheCity-v0', 'SaveTheCity-v1', 'SaveTheCity-v2'],
+        choices=['SaveTheCity-v0', 'SaveTheCity-v1', 'SaveTheCity-v2', 'SaveTheCity-v3'],
         help='Environment version to run'
     )
     parser.add_argument(

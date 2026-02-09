@@ -393,12 +393,11 @@ class SaveTheCityEnv(MultiGridEnv):
             for b in self.buildings
         ))
         if terminated == True:
-            print("Termination condition occured!")
+            pass
 
 
         if self.step_count >= self.max_steps:
             truncated = True
-            print("Truncation condition occured!")
 
         obs = self.grid.encode()
         reward = float(np.sum(rewards))  # reduce to one float
