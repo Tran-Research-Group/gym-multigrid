@@ -6,7 +6,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Ball, WorldObj
 from gym_multigrid.core.world import CollectWorld
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 
 class CollectGameEnv(MultiGridEnv):

@@ -12,7 +12,7 @@ from gym_multigrid.core.object import AgentGoal, Wall, WorldObj, Zone
 from gym_multigrid.core.object import SimpleDoor as Door
 from gym_multigrid.core.world import LabyrinthWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.subtasks import (
     EnvObjectGroup,
     HLMDPConfig,

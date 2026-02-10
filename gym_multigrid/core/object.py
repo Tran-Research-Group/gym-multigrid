@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
 from gym_multigrid.core.world import World
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
     fill_coords,
     point_in_circle,

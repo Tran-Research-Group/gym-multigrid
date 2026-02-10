@@ -10,7 +10,7 @@ from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObj
 from gym_multigrid.core.world import World
 from gym_multigrid.policy.base import AgentPolicy
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
 
 Actions: TypeAlias = enum.IntEnum
@@ -104,6 +104,13 @@ class NavigationActions(enum.IntEnum):
     RIGHT = 3
     UP = 4
 
+class LBFActions(enum.IntEnum):
+    STAY = 0
+    LEFT = 1
+    DOWN = 2
+    RIGHT = 3
+    UP = 4
+    LOAD = 5
 
 class Agent(WorldObj):
     """Defines the class for an agent in the environment"""

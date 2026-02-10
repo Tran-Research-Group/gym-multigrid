@@ -18,7 +18,7 @@ from gym_multigrid.multigrid import (
     PartialObsConfig,
     RenderingConfig,
 )
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 
 class LayoutConfig(TypedDict):

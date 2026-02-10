@@ -17,7 +17,7 @@ from gym_multigrid.multigrid import (
     PartialObsConfig,
     RenderingConfig,
 )
-from gym_multigrid.typing import Position, Size
+from gym_multigrid.typing_utils import Position, Size
 
 
 class PositionalObs(ObservationMode["RoomsEnv", spaces.Box, NDArray[np.float64]]):

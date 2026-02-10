@@ -22,7 +22,7 @@ from gym_multigrid.multigrid import (
 from gym_multigrid.policy import AgentPolicy
 from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
 from gym_multigrid.policy.prey_pred.utils import a_star
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 PreyPredWorld = World(
     encode_dim=2,

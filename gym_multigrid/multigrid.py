@@ -25,7 +25,7 @@ from gym_multigrid.core.constants import OBJECT_TO_STR, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Door, WorldObj
 from gym_multigrid.core.world import DefaultWorld, World
-from gym_multigrid.typing import Position, Size
+from gym_multigrid.typing_utils import Position, Size
 from gym_multigrid.utils.window import Window
 
 EnvType = TypeVar("EnvType", bound="MultiGridEnv")
