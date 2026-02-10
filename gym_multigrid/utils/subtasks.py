@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Door, Wall, WorldObj, Zone
 from gym_multigrid.core.world import World
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 
 @dataclass
