@@ -439,7 +439,7 @@ class Grid:
 
         return img
 
-    def encode(self, vis_mask: NDArray[np.bool] | None = None) -> np.ndarray:
+    def encode(self, vis_mask: NDArray[np.bool_] | None = None) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
 
@@ -481,7 +481,7 @@ class Grid:
         return array
 
     def encode_for_agents(
-        self, agent_pos: tuple[int, int], vis_mask: NDArray[np.bool] | None = None
+        self, agent_pos: tuple[int, int], vis_mask: NDArray[np.bool_] | None = None
     ) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
@@ -526,7 +526,7 @@ class Grid:
 
         return array
 
-    def process_vis(self, agent_pos: tuple[int, int]) -> NDArray[np.bool]:
+    def process_vis(self, agent_pos: tuple[int, int]) -> NDArray[np.bool_]:
         """Returns a mask of the visible cells in the grid
 
         Parameters
