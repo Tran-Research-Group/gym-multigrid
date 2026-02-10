@@ -339,3 +339,74 @@ register(
         "render_mode": "rgb_array",
     },
 )
+
+# LBF environment
+# ----------------------------------------
+register(
+    id="multigrid-lbf-v0",
+    entry_point="gym_multigrid.envs:LBFGameEnv",
+    max_episode_steps=400,
+    kwargs={
+        "agent_config": {
+            "level": [1, 1, 2],
+            "init_pos": [(1, 1), (1, 2), (1, 3)],
+            "index": [4, 5, 6],
+        },
+        "fruit_config": {
+            "num_fruit": [8, 8, 8],
+            "fruits_index": [0, 1, 2],
+            "fruits_reward": [1, 2, 3]
+        },
+        "layout_config": {
+            "size": 19,
+            "num_rooms": 4,
+            "field_map": [
+                "###################",
+                "#     1  # 2      #",
+                "#  1     #  1     #",
+                "#       G#     1  #",
+                "#  2    G#   1    #",
+                "#       G#        #",
+                "#    1   #  2   2 #",
+                "# 1      #        #",
+                "#     1  #  GGG   #",
+                "###################",
+                "#  GGG   #   2    #",
+                "#      3 #        #",
+                "# 3      #G    2  #",
+                "#    3   #G  3    #",
+                "#        #G       #",
+                "# 3      #   3    #",
+                "#   3    #  2  3  #",
+                "#     2  #        #",
+                "###################",
+            ],
+            "room_configs": [
+                {
+                    "flag_positions": [(8, 3), (8, 4), (8, 5)],
+                    "fruit_count": [5, 1, 0],
+                    "wall_positions": [(9, 3), (9, 4), (9, 5)],
+                },
+                {
+                    "flag_positions": [(12, 8), (13, 8), (14, 8)],
+                    "fruit_count": [3, 3, 0],
+                    "wall_positions": [(12, 9), (13, 9), (14, 9)],
+                },
+                {
+                    "flag_positions": [(10, 12), (10, 13), (10, 14)],
+                    "fruit_count": [0, 3, 3],
+                    "wall_positions": [(9, 12), (9, 13), (9, 14)],
+                },
+                {
+                    "flag_positions": [(3, 10), (4, 10), (5, 10)],
+                    "fruit_count": [0, 1, 5],
+                    "wall_positions": [(3, 9), (4, 9), (5, 9)],
+                }
+            ]
+        },
+        "reward_config": {
+            "step_penalty": 0.01,
+            "sum_reward": True,
+        },
+    },
+)
