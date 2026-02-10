@@ -75,6 +75,19 @@ FRWorld = World(
     },
 )
 
+LBFWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=ACCESSIBLE_COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "wall": 1,
+        "fruit": 2,
+        "goal": 3,
+        "agent": 4,
+    },
+)
+
 CollectWorld = World(
     encode_dim=3,
     normalize_obs=1,
