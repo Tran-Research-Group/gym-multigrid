@@ -574,9 +574,7 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             }
         elif self.observation_option == "agent_centered_toroidal":
             if world.encode_dim == 2:
-                self.obs_scaling = np.array(
-                    [obj_encoding_scaling, self.num_agents - 1]
-                )
+                self.obs_scaling = np.array([obj_encoding_scaling, self.num_agents - 1])
             else:
                 raise NotImplementedError
 
@@ -623,14 +621,11 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
         *,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
-    ) -> tuple[NDArray[np.int_], StepInfo]:
+    ) -> NDArray[np.int_]:
 
         super().reset(seed=seed, options=options)
-
         obs: Observation = self.get_obs()
-        info: StepInfo = self._get_step_info()
-
-        return obs, info
+        return obs
 
     def _gen_grid(self, width, height) -> None:
         self.grid = Grid(width, height, self.world)
@@ -784,13 +779,12 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
             self.place_agent(agent, pos)
 
     def get_state(self) -> State:
-        """get state with full information about all objects in the env
-        """
+        """get state with full information about all objects in the env"""
         state = self.grid.encode()
 
         # scale to range of [0, 1]
         if self.observation_option == "agent_centered_toroidal":
-            if (self.world.encode_dim == 2):
+            if self.world.encode_dim == 2:
                 state = np.divide(state, self.obs_scaling)
         else:
             raise NotImplementedError

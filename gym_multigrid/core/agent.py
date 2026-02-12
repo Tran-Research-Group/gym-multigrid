@@ -98,6 +98,12 @@ class NavigationActions(enum.IntEnum):
     up = 4
 
 
+class HallwayActions(enum.IntEnum):
+    stay = 0
+    left = 1
+    right = 2
+
+
 AgentT = TypeVar("AgentT", bound="Agent")
 
 

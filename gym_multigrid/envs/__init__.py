@@ -10,3 +10,4 @@ from gym_multigrid.envs.maze import MazeEnv
 
 from gym_multigrid.envs.two_agent_two_task_small import TwoAgentTwoTaskSmallEnv
 from gym_multigrid.envs.two_agent_five_task_small import TwoAgentFiveTaskSmallEnv
+from gym_multigrid.envs.three_agent_hallway import ThreeAgentHallwaysEnv

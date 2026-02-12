@@ -287,6 +287,13 @@ def register_envs():
         entry_point="gym_multigrid.envs:FiveTaskTeamNavigationEnv",
     )
 
+    # Multiagent independent hallway env
+    # ----------------------------------------
+    register(
+        id="three_agent_hallways-v0",
+        entry_point="gym_multigrid.envs:ThreeAgentHallwaysEnv",
+    )
+
 
 # list of environments that need comms_val as a parameter
 comms_envs: list[str] = ["five_task_team_navigation-v0"]
