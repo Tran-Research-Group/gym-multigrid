@@ -304,7 +304,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         return state
 
     def _get_obs(self) -> Observation:
-        obs: NDArray = np.zeros((self.num_agents))
+        obs: NDArray = np.zeros((self.num_agents, 1))
         for agent in self.agents:
             # each agent observes its x position
             obs[agent.index] = np.array(agent.pos[0])
