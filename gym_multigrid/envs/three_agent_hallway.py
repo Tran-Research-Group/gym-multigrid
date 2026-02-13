@@ -81,8 +81,6 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         agent_dir_to_vec : list[NDArray[np.int_]] = NAV_DIR_TO_VEC
             Direction vectors for the agents.
             The length of the list should be equal to the number of actions in the actions set.
-        reward_config: RewardConfig = reward_config
-            Configuration for conditions that cause the reward function to output non-zero reward
         world : WorldT = LabyrinthWorld
             World for the environment.
         render_mode : Literal["human", "rgb_array"] = "rgb_array"
@@ -94,11 +92,16 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
         # set env height and width
         height = 7
-        width = 10
-        self.goal_x = width - 1
+        width = 13
+        self.goal_x = width - 2
 
         self.goal_state_set = ((self.goal_x, 1), (self.goal_x, 3), (self.goal_x, 5))
-        self.hall_lengths = [8, 5, 2]
+
+        # hall_length = number of empty states in each agent's hall
+        # hall length in join1 was [2, 6, 10], but the goal state at the
+        # end of the hall adds 1 more length to the total hall length
+        # total hall length should be x+1 for each x in state_numbers from join1
+        self.hall_lengths = np.array([2, 6, 10])
 
         # observation config
         self.observation_option = observation_option
@@ -130,6 +133,12 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         }
         self.obj_group_dict: dict[str, dict[int, ObjGroupT]]
         self.init_grid: Grid
+
+        # scalings so entries in these tensors are in [0, 1]
+        obj_encoding_scaling = len(world.OBJECT_TO_IDX) - 1
+        if world.encode_dim == 2:
+            # state[:, :, 1] captures agent indices, so scale by num_agents-1 since 0-indexed
+            self.state_scaling = np.array([obj_encoding_scaling, self.num_agents - 1])
 
         self.obs_scaling = width
 
@@ -188,38 +197,67 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
 
         # make a list of all the objects you want to spawn in the env
-        env_object_config = [
+        n_wall_groups = 0
+        env_object_config = []
+        env_object_config.append(
             # surrounding wall
             EnvObjectGroup(
                 obj_type="wall",
-                group_index=0,
+                group_index=n_wall_groups,
                 pos=((0, 0, self.width, self.height),),
                 color="grey",
                 spawned_subtask_indices=(0,),
                 fill_mode="empty",
             ),
-            # # middle wall
-            # EnvObjectGroup(
-            #     obj_type="wall",
-            #     group_index=1,
-            #     pos=((4, 7, 3, 1),),
-            #     color="grey",
-            #     spawned_subtask_indices=(0,),
-            #     fill_mode="empty",
-            # ),
-        ]
+        )
+        n_wall_groups += len(env_object_config)
+
+        # middle walls
+        for x, y in self.goal_state_set:
+            if y > self.height:
+                pass
+            else:
+                env_object_config.append(
+                    EnvObjectGroup(
+                        obj_type="wall",
+                        group_index=n_wall_groups,
+                        pos=((0, y+1, self.width, 1),),
+                        color="grey",
+                        spawned_subtask_indices=(0,),
+                        fill_mode="filled",
+                    )
+                )
+                n_wall_groups += 1
+
+        # fill in agent hallways so they are different lengths
+        for i, (goal_x, goal_y) in enumerate(self.goal_state_set):
+            hall_length = self.hall_lengths[i]
+            wall_length = goal_x - hall_length
+
+            if wall_length > 0:
+                env_object_config.append(
+                    EnvObjectGroup(
+                        obj_type="wall",
+                        group_index=n_wall_groups,
+                        pos=((0, goal_y, wall_length, 1),),
+                        color="grey",
+                        spawned_subtask_indices=(0,),
+                        fill_mode="filled",
+                    )
+                )
+                n_wall_groups += 1
 
         # place the goals
-        # env_object_config.append(
-        #     EnvObjectGroup(
-        #         obj_type="goal",
-        #         group_index=0,
-        #         pos=self.goal_state_set,
-        #         color="green",
-        #         spawned_subtask_indices=(0,),
-        #         fill_mode="empty",
-        #     )
-        # )
+        env_object_config.append(
+            EnvObjectGroup(
+                obj_type="goal",
+                group_index=0,
+                pos=self.goal_state_set,
+                color="green",
+                spawned_subtask_indices=(0,),
+                fill_mode="empty",
+            )
+        )
 
         obj_group_dict: dict[str, dict[int, ObjGroupT]] = {}
 
@@ -261,7 +299,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         state = self.grid.encode()
 
         # scale to range of [0, 1]
-        state = np.divide(state, self.obs_scaling)
+        state = np.divide(state, self.state_scaling)
 
         return state
 
@@ -279,13 +317,13 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
     def _scale_agent_obs(self, agent_obs: NDArray) -> NDArray:
         return agent_obs / self.obs_scaling
 
-
     def get_env_info(self) -> EnvInfo:
         # obs_shape should only be the shape of a single agent
         # self.observation_space.shape = (n_agents, dim_1_size, dim_2_size, ...)
         obs_shape = int(np.prod(self.observation_space.shape[1:]))
 
         env_info: EnvInfo = {
+            # length of the state tensor when flattened to a 1D vector
             "state_shape": self.width * self.height * self.world.encode_dim,
             "obs_shape": obs_shape,
             "n_actions": len(self.actions),
@@ -540,219 +578,13 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         """
         reward: float = 0.0
 
-        reward += self._reward_movement(actions)
-        reward += self._reward_dense(curr_state)
-        reward += self._reward_reach_goal(curr_state, next_state)
-        reward += self._reward_leave_goal(curr_state, next_state)
-        reward += self._reward_all_at_goal(next_state)
-
-        return reward
-
-    def _reward_movement(self, actions: NDArray[np.int_]) -> float:
-        """Cost incurred by each action that is not "stay"
-        Parameters
-        ----------
-        actions : NDArray[np.int_]
-            agent actions
-
-        Returns
-        -------
-        float
-            reward
-        """
-
-        reward = 0.0
-        reward += self.reward_config.movement_reward * np.sum(
-            actions != self.actions.stay
-        )
-
-        return reward
-
-    def _reward_dense(self, curr_state: NDArray[np.int_]) -> float:
-        """dense reward based on Euclidean distance
-        NOTE: will not work well in environments with obstacles since it does not consider reachability. You want geodesic distance for that, but that's also more computationally expensive and not worth it for our needs.
-        """
-        # max distance in the environment
-        reward = 0.0
-        for agent in self.agents:
-            agent_state = curr_state[agent.index, :]
-
-            # get agent's set of goal states
-            goal_state_set = self.agent_goal_state_sets[agent.index]
-            if len(goal_state_set.shape) == 1:
-                goal_state_set = np.expand_dims(goal_state_set, 0)
-
-            # if this agent is in a goal state, skip the rest of this logic for the dense reward
-            if np.any(
-                np.all(
-                    agent_state == goal_state_set,
-                    axis=1,
-                )
-            ):
-                pass
-
-            else:
-                # filter out goal states that are occupied by another agent
-                # which also has the occupied state as a goal state
-                # only run this if there's more than 1 entry in goal state set (dependent subtasks)
-                if len(goal_state_set) > 1:
-                    rows_remove = []
-                    for state in curr_state:
-                        row_indices_remove = np.where(
-                            (state == goal_state_set).all(axis=1)
-                        )[0]
-                        if len(row_indices_remove) > 0:
-                            rows_remove += [row_indices_remove.item()]
-                    filtered_goal_state_set = np.delete(
-                        goal_state_set, rows_remove, axis=0
-                    )
-
-                else:
-                    filtered_goal_state_set = goal_state_set
-
-                # compute distances to all valid goal states
-                agent_state_arr = np.stack([agent_state] * len(filtered_goal_state_set))
-                goal_dists = np.linalg.norm(
-                    agent_state_arr - filtered_goal_state_set, axis=1
-                )
-
-                # define the reward based on the closest goal state
-                min_dist = np.min(goal_dists)
-
-                # the numerator here is the max value this reward can take when
-                # the agent is right next to its goal state, so make sure this
-                # is small enough so it doesn't drown out the other rewards
-                reward += self.reward_config.max_dense_reward_per_agent / min_dist
-
-        return reward
-
-    def _reward_reach_goal(
-        self,
-        curr_state: NDArray[np.int_],
-        next_state: NDArray[np.int_],
-    ) -> float:
-        """Reward for an agent reaching its assigned final goal state
-
-        Parameters
-        ----------
-        curr_state : NDArray[np.int_]
-            current state
-        next_state : NDArray[np.int_]
-            next state
-        Returns
-        -------
-        float
-            reward
-        """
-        reward: float = 0.0
-        n_agents_reach_goal: int = 0
-
-        for agent in self.agents:
-            # ensure goal_state_set for this agent is a 2D array so the logic below works as expected
-            goal_state_set = self.agent_goal_state_sets[agent.index]
-            if len(goal_state_set.shape) == 1:
-                goal_state_set = np.expand_dims(goal_state_set, 0)
-
-            # agent is not currently in a goal state
-            condition_1 = not np.any(
-                np.all(
-                    curr_state[agent.index, :] == goal_state_set,
-                    axis=1,
-                )
-            )
-
-            # agent's next state is one of its valid goal states
-            # with the reformatted states, now this gives false when it should give true
-            condition_2 = np.any(
-                np.all(
-                    next_state[agent.index, :] == goal_state_set,
-                    axis=1,
-                )
-            )
-
-            if condition_1 and condition_2:
-                # print(f"Agent {agent.index} reached its goal state")
-                n_agents_reach_goal += 1
-
-        reward += n_agents_reach_goal * self.reward_config.agent_reach_goal_reward
-
-        return reward
-
-    def _reward_leave_goal(
-        self,
-        curr_state: NDArray[np.int_],
-        next_state: NDArray[np.int_],
-    ) -> float:
-        """Reward for an agent leaving its assigned final goal state
-
-        Parameters
-        ----------
-        curr_state : NDArray[np.int_]
-            current state
-        next_state : NDArray[np.int_]
-            next state
-
-        Returns
-        -------
-        float
-            reward
-        """
-        reward: float = 0
-        n_agents_leave_goal: int = 0
-
-        for agent in self.agents:
-            # ensure goal_state_set for this agent is a 2D array so the logic below works as expected
-            goal_state_set = self.agent_goal_state_sets[agent.index]
-            if len(goal_state_set.shape) == 1:
-                goal_state_set = np.expand_dims(goal_state_set, 0)
-
-            # agent's current state is a valid goal state
-            condition_1 = np.any(
-                np.all(
-                    curr_state[agent.index, :] == goal_state_set,
-                    axis=1,
-                )
-            )
-
-            # # agent's next state is not a valid goal state
-            # condition_2 = not np.any(
-            #     np.all(
-            #         next_state[agent.index, :]
-            #         == goal_state_set,
-            #         axis=1,
-            #     )
-            # )
-
-            # # agent's next state is different from its current state
-            condition_2 = not np.array_equal(
-                curr_state[agent.index, :], next_state[agent.index, :]
-            )
-
-            if condition_1 and condition_2:
-                # print(f"Agent {agent.index} left a goal state")
-                n_agents_leave_goal += 1
-
-        reward += n_agents_leave_goal * self.reward_config.agent_leave_goal_reward
-
-        return reward
-
-    def _reward_all_at_goal(self, next_state: NDArray[np.int_]) -> float:
-        """Reward the team for all being at their final assigned states
-
-        Parameters
-        ----------
-        next_state : NDArray[np.int_]
-            next state
-
-        Returns
-        -------
-        float
-            reward
-        """
-        reward = 0.0
+        # Give a reward if all agents arrive at the goal at the same time.
+        # You just need to check if all agents are in the goal state b/c _terminated()
+        # will end an ep if any agent reaches the goal.
         all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
 
-        reward += all_at_goal_flag * self.reward_config.all_agents_at_goal_reward
+        if all_at_goal_flag:
+            reward += 10.0
 
         return reward
 
@@ -772,13 +604,37 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         """
         # I define two different variables here b/c we may consider other conditions
         # in defining "terminated" in the future or in other envs
-        terminated = (self._check_all_agents_reached_goal(next_state=next_state)) or (
-            self._check_any_agent_detected()
-        )
+        terminated = self._check_any_agent_reached_goal(next_state=next_state)
 
         all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
 
         return terminated, all_at_goal_flag
+
+    def _check_any_agent_reached_goal(self, next_state: NDArray[np.int_]) -> bool:
+        """check if each agent is in a valid goal state"""
+
+        reached_goal: NDArray = np.zeros(len(self.agents))
+
+        for i, agent in enumerate(self.agents):
+            # ensure goal_state_set for this agent is a 2D array so the logic below works as expected
+            goal_state_set = self.agent_goal_state_sets[agent.index]
+            if len(goal_state_set.shape) == 1:
+                goal_state_set = np.expand_dims(goal_state_set, 0)
+
+            reached_goal[i] = np.any(
+                np.all(
+                    next_state[agent.index, :] == goal_state_set,
+                    axis=1,
+                )
+            )
+
+        # Convert from np bool to python bool b/c
+        # np bools cannot be interpreted as integers.
+        # This is an issue that comes up later in the training pipeline.
+        any_at_goal_flag = bool(np.any(reached_goal))
+
+        return any_at_goal_flag
+
 
     def _check_all_agents_reached_goal(self, next_state: NDArray[np.int_]) -> bool:
         """check if each agent is in a valid goal state"""
@@ -804,24 +660,6 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         all_at_goal_flag = bool(np.all(reached_goal))
 
         return all_at_goal_flag
-
-    def _check_any_agent_detected(self) -> bool:
-        """check whether any agent was detected by the detection zones in the environment
-
-        Returns
-        -------
-        bool
-            True if any agent was detected
-        """
-        detected: bool = False
-        for i, detector in enumerate(self.detectors):
-            if detector.detect_agents(
-                self.agents, self.comms_val, self.obj_group_dict, self.np_random
-            ):
-                detected = True
-                break
-
-        return detected
 
     # step info
     def _get_step_info(self, all_at_goal: bool = False) -> StepInfo:
