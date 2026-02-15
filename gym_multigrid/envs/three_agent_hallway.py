@@ -51,6 +51,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
     def __init__(
         self,
         num_agents: int = 3,
+        hall_lengths: list[int] = [2, 6, 10],
         p_intended_movement: float = 1.0,
         actions_set: type[ActionsT] = HallwayActions,
         world: WorldT = TeamNavigationWorld,
@@ -101,7 +102,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         # hall length in join1 was [2, 6, 10], but the goal state at the
         # end of the hall adds 1 more length to the total hall length
         # total hall length should be x+1 for each x in state_numbers from join1
-        self.hall_lengths = np.array([2, 6, 10])
+        self.hall_lengths = np.array(hall_lengths)
 
         # observation config
         self.observation_option = observation_option
@@ -584,7 +585,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
 
         if all_at_goal_flag:
-            reward += 10.0
+            reward += 5.0
 
         return reward
 
