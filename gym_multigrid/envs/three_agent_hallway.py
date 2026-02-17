@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 from gymnasium import spaces
 
-from gym_multigrid.core.agent import HallwayActions, ActionsT, Agent
+from gym_multigrid.core.agent import NavigationActions, ActionsT, Agent
 from gym_multigrid.core.agent import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Wall, WorldObjT
@@ -53,7 +53,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         num_agents: int = 3,
         hall_lengths: list[int] = [2, 6, 10],
         p_intended_movement: float = 1.0,
-        actions_set: type[ActionsT] = HallwayActions,
+        actions_set: type[ActionsT] = NavigationActions,
         world: WorldT = TeamNavigationWorld,
         observation_option: Literal["x_position"] = "x_position",
         obs_type: Literal["array", "array_scaled"] = "array_scaled",
@@ -76,7 +76,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         observation_option : Literal["goal"] = "goal"
             Observation option.
             - "goal": The observation includes agent positions and position of the assigned goal.
-        actions_set : type[ActionsT] = HallwayActions
+        actions_set : type[ActionsT] = NavigationActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
         agent_dir_to_vec : list[NDArray[np.int_]] = NAV_DIR_TO_VEC
@@ -157,6 +157,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
+
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -351,8 +352,8 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         return avail_actions
 
     def print_avail_actions_str(self, avail_actions):
-        if self.actions == HallwayActions:
-            actions = [a.name for a in HallwayActions]
+        if self.actions == NavigationActions:
+            actions = [a.name for a in NavigationActions]
 
             print("Available actions")
             for agent_idx, avail_actions_agent in enumerate(avail_actions):
@@ -364,17 +365,17 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
                 print(f"Agent: {agent_idx} --- {action_str}")
 
     def _get_avail_actions_agent(self, agent: Agent) -> list[bool]:
-        if self.actions == HallwayActions:
+        if self.actions == NavigationActions:
             avail_actions_tmp: dict[int, bool] = {}
 
             # populate with filler data
-            for action in HallwayActions:
+            for action in NavigationActions:
                 avail_actions_tmp[action.value] = True
 
             # set the values in avail_actions
             # you should be able to set the desired order of the neighbor positions here
             neighbor_positions: dict[str, NDArray[np.int_]] = (
-                agent.get_left_right_neighbor_pos()
+                agent.get_all_neighbor_pos()
             )
 
             for direction, pos in neighbor_positions.items():
@@ -382,9 +383,9 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
                 if (neighbor_cell is None) or (neighbor_cell.can_overlap()):
                     continue
                 else:
-                    avail_actions_tmp[HallwayActions[direction].value] = False
+                    avail_actions_tmp[NavigationActions[direction].value] = False
 
-            # turn avail_actions into a list with the ordering of the actions same as in HallwayActions
+            # turn avail_actions into a list with the ordering of the actions same as in NavigationActions
             avail_actions: list[bool] = list(avail_actions_tmp.values())
 
         else:
