@@ -34,9 +34,7 @@ class StepInfo(TypedDict):
 
 State: TypeAlias = NDArray[np.int_] | NDArray[np.float32] | NDArray[np.float64]
 
-Observation: TypeAlias = (
-    dict[str, NDArray[np.int_]] | NDArray[np.int_] | NDArray[np.float32]
-)
+Observation: TypeAlias = tuple[NDArray]
 
 
 class ThreeAgentHallwaysEnv(MultiGridEnv):
@@ -136,10 +134,10 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         self.init_grid: Grid
 
         # scalings so entries in these tensors are in [0, 1]
-        obj_encoding_scaling = len(world.OBJECT_TO_IDX) - 1
-        if world.encode_dim == 2:
-            # state[:, :, 1] captures agent indices, so scale by num_agents-1 since 0-indexed
-            self.state_scaling = np.array([obj_encoding_scaling, self.num_agents - 1])
+        # obj_encoding_scaling = len(world.OBJECT_TO_IDX) - 1
+        # if world.encode_dim == 2:
+        # state[:, :, 1] captures agent indices, so scale by num_agents-1 since 0-indexed
+        # self.state_scaling = np.array([obj_encoding_scaling, self.num_agents - 1])
 
         self.obs_scaling = width
 
@@ -157,7 +155,6 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         self.action_space = spaces.MultiDiscrete(
             [len(self.actions) for _ in range(self.num_agents)]
         )
-
 
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
@@ -187,7 +184,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         *,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
-    ) -> NDArray[np.int_]:
+    ) -> Observation:
 
         super().reset(seed=seed, options=options)
 
@@ -223,7 +220,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
                     EnvObjectGroup(
                         obj_type="wall",
                         group_index=n_wall_groups,
-                        pos=((0, y+1, self.width, 1),),
+                        pos=((0, y + 1, self.width, 1),),
                         color="grey",
                         spawned_subtask_indices=(0,),
                         fill_mode="filled",
@@ -298,26 +295,27 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
     def get_state(self) -> State:
         """get state with full information about all objects in the env"""
-        state = self.grid.encode()
-
-        # scale to range of [0, 1]
-        state = np.divide(state, self.state_scaling)
+        # state = self.grid.encode()
+        state = np.zeros(self.num_agents)
+        for agent in self.agents:
+            state[agent.index] = self._get_agent_obs(agent)
 
         return state
 
     def _get_obs(self) -> Observation:
-        obs: NDArray = np.zeros((self.num_agents, 1))
-        for agent in self.agents:
-            # each agent observes its x position
-            obs[agent.index] = np.array(agent.pos[0])
-
-        if self.obs_type == "array_scaled":
-            obs = obs / self.obs_scaling
+        # obs: NDArray = np.zeros((self.num_agents, 1))
+        obs_list: list[NDArray] = [self._get_agent_obs(agent) for agent in self.agents]
+        obs = tuple(obs_list)
 
         return obs
 
-    def _scale_agent_obs(self, agent_obs: NDArray) -> NDArray:
-        return agent_obs / self.obs_scaling
+    def _get_agent_obs(self, agent: Agent) -> NDArray:
+        # each agent observes its x position
+        agent_obs = np.array(agent.pos[0])
+
+        if self.obs_type == "array_scaled":
+            agent_obs = agent_obs / self.obs_scaling
+        return agent_obs
 
     def get_env_info(self) -> EnvInfo:
         # obs_shape should only be the shape of a single agent
@@ -326,7 +324,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
         env_info: EnvInfo = {
             # length of the state tensor when flattened to a 1D vector
-            "state_shape": self.width * self.height * self.world.encode_dim,
+            "state_shape": self.num_agents,
             "obs_shape": obs_shape,
             "n_actions": len(self.actions),
             "n_agents": self.num_agents,
@@ -587,7 +585,12 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         all_at_goal_flag = self._check_all_agents_reached_goal(next_state=next_state)
 
         if all_at_goal_flag:
-            reward += 10.0
+            # original was 10, but they did not scale their obs and state to be in [0, 1]
+            # scaling ensures rewards, obs, and gradients are of a similar scale
+            if self.obs_type == "array_scaled":
+                reward += 1.0
+            else:
+                reward += 10.0
 
         return reward
 
@@ -618,13 +621,13 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
         reached_goal: NDArray = np.zeros(len(self.agents))
 
-        for i, agent in enumerate(self.agents):
+        for agent in self.agents:
             # ensure goal_state_set for this agent is a 2D array so the logic below works as expected
             goal_state_set = self.agent_goal_state_sets[agent.index]
             if len(goal_state_set.shape) == 1:
                 goal_state_set = np.expand_dims(goal_state_set, 0)
 
-            reached_goal[i] = np.any(
+            reached_goal[agent.index] = np.any(
                 np.all(
                     next_state[agent.index, :] == goal_state_set,
                     axis=1,
@@ -638,19 +641,18 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
         return any_at_goal_flag
 
-
     def _check_all_agents_reached_goal(self, next_state: NDArray[np.int_]) -> bool:
         """check if each agent is in a valid goal state"""
 
         reached_goal: NDArray = np.zeros(len(self.agents))
 
-        for i, agent in enumerate(self.agents):
+        for agent in self.agents:
             # ensure goal_state_set for this agent is a 2D array so the logic below works as expected
             goal_state_set = self.agent_goal_state_sets[agent.index]
             if len(goal_state_set.shape) == 1:
                 goal_state_set = np.expand_dims(goal_state_set, 0)
 
-            reached_goal[i] = np.any(
+            reached_goal[agent.index] = np.any(
                 np.all(
                     next_state[agent.index, :] == goal_state_set,
                     axis=1,

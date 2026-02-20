@@ -596,7 +596,6 @@ class FiveTaskTeamNavigationEnv(MultiGridEnv):
     def _set_observation_space(self) -> spaces.Box:
         max_x: int = self.width - 1
         max_y: int = self.height - 1
-
         obs_shape = self.reset()[0].shape
 
         if self.obs_type in ["array", "array_scaled"]:
