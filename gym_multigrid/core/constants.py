@@ -167,6 +167,19 @@ NAV_DIR_TO_VEC: list[NDArray[np.int_]] = [
     np.array((0, -1)),
 ]
 
+HALL_DIR_TO_VEC = [
+    # Stay
+    np.array((0, 0)),
+    # Left
+    np.array((-1, 0)),
+    # Right
+    np.array((1, 0)),
+    # Up
+    np.array((0, -1)),
+    # Down
+    np.array((0, 1)),
+]
+
 
 # Map of object types to short string
 OBJECT_TO_STR = {

@@ -11,7 +11,7 @@ from gym_multigrid.policy.base import AgentPolicyT
 from gym_multigrid.typing import Position
 from gym_multigrid.utils.rendering import point_in_triangle, rotate_fn, fill_coords
 from gym_multigrid.core.object import WorldObj
-from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
+from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC, HALL_DIR_TO_VEC
 
 
 ActionsT = TypeVar("ActionsT", bound=enum.IntEnum)

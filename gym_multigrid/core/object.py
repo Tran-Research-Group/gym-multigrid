@@ -130,6 +130,14 @@ class WorldObj:
             "down": self.south_pos(),
         }
 
+    def get_left_right_neighbor_pos(self) -> dict[str, NDArray[np.int_]]:
+        """get all of the neighboring positions"""
+        return {
+            "left": self.west_pos(),
+            "right": self.east_pos(),
+        }
+
+
     def reset(self) -> None:
         """
         Reset the object to its initial state.
