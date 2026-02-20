@@ -311,7 +311,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
     def _get_agent_obs(self, agent: Agent) -> NDArray:
         # each agent observes its x position
-        agent_obs = np.array(agent.pos[0])
+        agent_obs = np.array([agent.pos[0]])
 
         if self.obs_type == "array_scaled":
             agent_obs = agent_obs / self.obs_scaling
