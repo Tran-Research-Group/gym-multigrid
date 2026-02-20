@@ -311,8 +311,8 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
             # each agent observes its x position
             obs[agent.index] = np.array(agent.pos[0])
 
-        # if self.obs_type == "array_scaled":
-        #     obs = obs / self.obs_scaling
+        if self.obs_type == "array_scaled":
+            obs = obs / self.obs_scaling
 
         return obs
 
