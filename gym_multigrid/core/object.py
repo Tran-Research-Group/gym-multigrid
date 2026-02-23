@@ -453,7 +453,6 @@ class Building(WorldObj):
         # If the building is on fire, overlay a red glow
         if self.fire_rate > 0:
             fire_intensity = min(1, self.fire_rate * 0.25 + 0.5)  # Scale fire effect
-            print("FIRE", fire_intensity)
             fire_color = np.array(self.world.COLORS["red"]) * fire_intensity
             fill_coords(img, point_in_circle(0.5, 0.5, 0.4), tuple(fire_color))
 
