@@ -34,7 +34,7 @@ class StepInfo(TypedDict):
 
 State: TypeAlias = NDArray[np.int_] | NDArray[np.float32] | NDArray[np.float64]
 
-Observation: TypeAlias = tuple[NDArray]
+Observation: TypeAlias = NDArray[np.int_] | NDArray[np.float32] | NDArray[np.float64]
 
 
 class ThreeAgentHallwaysEnv(MultiGridEnv):
@@ -53,8 +53,10 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         p_intended_movement: float = 1.0,
         actions_set: type[ActionsT] = HallwayActions,
         world: WorldT = TeamNavigationWorld,
-        observation_option: Literal["x_position"] = "x_position",
-        obs_type: Literal["array", "array_scaled"] = "array_scaled",
+        obs_option: Literal[
+            "single_x_position", "team_x_positions"
+        ] = "single_x_position",
+        scaling: bool = False,
         agent_dir_to_vec: list[NDArray[np.int_]] = HALL_DIR_TO_VEC,
         render_mode: Literal["human", "rgb_array"] = "rgb_array",
         init_state_dist: None = None,
@@ -71,9 +73,8 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         p_intended_movement : float = 0.95
             Probability of the intended movement.
             Should be in the range [0, 1].
-        observation_option : Literal["goal"] = "goal"
+        obs_option: Literal["single_x_position", "team_x_positions"] = "single_x_position",
             Observation option.
-            - "goal": The observation includes agent positions and position of the assigned goal.
         actions_set : type[ActionsT] = HallwayActions
             Set of actions for the agents.
             By default, there are five actions: "stay", "up", "right", "down", and "left".
@@ -103,8 +104,8 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         self.hall_lengths = np.array(hall_lengths)
 
         # observation config
-        self.observation_option = observation_option
-        self.obs_type = obs_type
+        self.obs_option = obs_option
+        self.scaling = scaling
 
         # agent config
         agent_view_size: int | None = None
@@ -139,7 +140,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         # state[:, :, 1] captures agent indices, so scale by num_agents-1 since 0-indexed
         # self.state_scaling = np.array([obj_encoding_scaling, self.num_agents - 1])
 
-        self.obs_scaling = width
+        self.obs_scaling = width - 1
 
         super().__init__(
             agents=agents,
@@ -157,25 +158,18 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         )
 
     def _set_observation_space(self) -> spaces.Box:
-        max_x: int = self.width - 1
-        max_y: int = self.height - 1
+        self.obs_shape = self.reset().shape
 
-        obs_shape = self.reset()[0].shape
-
-        if self.obs_type in ["array", "array_scaled"]:
-            if self.obs_type == "array":
-                max_val = np.max((max_x, max_y))
-            else:
-                max_val = 1
-
-            observation_space = spaces.Box(
-                low=np.zeros(obs_shape),
-                high=max_val * np.ones(obs_shape),
-                dtype=np.float32,
-            )
-
+        if self.scaling:
+            max_val = 1.0
         else:
-            raise ValueError(f"Invalid observation type: {self.obs_type}")
+            max_val = self.width - 1
+
+        observation_space = spaces.Box(
+            low=np.zeros(self.obs_shape),
+            high=max_val * np.ones(self.obs_shape),
+            dtype=np.float32,
+        )
 
         return observation_space
 
@@ -188,7 +182,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
         super().reset(seed=seed, options=options)
 
-        obs: Observation = self._get_obs()
+        obs: Observation = self.get_obs()
 
         return obs
 
@@ -295,37 +289,42 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
 
     def get_state(self) -> State:
         """get state with full information about all objects in the env"""
-        # state = self.grid.encode()
-        state = np.zeros(self.num_agents)
-        for agent in self.agents:
-            state[agent.index] = self._get_agent_obs(agent)
+        state = np.array([a.pos[0] for a in self.agents])
+
+        if self.scaling:
+            state = state / self.obs_scaling
 
         return state
 
-    def _get_obs(self) -> Observation:
-        # obs: NDArray = np.zeros((self.num_agents, 1))
-        obs_list: list[NDArray] = [self._get_agent_obs(agent) for agent in self.agents]
-        obs = tuple(obs_list)
+    def get_obs(self) -> Observation:
+        obs_list = [self._get_agent_obs(agent) for agent in self.agents]
+        obs: Observation = np.vstack(obs_list)
 
         return obs
 
     def _get_agent_obs(self, agent: Agent) -> NDArray:
-        # each agent observes its x position
-        agent_obs = np.array([agent.pos[0]])
+        if self.obs_option == "single_x_position":
+            # each agent observes its x position
+            agent_obs = np.array([agent.pos[0]])
 
-        if self.obs_type == "array_scaled":
+        elif self.obs_option == "team_x_positions":
+            # each agent observes every agent's x position
+            agent_obs = np.array([a.pos[0] for a in self.agents])
+
+        if self.scaling:
             agent_obs = agent_obs / self.obs_scaling
+
         return agent_obs
 
     def get_env_info(self) -> EnvInfo:
         # obs_shape should only be the shape of a single agent
         # self.observation_space.shape = (n_agents, dim_1_size, dim_2_size, ...)
-        obs_shape = int(np.prod(self.observation_space.shape[1:]))
+        total_obs_length = int(np.prod(self.observation_space.shape[1:]))
 
         env_info: EnvInfo = {
             # length of the state tensor when flattened to a 1D vector
             "state_shape": self.num_agents,
-            "obs_shape": obs_shape,
+            "obs_shape": total_obs_length,
             "n_actions": len(self.actions),
             "n_agents": self.num_agents,
         }
@@ -410,7 +409,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         )
 
         # get observation from being in s_{t+1}
-        obs: Observation = self._get_obs()
+        obs: Observation = self.get_obs()
 
         terminated, all_at_goal = self._terminated(next_state=next_state)
 
@@ -587,7 +586,7 @@ class ThreeAgentHallwaysEnv(MultiGridEnv):
         if all_at_goal_flag:
             # original was 10, but they did not scale their obs and state to be in [0, 1]
             # scaling ensures rewards, obs, and gradients are of a similar scale
-            if self.obs_type == "array_scaled":
+            if self.scaling:
                 reward += 1.0
             else:
                 reward += 10.0
