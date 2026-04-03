@@ -36,8 +36,8 @@ class Grid:
         world : World
             world object in which the grid is situated
         """
-        assert width >= 3
-        assert height >= 3
+        # assert width > 0
+        # assert height > 0
 
         self.width: int = width
         self.height: int = height

@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.world import World
 from gym_multigrid.policy.ctf.typing import ObservationDict
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 
 class AStarNode(NamedTuple):

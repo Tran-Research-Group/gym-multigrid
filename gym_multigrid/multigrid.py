@@ -369,11 +369,36 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
     def _get_info(self):
         return {}
 
+    def get_env_info(self):
+        """standard function to interface with EPyMARL training loop"""
+        env_info = {
+            "state_shape": self._get_state_size(),
+            "obs_shape": self._get_obs_size(),
+            "n_actions": len(self.actions),
+            "n_agents": len(self.agents),
+        }
+        return env_info
+
+    def _get_state_size(self) -> int:
+        """standard function to interface with EPyMARL training loop,
+        returns the flattened size of the global state."""
+        state = self.grid.encode()
+        state_size = math.prod(state.shape)
+        return state_size
+
+    def _get_obs_size(self):
+        """standard function to interface with EPyMARL training loop,
+        returns the flattened size of a single agent's observation."""
+        # not implemented b/c each env's observation can be very different
+        raise NotImplementedError(
+            "Please implement _get_obs_size in your environment."
+        )
+
     @property
     def steps_remaining(self):
-        assert self.max_steps is not None, (
-            "steps_remaining is only available if max_steps is set"
-        )
+        assert (
+            self.max_steps is not None
+        ), "steps_remaining is only available if max_steps is set"
         return self.max_steps - self.step_count
 
     def __str__(self):
@@ -754,7 +779,6 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         for a in self.agents:
             topX, topY, botX, botY = a.get_view_exts()
-
             grid = self.grid.slice(topX, topY, a.view_size, a.view_size)
 
             for i in range(a.dir + 1):
@@ -778,7 +802,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return grids, vis_masks
 
-    def gen_obs(self):
+    def gen_obs(self) -> list[NDArray]:
         """
         Generate the agent's view (partially observable, low-resolution encoding)
         """
@@ -788,12 +812,13 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         # Encode the partially observable view into a numpy array
         obs = [
             grid.encode_for_agents(
-                self.world, [grid.width // 2, grid.height - 1], vis_mask
+                agent_pos=(grid.width // 2, grid.height - 1),
+                vis_mask=vis_mask,
             )
             for grid, vis_mask in zip(grids, vis_masks)
         ]
-
         return obs
+
 
     def get_obs_render(self, obs, tile_size=TILE_PIXELS // 2):
         """

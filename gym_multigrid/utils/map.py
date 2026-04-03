@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 
 
 def distance_points(p1: Position, p2: Position, is_defeated: bool = False) -> float:

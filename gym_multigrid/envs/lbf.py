@@ -1,13 +1,13 @@
-import enum
-import warnings
-from typing import Any, Literal, Type, TypedDict
 from enum import IntEnum
+from typing import Any, Type, TypedDict
+import warnings
+import math
 
 import numpy as np
 from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import Agent, LBFActions
-from gym_multigrid.core.constants import NAV_DIR_TO_VEC
+from gym_multigrid.core.constants import DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
@@ -17,8 +17,9 @@ from gym_multigrid.utils.rendering import (
 )
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy import AgentPolicy
-from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
+
+# from gym_multigrid.policy import AgentPolicy
+# from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
 from gym_multigrid.policy.prey_pred.utils import a_star
 
 
@@ -37,6 +38,7 @@ class FruitTypeDict(TypedDict):
     capture_reward: float
     level: int
     color: str
+
 
 class Fruit(WorldObj):
     def __init__(
@@ -67,7 +69,7 @@ class Fruit(WorldObj):
         self._pos = pos
         if pos is not None:
             self.neighbor_pos = pos + self.neighbor_pos_offsets
-    
+
     def can_pickup(self):
         return True
 
@@ -102,17 +104,17 @@ class Fruit(WorldObj):
         agent_ids = agent_ids if capturable else []
 
         return capturable
-    
+
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
-    
+
     def reset(self) -> None:
         super().reset()
         if self.pos is not None:
             self.neighbor_pos = self.pos + self.neighbor_pos_offsets
         else:
             self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
-    
+
     def encode(self, current_agent: bool = False) -> tuple[int, ...]:
         """Encode the a description of this object as a 3-tuple of integers"""
         if self.world.encode_dim == 3:
@@ -130,10 +132,13 @@ class Fruit(WorldObj):
                 0,
                 0,
             )
+
+
 class AgentConfigDict(TypedDict):
     init_pos: tuple[int, int]
     level: int
     color: str
+
 
 class LBFAgent(Agent):
     def __init__(
@@ -156,15 +161,15 @@ class LBFAgent(Agent):
             color=agent_config["color"],
             type="agent",
             view_size=view_size,
-            dir_to_vec=NAV_DIR_TO_VEC,
+            dir_to_vec=DIR_TO_VEC,
         )
 
     def get_level(self) -> int:
         return self.agent_config["level"]
-    
+
     def get_init_pos(self) -> tuple[int, int]:
         return self.agent_config["init_pos"]
-    
+
     @property
     def pos(self) -> Position:
         return (self._pos[0], self._pos[1])
@@ -181,7 +186,7 @@ class LBFAgent(Agent):
             self.neighbor_pos = self.pos + self.neighbor_pos_offsets
         else:
             self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
-    
+
     def encode(self, current_agent: bool = False) -> tuple[int, ...]:
         """Encode a description of this object as a 3-tuple of integers
 
@@ -196,6 +201,7 @@ class LBFAgent(Agent):
                 self.world.COLOR_TO_IDX[self.color],
                 self.agent_config["level"],
             )
+
 
 class LBFGameEnv(MultiGridEnv):
     """
@@ -221,30 +227,45 @@ class LBFGameEnv(MultiGridEnv):
         """
         self.size = kwargs["layout_config"]["size"]
         self.num_rooms = kwargs["layout_config"]["num_rooms"]
-        self.waypoints = kwargs["layout_config"]["room_configs"]
+        self.waypoints = self._config_lists_to_tuples(
+            kwargs["layout_config"]["room_configs"]
+        )
         self.field_map = kwargs["layout_config"]["field_map"]
-        
+
         self.num_fruits = kwargs["fruit_config"]["num_fruit"]
-        self.total_num_fruits = int(np.sum(np.array(kwargs["fruit_config"]["num_fruit"])))
+        self.total_num_fruits = int(
+            np.sum(np.array(kwargs["fruit_config"]["num_fruit"]))
+        )
         self.collected_fruit = 0
         self.fruits_index = kwargs["fruit_config"]["fruits_index"]
         self.fruits_reward = kwargs["fruit_config"]["fruits_reward"]
         self.num_fruit_types = len(kwargs["fruit_config"]["fruits_index"])
-        
+
         self.agents_index = kwargs["agent_config"]["index"]
         self.world = LBFWorld
         self.actions_set = LBFActions
         partial_obs: bool = False
-        self.info = {}
 
         agents = []
         for i, agent_index in enumerate(self.agents_index):
+            init_pos = kwargs["agent_config"]["init_pos"][i]
+            if isinstance(init_pos, list):
+                init_pos = tuple(init_pos)
+
             temp_agent_config: AgentConfigDict = {
-                "init_pos": kwargs["agent_config"]["init_pos"][i],
+                "init_pos": init_pos,
                 "level": kwargs["agent_config"]["level"][i],
                 "color": self.world.IDX_TO_COLOR[agent_index],
             }
-            agents.append(LBFAgent(self.world, i, temp_agent_config))
+
+            agents.append(
+                LBFAgent(
+                    world=self.world,
+                    index=i,
+                    agent_config=temp_agent_config,
+                    view_size=kwargs["agent_config"]["view_size"],
+                )
+            )
 
         super().__init__(
             grid_size=self.size,
@@ -272,7 +293,9 @@ class LBFGameEnv(MultiGridEnv):
                     temp_fruit_config: FruitTypeDict = {  # type: ignore
                         "capture_reward": float(self.fruits_reward[int(cell) - 1]),
                         "level": int(cell),
-                        "color": str(self.world.IDX_TO_COLOR[self.fruits_index[int(cell) - 1]])
+                        "color": str(
+                            self.world.IDX_TO_COLOR[self.fruits_index[int(cell) - 1]]
+                        ),
                     }
                     self.put_obj(Fruit(temp_fruit_config, self.world), x, y)
                 else:
@@ -289,7 +312,7 @@ class LBFGameEnv(MultiGridEnv):
                 )
                 self.put_obj(waypoint_obj, waypoint[0], waypoint[1])
                 self.waypoint_pos.append(waypoint_obj.pos)
-        
+
         # Place the agents
         for agent in self.agents:
             self.place_agent(
@@ -297,12 +320,14 @@ class LBFGameEnv(MultiGridEnv):
                 agent.get_init_pos(),
             )
         self.init_grid: Grid = self.grid.copy()
-    
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         self.step_count: int = 0
-        self.collected_fruit: NDArray[np.int_] = np.zeros(self.num_fruit_types, dtype=np.int_)
+        self.collected_fruit: NDArray[np.int_] = np.zeros(
+            self.num_fruit_types, dtype=np.int_
+        )
         self.current_room: int = 0
         self.room_cleared = [False for _ in range(self.num_rooms)]
 
@@ -318,7 +343,7 @@ class LBFGameEnv(MultiGridEnv):
         self._reset_agents(agent_pos_list=agent_pos_list)
 
         obs: NDArray[np.int_] = self.grid.encode()
-        info: dict[str, Any] = self.info
+        info: dict[str, Any] = self._get_info(reset=True)
 
         return obs, info
 
@@ -329,7 +354,7 @@ class LBFGameEnv(MultiGridEnv):
         Reset the agents in the environment.
         """
         for agent in self.agents:
-            agent.reset(self.np_random)
+            agent.reset()
 
         use_agent_pos_list: bool = agent_pos_list is not None
         if agent_pos_list is not None:
@@ -350,7 +375,7 @@ class LBFGameEnv(MultiGridEnv):
                 else agent_pos_list.pop(0)
             )
             self.place_agent(agent, agent_pos)
-        
+
     def step(
         self, action: NDArray[np.int_] | np.int_
     ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
@@ -378,7 +403,7 @@ class LBFGameEnv(MultiGridEnv):
         terminated: bool = False
         actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
         rewards: NDArray[np.float64] = np.zeros(len(actions))
-        
+
         # Order to apply the actions to the agents
         order: NDArray[np.int_] = self.np_random.permutation(len(self.agents))
 
@@ -397,8 +422,12 @@ class LBFGameEnv(MultiGridEnv):
                 elif act == self.actions.LOAD:
                     for neighbor_pos in agent.neighbor_pos:
                         cell = self.grid.get(*neighbor_pos)
-                        if isinstance(cell, Fruit) and cell.check_capture_condition(self.grid):
-                            print(f"Agent {i} captured fruit at {cell.pos} with level {cell.fruit_config['level']}!")
+                        if isinstance(cell, Fruit) and cell.check_capture_condition(
+                            self.grid
+                        ):
+                            print(
+                                f"Agent {i} captured fruit at {cell.pos} with level {cell.fruit_config['level']}!"
+                            )
                             self._handle_pickup(i, rewards, neighbor_pos, cell)
                         else:
                             pass
@@ -408,37 +437,56 @@ class LBFGameEnv(MultiGridEnv):
                     self.grid.set(*agent.pos, None)
                     # Change the dir of the agent
                     if agent.pos != next_pos:
-                        dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(
-                            agent.pos
-                        )
+                        dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(agent.pos)
                         agent.dir = agent.vec2dir(dir_vec)
                     agent.pos = next_pos
-                    
+
                     # Check if the agent has reached a waypoint
-                    if agent.pos in self.waypoint_pos and self.room_cleared[self.current_room]:
-                        #print(f"Agent {i} reached waypoint at {agent.pos} in room {self.current_room}!")
+                    if (
+                        agent.pos in self.waypoint_pos
+                        and self.room_cleared[self.current_room]
+                    ):
+                        # print(f"Agent {i} reached waypoint at {agent.pos} in room {self.current_room}!")
                         self._reward(i, rewards, next_cell.reward if next_cell else 0)
         # if all agents are at waypoints, move to the next room
-        if all(agent.pos in self.waypoint_pos for agent in self.agents) and self.room_cleared[self.current_room]:
-            print(f"All agents reached waypoints for room {self.current_room}. Moving to next room...")
+        if (
+            all(agent.pos in self.waypoint_pos for agent in self.agents)
+            and self.room_cleared[self.current_room]
+        ):
+            print(
+                f"All agents reached waypoints for room {self.current_room}. Moving to next room..."
+            )
             # remove walls and waypoints for the current room
             for waypoint in self.waypoints[self.current_room]["flag_positions"]:
-                #self.grid.set(waypoint[0], waypoint[1], None)
+                # self.grid.set(waypoint[0], waypoint[1], None)
                 self.waypoint_pos.remove(waypoint)
             for wall_pos in self.waypoints[self.current_room]["wall_positions"]:
-                #print(f"Removing wall at {wall_pos}")
+                # print(f"Removing wall at {wall_pos}")
                 self.grid.set(wall_pos[0], wall_pos[1], None)
             self.current_room += 1
-        
+
         # Terminate the episode if all rooms have been cleared or max steps reached
         terminated = self.current_room == self.num_rooms
         truncated = self.step_count >= self.max_steps
 
         self.step_count += 1
-        print(f"Step: {self.step_count}, Total Collected Fruit: {self.collected_fruit}, Current Room: {self.current_room}")
+        # print(
+        #     f"Step: {self.step_count}, Total Collected Fruit: {self.collected_fruit}, Current Room: {self.current_room}"
+        # )
 
-        return self.grid.encode(), float(np.sum(rewards)), terminated, truncated, self.info
-    
+        obs: NDArray[np.int_] = self.grid.encode()
+        reward: float = float(np.sum(rewards))
+
+        info = self._get_info()
+
+        return (
+            obs,
+            reward,
+            terminated,
+            truncated,
+            info,
+        )
+
     def _get_next_pos(self, agent, action: int) -> tuple[int, int]:
         self.actions: Type[LBFActions]
 
@@ -471,11 +519,16 @@ class LBFGameEnv(MultiGridEnv):
             self.collected_fruit[fwd_cell.fruit_config["level"] - 1] += 1
             # print(f"Collected fruit of type {fwd_cell.fruit_config['level']}. Total collected: {self.collected_fruit}")
             # reset fruit collected for the room if room cleared
-            if self.collected_fruit.tolist() == self.waypoints[self.current_room]["fruit_count"]:
+            if (
+                self.collected_fruit.tolist()
+                == self.waypoints[self.current_room]["fruit_count"]
+            ):
                 self.room_cleared[self.current_room] = True
-                self.collected_fruit: NDArray[np.int_] = np.zeros(self.num_fruit_types, dtype=np.int_)
+                self.collected_fruit: NDArray[np.int_] = np.zeros(
+                    self.num_fruit_types, dtype=np.int_
+                )
             self._reward(i, rewards, fwd_cell.reward)
-    
+
     def _reward(
         self, current_agent: int, rewards: NDArray[np.float64], reward: float = 1
     ) -> None:
@@ -484,10 +537,135 @@ class LBFGameEnv(MultiGridEnv):
         """
         rewards[current_agent] += reward
 
+    def _get_info(self, reset: bool = False) -> dict:
+        # step info
+        info = {}
+
+        # TODO follow join1's example here
+        # if X happens, info["battle_won"] = True
+        # else info["battle_won"] = False
+
+        # if not reset and some other condition
+        # info["battle_won"] = True
+
+        # else:
+        # info["battle_won"] = False
+
+        return info
+
+    def _config_lists_to_tuples(self, data: list[dict]) -> list[dict]:
+        # convert from list of lists to list of tuples in a list of config dicts
+        for d in data:
+            for k, v in d.items():
+                updated_config = []
+                for item in v:
+                    if isinstance(item, list):
+                        updated_config.append(tuple(item))
+                    else:
+                        updated_config.append(item)
+                d[k] = updated_config
+
+        return data
+
+    def get_state(self):
+        # return a state of size (n_state_features)
+        # use multigrid's basic state for now, come back to this later
+        state = self.grid.encode()
+
+        # obs = self.get_obs()
+        # state = obs[0]
+        # for i in range(len(self.agents) - 1):
+        #     state = np.concatenate([state, obs[i + 1]])
+
+        return state.flatten()
+
+    def get_obs(self):
+        # return an obs of size (n_agents, n_obs_features)
+        # use multigrid's basic obs for now, come back to this later
+        obs = self.gen_obs()
+        obs = np.array(obs).reshape(len(self.agents), -1)
+
+        return obs
+
+    def get_avail_actions(self):
+        # added this method to interface with PYMARL training loop
+        # returns list of agent lists, where each agent's list has binary values representing
+        # available actions
+        # based on the MAIC paper's implementation of LBF with some minor cleanup
+        # https://github.com/mansicer/MAIC/blob/main/src/envs/lbforaging/foraging.py
+
+        return [self.get_avail_agent_actions(agent) for agent in self.agents]
+
+    def get_avail_agent_actions(self, agent: LBFAgent) -> list[bool]:
+        avail_actions = [False] * len(self.actions)
+        agent_actions = [
+            action
+            for action in self.actions_set
+            if self._is_valid_action(agent, action)
+        ]
+
+        for action in agent_actions:
+            avail_actions[action.value] = True
+
+        return avail_actions
+
+    def _is_valid_action(self, agent, action):
+        valid = False
+
+        if action == self.actions_set.STAY:
+            valid = True
+        elif action == self.actions_set.LOAD:
+            valid = self._adjacent_fruit(agent) > 0
+        else:
+            # movement actions
+            next_pos = self._get_next_pos(agent, action)
+            next_cell: None | WorldObj = self.grid.get(*next_pos)
+
+            # agent can move to next space
+            if next_cell is None or next_cell.can_overlap():
+                # agent not in outer row of env
+                match action:
+                    case self.actions_set.UP:
+                        valid = agent.pos[0] > 0
+                    case self.actions_set.DOWN:
+                        valid = agent.pos[0] < self.height - 1
+                    case self.actions_set.LEFT:
+                        valid = agent.pos[1] > 0
+                    case self.actions_set.RIGHT:
+                        valid = agent.pos[1] < self.width - 1
+
+        return valid
+
+    def _adjacent_fruit(self, agent: LBFAgent):
+        """
+        original logic for adjacent_food takes (x, y) as input and tells you the sum around it. Fruit encoded as a 1 in original lbf, so the logic below equivalent to "if any positions around me have a fruit in them, I can take the load action"
+
+        Parameters
+        ----------
+        agent : LBFAgent
+
+        Returns
+        -------
+        bool: true if agent is next to a piece of fruit
+        """
+        fruit_neighbor: list[bool] = [False] * len(agent.neighbor_pos)
+        for i, neighbor_pos in enumerate(agent.neighbor_pos):
+            if isinstance(self.grid.get(*neighbor_pos), Fruit):
+                fruit_neighbor[i] = True
+
+        return any(fruit_neighbor)
+
+    def _get_obs_size(self):
+        """standard function to interface with EPyMARL training loop, returns the flattened size of a single agent's observation."""
+        obs_team = self.get_obs()
+        return math.prod(obs_team[0].shape)
+
+
 class AgentState(IntEnum):
     MOVING_TO_WAYPOINT = 0
-    LOADING_FRUIT      = 1
-    WAITING_AT_GOAL    = 2
+    LOADING_FRUIT = 1
+    WAITING_AT_GOAL = 2
+
 
 class GreedyPredatorPolicy:
     def __init__(
@@ -495,8 +673,8 @@ class GreedyPredatorPolicy:
         fruit_list,
         goal_list,
         random_prob: float = 0.1,
-        action_set: Type[enum.IntEnum] = LBFActions,
-        dir_to_vec: list[NDArray[np.int_]] = NAV_DIR_TO_VEC,
+        action_set: Type[IntEnum] = LBFActions,
+        dir_to_vec: list[NDArray[np.int_]] = DIR_TO_VEC,
         random_generator: np.random.Generator | None = None,
     ):
         self.fruit_list = fruit_list
@@ -504,7 +682,7 @@ class GreedyPredatorPolicy:
         self.goal_list = goal_list
         self.goal_idx: int = 0
         self.random_prob: float = random_prob
-        self.action_set: Type[enum.IntEnum] = action_set
+        self.action_set: Type[IntEnum] = action_set
         self.dir_to_vec: list[NDArray[np.int_]] = dir_to_vec
         self.random_generator: np.random.Generator = (
             random_generator
@@ -512,7 +690,7 @@ class GreedyPredatorPolicy:
             else np.random.default_rng()
         )
         self.state = AgentState.MOVING_TO_WAYPOINT
-    
+
     def vec2dir(self, vec: NDArray[np.int_]) -> int:
         """
         Convert a vector to a direction.
@@ -541,9 +719,9 @@ class GreedyPredatorPolicy:
         if self.fruit_idx >= len(self.fruit_list[self.goal_idx]):
             target_pos = self.goal_list[self.goal_idx]
             self.state = AgentState.MOVING_TO_WAYPOINT
-        else: # Still fruits to pick up in current room
+        else:  # Still fruits to pick up in current room
             target_pos = self.fruit_list[self.goal_idx][self.fruit_idx]
-        
+
         if self.state == AgentState.LOADING_FRUIT:
             # Check if the fruit we were loading still exists
             fruit_nearby = self._fruit_adjacent(current_pos, grid)
@@ -558,7 +736,7 @@ class GreedyPredatorPolicy:
                 else:
                     target_pos = self.fruit_list[self.goal_idx][self.fruit_idx]
                 self.state = AgentState.MOVING_TO_WAYPOINT
-        
+
         if current_pos == target_pos:
             if target_pos == self.goal_list[self.goal_idx]:
                 self.state = AgentState.WAITING_AT_GOAL
@@ -589,11 +767,11 @@ class GreedyPredatorPolicy:
                 action = self.vec2dir(dir_vec)
 
         return action
-    
+
     def _fruit_adjacent(self, pos: tuple[int, int], grid) -> bool:
         """Return True if any fruit is orthogonally adjacent to pos."""
         r, c = pos
-        for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             if grid.get(r + dr, c + dc) and isinstance(grid.get(r + dr, c + dc), Fruit):
                 return True
         return False

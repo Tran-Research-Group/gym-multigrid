@@ -10,7 +10,7 @@ from gym_multigrid.core.world import CtfWorld, World
 from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.policy.ctf.typing import ObservationDict
 from gym_multigrid.policy.ctf.utils import a_star, get_unterminated_opponent_pos
-from gym_multigrid.typing import Position
+from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.map import (
     closest_area_pos,
     distance_area_point,
