@@ -2,6 +2,8 @@ from typing import Any, Final, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
+from cv2 import putText, FONT_HERSHEY_COMPLEX, LINE_AA
+
 
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
 from gym_multigrid.core.world import World
@@ -242,6 +244,28 @@ class WorldObj:
     def render(self, img: NDArray[np.uint8]) -> None:
         """Draw this object with the given renderer"""
         raise NotImplementedError
+
+    def _render_level(self, img: NDArray) -> NDArray:
+        # Calculate pixel position for text (roughly centered)
+        text_x = int(1.1 * self.tile_size)
+        text_y = int(1.7 * self.tile_size)
+
+        # badge behind text to make it visible
+        # badge_x, badge_y = img.shape[0] // 2, img.shape[1] // 2
+        # img = cv2.circle(img, center=(badge_x, badge_y), radius=self.tile_size // 2, color=(155, 155, 155), thickness=cv2.FILLED, lineType=cv2.LINE_AA)
+
+        img = putText(
+            img,
+            str(self.level),
+            (text_x, text_y),
+            fontFace=FONT_HERSHEY_COMPLEX,
+            fontScale=1.2,
+            color=(255, 255, 255),
+            thickness=3,
+            lineType=LINE_AA,
+        )
+
+        return img
 
 
 class ObjectGoal(WorldObj):

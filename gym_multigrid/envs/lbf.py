@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from gymnasium import spaces
 
 from gym_multigrid.core.agent import Agent, LBFActions
-from gym_multigrid.core.constants import DIR_TO_VEC
+from gym_multigrid.core.constants import DIR_TO_VEC, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
@@ -31,10 +31,12 @@ class LBFAgent(Agent):
         view_size: Optional[int] = None,
         init_pos: Optional[tuple[int, int]] = None,
         level: Optional[int] = None,
+        tile_size: int = TILE_PIXELS,
     ):
 
         self.init_pos = init_pos
         self.level = level
+        self.tile_size = tile_size
 
         self.reward: float = 0.0
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
@@ -93,6 +95,7 @@ class LBFAgent(Agent):
             img, point_in_rect(0.15, 0.85, 0.15, 0.85), self.world.COLORS[self.color]
         )
 
+        self._render_level(img)
 
 class Fruit(WorldObj):
     def __init__(
@@ -100,8 +103,10 @@ class Fruit(WorldObj):
         world: World,
         color: str,
         level: int,
+        tile_size: int = TILE_PIXELS,
     ):
         self.level = level
+        self.tile_size = tile_size
 
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -160,6 +165,8 @@ class Fruit(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
+        self._render_level(img)
+
 
     def reset(self) -> None:
         super().reset()
@@ -312,6 +319,7 @@ class LBFGameEnv(MultiGridEnv):
                     world=self.world,
                     index=i,
                     color=self.world.IDX_TO_COLOR[0],
+                    tile_size=TILE_PIXELS,
                     view_size=self.sight,
                 )
             )
@@ -343,7 +351,7 @@ class LBFGameEnv(MultiGridEnv):
             agents=agents,
             partial_obs=partial_obs,
             actions_set=self.actions_set,
-            render_mode="human",
+            render_mode="rgb_array",
         )
 
     # grid generation
@@ -525,7 +533,7 @@ class LBFGameEnv(MultiGridEnv):
         self._gen_grid(self.width, self.height)
 
         obs: NDArray[np.int_] = self.get_obs()
-        info: dict[str, Any] = self._get_info(reset=True)
+        info: dict[str, Any] = self._get_info()
 
         return obs, info
 
@@ -643,11 +651,9 @@ class LBFGameEnv(MultiGridEnv):
         # )
 
         obs: NDArray[np.int_] = self.get_obs()
-
         agent_rewards = [a.reward for a in self.agents]
         reward: float = float(np.sum(agent_rewards))
-
-        info = self._get_info()
+        info = self._get_info(terminated=terminated)
 
         return (
             obs,
@@ -764,19 +770,12 @@ class LBFGameEnv(MultiGridEnv):
         """
         rewards[current_agent] += reward
 
-    def _get_info(self, reset: bool = False) -> dict:
+    def _get_info(self, terminated: bool = False) -> dict:
         # step info
         info = {}
 
-        # TODO follow join1's example here
-        # if X happens, info["battle_won"] = True
-        # else info["battle_won"] = False
-
-        # if not reset and some other condition
-        # info["battle_won"] = True
-
-        # else:
-        # info["battle_won"] = False
+        # Agents only succeed at the task if terminated = True
+        info["battle_won"] = terminated
 
         return info
 

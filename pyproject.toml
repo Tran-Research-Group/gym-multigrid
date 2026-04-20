@@ -12,6 +12,7 @@ python = ">=3.10"
 gymnasium = ">=0.28"
 matplotlib = ">=3.7.1"
 numpy = ">=1.20.0"     # Because of safety-gymnasium
+opencv-python = ">=4.13" # used for rendering extra info in some envs
 pydantic = "^2.0"
 
 
