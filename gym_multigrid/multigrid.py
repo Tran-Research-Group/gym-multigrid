@@ -230,7 +230,9 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         # Actions are discrete integer values
 
+        # Define the empty grid. _gen_grid is supposed to fill this up
         self.world = world
+        self.grid = Grid(width, height, world)
 
         self.action_space, self.ac_dim = self._set_action_space()
         self.observation_space = self._set_observation_space()
@@ -260,8 +262,6 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         else:
             pass
 
-        # Define the empty grid. _gen_grid is supposed to fill this up
-        self.grid = Grid(width, height, world)
 
     def _set_action_space(self) -> tuple[spaces.Space, int | np.integer]:
         self.ac_dim: int | np.integer

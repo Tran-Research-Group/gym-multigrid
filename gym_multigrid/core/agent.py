@@ -105,11 +105,12 @@ class NavigationActions(enum.IntEnum):
     UP = 4
 
 class LBFActions(enum.IntEnum):
+    # matches the order from original LBF action set
     STAY = 0
-    LEFT = 1
+    UP = 1
     DOWN = 2
-    RIGHT = 3
-    UP = 4
+    LEFT = 3
+    RIGHT = 4
     LOAD = 5
 
 class Agent(WorldObj):
