@@ -192,6 +192,11 @@ class LBFGameEnv(MultiGridEnv):
     Environment in which the agents have to collect the balls
     """
 
+    metadata = {
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 10,
+    }
+
     def __init__(
         self,
         n_agents: int = 4,
@@ -372,11 +377,11 @@ class LBFGameEnv(MultiGridEnv):
             agent_levels = sorted([agent.level for agent in self.agents])
             max_fruit_levels = sum(agent_levels[:3]) * np.ones(self.max_num_fruit)
 
-        # self._num_fruit_spawned = self._spawn_fruit(
-        #     self.max_num_fruit,
-        #     min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
-        #     max_levels=max_fruit_levels,
-        # )
+        self._num_fruit_spawned = self._spawn_fruit(
+            self.max_num_fruit,
+            min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
+            max_levels=max_fruit_levels,
+        )
 
         # only do if field_map is given in the config file
         if self.field_map is not None:
@@ -435,8 +440,8 @@ class LBFGameEnv(MultiGridEnv):
             while attempts < self.spawn_attempts:
                 # -1 to avoid including the outer wall in the sample
                 pos = (
-                    self.np_random.integers(1, self.width-1),
-                    self.np_random.integers(1, self.height-1),
+                    self.np_random.integers(1, self.width - 1),
+                    self.np_random.integers(1, self.height - 1),
                 )
 
                 if self._valid_agent_cell(self.grid.get(*pos)):
@@ -472,8 +477,8 @@ class LBFGameEnv(MultiGridEnv):
             attempts += 1
             # -1 to avoid including the outer wall in the sample
             pos = (
-                self.np_random.integers(1, self.width-1),
-                self.np_random.integers(1, self.height-1),
+                self.np_random.integers(1, self.width - 1),
+                self.np_random.integers(1, self.height - 1),
             )
 
             # check if any fruit in the neighborhood
@@ -926,7 +931,7 @@ class LBFGameEnv(MultiGridEnv):
         """standard function to interface with EPyMARL training loop, returns the flattened size of a single agent's observation."""
         match self.obs_type:
             case "original":
-                obs_size: int = self.observation_space[0].shape[0]
+                obs_size: int = self.observation_space.shape[1]
 
             case _:
                 raise NotImplementedError
@@ -974,16 +979,25 @@ class LBFGameEnv(MultiGridEnv):
                     axis=0,
                 ).flatten()
 
-                # min and max total obs
-                min_obs = np.concat([min_fruit_obs, min_agent_obs])
-                max_obs = np.concat([max_fruit_obs, max_agent_obs])
-
-                obs_space = spaces.Box(low=min_obs, high=max_obs)
+                # min and max total obs (single agent)
+                min_obs_single = np.concat([min_fruit_obs, min_agent_obs]).reshape(
+                    1, -1
+                )
+                max_obs_single = np.concat([max_fruit_obs, max_agent_obs]).reshape(
+                    1, -1
+                )
 
                 # get joint obs space for the team
-                team_obs_space = spaces.Tuple(
-                    tuple([obs_space] * len(self.agents))
+                team_obs_space = spaces.Box(
+                    low=np.repeat(min_obs_single, repeats=self.num_agents, axis=0),
+                    high=np.repeat(max_obs_single, repeats=self.num_agents, axis=0),
+                    dtype=np.int_,
                 )
+
+                # following original env
+                # team_obs_space = spaces.Tuple(
+                #     tuple([obs_space] * len(self.agents))
+                # )
 
             case _:
                 raise NotImplementedError
@@ -1053,7 +1067,6 @@ class LBFGameEnv(MultiGridEnv):
         ac_dim = len(self.actions)
 
         return action_space, ac_dim
-
 
     # helper methods
     def _get_neighborhood(

@@ -262,7 +262,6 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         else:
             pass
 
-
     def _set_action_space(self) -> tuple[spaces.Space, int | np.integer]:
         self.ac_dim: int | np.integer
         if len(self.agents) == 1:
@@ -390,9 +389,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         """standard function to interface with EPyMARL training loop,
         returns the flattened size of a single agent's observation."""
         # not implemented b/c each env's observation can be very different
-        raise NotImplementedError(
-            "Please implement _get_obs_size in your environment."
-        )
+        raise NotImplementedError("Please implement _get_obs_size in your environment.")
 
     @property
     def steps_remaining(self):
@@ -818,7 +815,6 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             for grid, vis_mask in zip(grids, vis_masks)
         ]
         return obs
-
 
     def get_obs_render(self, obs, tile_size=TILE_PIXELS // 2):
         """
