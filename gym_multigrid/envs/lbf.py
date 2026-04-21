@@ -288,6 +288,37 @@ class LBFGameEnv(MultiGridEnv):
 
         # init agents
         agents = []
+        self.agent_config = None
+        self.fruit_config = None
+
+        # test case
+        # self.agent_config = [
+        #     {
+        #         "pos": (1, 1),
+        #         "level": 1,
+        #      },
+        #     {
+        #         "pos": (6, 2),
+        #         "level": 2,
+        #      },
+        #     {
+        #         "pos": (6, 3),
+        #         "level": 2,
+        #      },
+        #     {
+        #         "pos": (6, 4),
+        #         "level": 2,
+        #      },
+        # ]
+
+        # self.fruit_config = [
+        #     {
+        #         "pos": (1, 2),
+        #         "level": 1,
+        #      },
+        # ]
+
+
         """
         old logic, doesn't allow random spawning of agent + fruit
         if kwargs.get("agent_config"):
@@ -363,7 +394,7 @@ class LBFGameEnv(MultiGridEnv):
         self.grid.wall_rect(x=0, y=0, w=self.width, h=self.height)
 
         # spawn agents
-        self._spawn_agents(self.min_agent_levels, self.max_agent_levels)
+        self._spawn_agents(self.min_agent_levels, self.max_agent_levels, self.agent_config)
 
         # old logic, doesn't match original LBF
         # if self.agent_config is None:
@@ -389,6 +420,7 @@ class LBFGameEnv(MultiGridEnv):
             self.max_num_fruit,
             min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
             max_levels=max_fruit_levels,
+            fruit_config=self.fruit_config,
         )
 
         # only do if field_map is given in the config file
@@ -426,7 +458,7 @@ class LBFGameEnv(MultiGridEnv):
                     self.put_obj(waypoint_obj, waypoint[0], waypoint[1])
                     self.waypoint_pos.append(waypoint_obj.pos)
 
-    def _spawn_agents(self, min_agent_levels: np.ndarray, max_agent_levels: np.ndarray):
+    def _spawn_agents(self, min_agent_levels: np.ndarray, max_agent_levels: np.ndarray, agent_config: Optional[dict]):
         # permute agent levels
         agent_permutation = self.np_random.permutation(self.num_agents)
         min_agent_levels = min_agent_levels[agent_permutation]
@@ -443,27 +475,32 @@ class LBFGameEnv(MultiGridEnv):
         for agent, min_agent_level, max_agent_level in zip(
             self.agents, min_agent_levels, max_agent_levels
         ):
-            attempts = 0
-
-            while attempts < self.spawn_attempts:
-                # -1 to avoid including the outer wall in the sample
-                pos = (
-                    self.np_random.integers(1, self.width - 1),
-                    self.np_random.integers(1, self.height - 1),
-                )
-
-                if self._valid_agent_cell(self.grid.get(*pos)):
-                    level = self.np_random.integers(
-                        min_agent_level, max_agent_level + 1
+            if agent_config is None:
+                attempts = 0
+                while attempts < self.spawn_attempts:
+                    # -1 to avoid including the outer wall in the sample
+                    pos = (
+                        self.np_random.integers(1, self.width - 1),
+                        self.np_random.integers(1, self.height - 1),
                     )
-                    agent.reset(init_pos=pos, level=level)
-                    self.place_agent(agent, pos=pos)
-                    break
 
-                attempts += 1
+                    if self._valid_agent_cell(self.grid.get(*pos)):
+                        level = self.np_random.integers(
+                            min_agent_level, max_agent_level + 1
+                        )
+                        agent.reset(init_pos=pos, level=level)
+                        self.place_agent(agent, pos=pos)
+                        break
+
+                    attempts += 1
+
+            else:
+                pos = agent_config[agent.index]["pos"]
+                agent.reset(init_pos=pos, level=agent_config[agent.index]["level"])
+                self.place_agent(agent, pos=pos)
 
     def _spawn_fruit(
-        self, max_num_fruit: int, min_levels: np.ndarray, max_levels: np.ndarray
+        self, max_num_fruit: int, min_levels: np.ndarray, max_levels: np.ndarray, fruit_config: Optional[dict]
     ) -> int:
         """
         Returns
@@ -471,48 +508,61 @@ class LBFGameEnv(MultiGridEnv):
         int
             number of fruit spawned in the environment, may be less than max_num_fruit
         """
-
         fruit_count = 0
-        attempts = 0
-        min_levels = max_levels if self.force_coop else min_levels
 
-        # permute fruit levels
-        fruit_permutation = self.np_random.permutation(max_num_fruit)
-        min_levels = min_levels[fruit_permutation]
-        max_levels = max_levels[fruit_permutation]
+        if fruit_config is None:
+            attempts = 0
+            min_levels = max_levels if self.force_coop else min_levels
 
-        while fruit_count < max_num_fruit and attempts < 1000:
-            attempts += 1
-            # -1 to avoid including the outer wall in the sample
-            pos = (
-                self.np_random.integers(1, self.width - 1),
-                self.np_random.integers(1, self.height - 1),
-            )
+            # permute fruit levels
+            fruit_permutation = self.np_random.permutation(max_num_fruit)
+            min_levels = min_levels[fruit_permutation]
+            max_levels = max_levels[fruit_permutation]
 
-            # check if any fruit in the neighborhood
-            grid = self.grid.encode()
-            radius_objects = self._get_neighborhood(*pos)[:, :, 0]
-            plus_objects = self._get_neighborhood(*pos, radius=2, ignore_diag=True)[
-                :, 0
-            ]
-
-            if (
-                np.any(radius_objects == self.world.OBJECT_TO_IDX["fruit"])
-                or np.any(plus_objects == self.world.OBJECT_TO_IDX["fruit"])
-                or (grid[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
-            ):
-                continue
-
-            self.place_object(
-                Fruit(
-                    world=self.world,
-                    level=self.np_random.integers(
-                        min_levels[fruit_count], max_levels[fruit_count] + 1
-                    ),
-                    color=self.world.IDX_TO_COLOR[3],
+            while fruit_count < max_num_fruit and attempts < 1000:
+                attempts += 1
+                # -1 to avoid including the outer wall in the sample
+                pos = (
+                    self.np_random.integers(1, self.width - 1),
+                    self.np_random.integers(1, self.height - 1),
                 )
-            )
-            fruit_count += 1
+
+                # check if any fruit in the neighborhood
+                grid = self.grid.encode()
+                radius_objects = self._get_neighborhood(*pos)[:, :, 0]
+                plus_objects = self._get_neighborhood(*pos, radius=2, ignore_diag=True)[
+                    :, 0
+                ]
+
+                if (
+                    np.any(radius_objects == self.world.OBJECT_TO_IDX["fruit"])
+                    or np.any(plus_objects == self.world.OBJECT_TO_IDX["fruit"])
+                    or (grid[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
+                ):
+                    continue
+
+                self.place_object(
+                    Fruit(
+                        world=self.world,
+                        level=self.np_random.integers(
+                            min_levels[fruit_count], max_levels[fruit_count] + 1
+                        ),
+                        color=self.world.IDX_TO_COLOR[3],
+                    ),
+                    pos=pos,
+                )
+                fruit_count += 1
+        else:
+            fruit_count = len(fruit_config)
+            for fruit in fruit_config:
+                self.place_object(
+                    Fruit(
+                        world=self.world,
+                        level=fruit["level"],
+                        color=self.world.IDX_TO_COLOR[3],
+                    ),
+                    pos=fruit["pos"],
+                )
 
         return fruit_count
 
@@ -704,26 +754,25 @@ class LBFGameEnv(MultiGridEnv):
                         if isinstance(fruit_neighbor_cell, LBFAgent):
                             adj_agents.append(fruit_neighbor_cell)
 
-                        adj_agent_levels = [int(a.level) for a in adj_agents]
-                        tot_agent_levels = sum(adj_agent_levels)
+                    adj_agent_levels = [int(a.level) for a in adj_agents]
+                    tot_agent_levels = sum(adj_agent_levels)
 
-                        # failed to load
-                        if tot_agent_levels < fruit_level:
-                            for a in adj_agents:
-                                a.reward -= self.failed_load_penalty
-                        else:
-                            # the fruit was loaded and each player scores points
-                            for a in adj_agents:
-                                a.reward += float(a.level * fruit_level)
-                                if self._normalize_reward:
-                                    a.reward = a.reward / float(
-                                        tot_agent_levels * self._num_fruit_spawned
-                                    )
+                    # failed to load
+                    if tot_agent_levels < fruit_level:
+                        for a in adj_agents:
+                            a.reward -= self.failed_load_penalty
+                    else:
+                        # the fruit was loaded and each player scores points
+                        for a in adj_agents:
+                            a.reward += float(a.level * fruit_level)
+                            if self._normalize_reward:
+                                a.reward = a.reward / float(
+                                    tot_agent_levels * self._num_fruit_spawned
+                                )
 
-                            # remove the fruit from the map
-                            cell.pos = np.array([-1, -1])
-                            self.grid.set(*fruit_pos, None)
-                            self.collected_fruit += 1
+                        cell.pos = np.array([-1, -1])
+                        self.grid.set(*fruit_pos, None)
+                        self.collected_fruit += 1
 
                     # remove these agents so they are not checked again
                     loading_agents -= set(adj_agents)
