@@ -116,6 +116,7 @@ class SaveTheCityEnv(MultiGridEnv):
             f"agent{i+1}": {"fires_extinguished": 0, "buildings_completed": 0}
             for i in range(len(self.agents))
         }
+        self.info["buildings_burned"] = 0
 
         super().__init__(
             grid_size=self.size,
@@ -236,6 +237,7 @@ class SaveTheCityEnv(MultiGridEnv):
             f"agent{i+1}": {"fires_extinguished": 0, "buildings_completed": 0}
             for i in range(len(self.agents))
         }
+        self.info["buildings_burned"] = 0
 
         # Reset step counter and grid via parent class (which handles seeding)
         # Parent's reset calls _reset_gym (sets seed), _gen_grid (builds grid), and _reset_agents (resets & places agents)
@@ -376,15 +378,15 @@ class SaveTheCityEnv(MultiGridEnv):
         for building in self.buildings:
             result = building.step()
             if result == "burned_down":
-                # Optional: Penalize all agents (or team)
                 rewards -= 50  # team penalty
+                self.info["buildings_burned"] += 1
 
         # # Filter buildings to only alive ones
         # self.buildings = [b for b in self.buildings if b.alive]
 
         for building in self.buildings:
             if building.alive and building.fire_rate == 0 and building.building_state < 100:
-                if self.np_random.random() < 0.05:
+                if self.np_random.random() < 0.025:
                     building.burn()
 
         # Check for termination: all buildings done or burned

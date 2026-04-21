@@ -76,9 +76,9 @@ register(
 register(
     id="SaveTheCity-v3",
     entry_point="gym_multigrid.envs.save_the_city:SaveTheCityEnv",
-    max_episode_steps=3000,
+    max_episode_steps=500,
     kwargs={
-        "size": 15,
+        "size": 10,
         "num_buildings": 5,
         "agent_configs": [
             {

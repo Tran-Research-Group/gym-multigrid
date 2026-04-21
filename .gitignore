@@ -10,5 +10,9 @@ ppo_random_collect_tensorboard/*
 
 tests/out
 out
+wandb
+scripts/debug_*
+nul
+SAVE_THE_CITY_DOCUMENTATION.md
 
 CLAUDE.md

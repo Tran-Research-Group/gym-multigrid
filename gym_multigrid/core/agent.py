@@ -593,15 +593,15 @@ class SaveTheCityAgent(Agent):
         agent_type: str,
         move_speed: int,
         build_speed: int,
-        firefight_speed: int,
+        firefight_speed: float,
         policy_name: str | None = None,
         policy_dict: dict[str, Type[AgentPolicyT]] | None = None,
     ):
         super().__init__(world, type=agent_type, color=self.get_color(agent_type), actions=SaveTheCityActions)
         self.agent_type = agent_type  # "firefighter", "builder", or "generalist"
-        self.move_speed = move_speed  # Movement speed (Generalists move faster)
-        self.build_speed = build_speed  # How fast agent builds
-        self.firefight_speed = firefight_speed  # How fast agent extinguishes fires
+        self.move_speed = move_speed
+        self.build_speed = build_speed
+        self.firefight_speed = firefight_speed
 
         # Policy setup (similar to prey_pred pattern)
         self.policy_name = policy_name
@@ -681,7 +681,7 @@ class Firefighter(SaveTheCityAgent):
             agent_type="firefighter",
             move_speed=1,
             build_speed=1,
-            firefight_speed=20,
+            firefight_speed=1,
             policy_name=policy_name,
             policy_dict=policy_dict,
         )
@@ -701,7 +701,7 @@ class Builder(SaveTheCityAgent):
             agent_type="builder",
             move_speed=1,
             build_speed=20,
-            firefight_speed=1,
+            firefight_speed=0.05,
             policy_name=policy_name,
             policy_dict=policy_dict,
         )
@@ -721,7 +721,7 @@ class Generalist(SaveTheCityAgent):
             agent_type="generalist",
             move_speed=2,
             build_speed=5,
-            firefight_speed=5,
+            firefight_speed=0.1,
             policy_name=policy_name,
             policy_dict=policy_dict,
         )
