@@ -1,4 +1,5 @@
 from os.path import join, dirname
+from warnings import warn
 from enum import IntEnum
 from collections import defaultdict
 from typing import Any, Type, Literal, Optional
@@ -101,7 +102,7 @@ class LBFAgent(Agent):
         self.init_pos = init_pos
         self.reward: float = 0.0
 
-    def encode(self, current_agent: bool = False) -> tuple[int, ...]:
+    def encode(self, current_agent: bool = False) -> tuple[int]:
         """Encode a description of this object as a 3-tuple of integers
 
         Parameters
@@ -393,25 +394,23 @@ class LBFGameEnv(MultiGridEnv):
 
     def __init__(
         self,
-        n_agents: int = 4,
-        num_rooms: int = 1,
-        max_num_fruit: int = 2,
-        sight: int = 2,
-        field_size: Optional[int] = None,
+        map: Optional[str] = None,
         width: Optional[int] = 10,
         height: Optional[int] = 10,
-        normalize_reward: bool = True,
+        num_rooms: int = 1,
+        n_agents: int = 4,
+        sight: int = 2,
         min_agent_level: int = 1,
         max_agent_level: int = 2,
+        max_num_fruit: int = 2,
         min_fruit_level: int = 1,
         max_fruit_level: Optional[int] = None,
-        failed_load_penalty: float = 0.0,
         force_coop: bool = False,
         observe_agent_levels: bool = True,
-        state_type: Literal["original", "multigrid_encode"] = "original",
-        obs_type: Literal["original"] = "original",
-        use_field_map: bool = False,
-        goal_type: Literal["assigned", "unassigned", "mixed"] = "assigned",
+        state_type: Literal["original", "multigrid_flattened"] = "original",
+        obs_type: Literal["original", "multigrid_flattened"] = "original",
+        normalize_reward: bool = True,
+        failed_load_penalty: float = 0.0,
         use_project_mdp: bool = False,
         task_type: Optional[Literal["atomic", "composed"]] = None,
         num_comms_values: Optional[int] = 4,
@@ -421,6 +420,10 @@ class LBFGameEnv(MultiGridEnv):
 
         Parameters
         ----------
+        map:
+            name of the map to load (yaml file)
+            if None, just 1 room w/ some width and height
+
         size : int
             Size of grid if square. Default 19
         num_fruit : list[int]
@@ -432,39 +435,38 @@ class LBFGameEnv(MultiGridEnv):
         fruits_reward : list[float]
             Reward given for collecting each fruit type.
         use_mdp: bool, whether to use the project MDP
+        state_type: Literal["original", "multigrid_flattened"] = "original"
+            format for the state, orignal breaks when using Goal objects since they were not in the original LBF env
+        obs_type: Literal["original", "multigrid"] = "original"
+            format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
         """
         self.num_agents = n_agents
 
         # multi-room support
         self.num_rooms = num_rooms
-        self.field_map: pd.DataFrame
-        self.spawn_room_coords: list[tuple]
+        self.field_map: pd.DataFrame | None = None
+        self.room_coords: dict[int, tuple]
+        self.agent_spawn_room = 0
 
-        if use_field_map:
-            self.field_map = self._load_field_map(
-                num_agents=n_agents, num_rooms=num_rooms, goal_type=goal_type
-            )
+        if map is not None:
+            if width is not None or height is not None:
+                warn("(height, width) and field map provided, using field map size.")
+
+            self.field_map = self._load_field_map(map)
             height, width = self.field_map.shape
+
         else:
-            self.field_map = None
+            # add 2 b/c of the outer wall that automatically spawns
+            # when no map is specified
+            width = width + 2
+            height = height + 2
 
-            # add 2 b/c of the outer wall
-            if field_size is not None:
-                width = field_size + 2
-                height = field_size + 2
-            else:
-                if width is not None and height is not None:
-                    width = width + 2
-                    height = height + 2
-                else:
-                    raise ValueError(
-                        "Please specify either field_size or (width, height)"
-                    )
-
-            self.spawn_room_coords = [
-                (0, 0),
-                (width, height)
-            ]
+            self.room_coords = {
+                0: {
+                    "x_limits": (0, width),
+                    "y_limits": (0, height),
+                }
+            }
 
         if use_project_mdp:
             self.p_mdp = ProjectMDP(
@@ -536,37 +538,43 @@ class LBFGameEnv(MultiGridEnv):
         )
 
     # grid generation
-    def _load_field_map(self, num_agents, num_rooms, goal_type) -> pd.DataFrame:
-
+    def _load_field_map(self, map: str) -> pd.DataFrame:
         # read the room layout yaml file to compose the rooms into a cohesive env
-        maps_dir = join(dirname(__file__), "maps", "lbf")
-        env_config = join(
-            maps_dir,
-            f"{num_agents}_agents_{num_rooms}_rooms_{goal_type}_goals.yaml",
-        )
-        with open(env_config) as f:
+        map_dir = join(dirname(__file__), "maps", "lbf", map)
+        config_path = join(map_dir, "config.yaml")
+        with open(config_path) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
+        # grab all the rooms arranged in a grid
         rooms = defaultdict(list)
-        for i, row in enumerate(config["room_layout"]):
-            for j, room_config in enumerate(row):
-                room_load_path = join(maps_dir, f"{room_config}.csv")
+        self.room_coords = {}
+        x_min, y_min = 0, 0
+        room_idx = 0
+        for j, row in enumerate(config["room_layout"]):
+            for i, room_config in enumerate(row):
+                room_load_path = join(map_dir, f"{room_config}.csv")
                 room = pd.read_csv(room_load_path, header=None).astype(object)
-                rooms[i].append(room)
+                rooms[j].append(room)
 
-                if i == 0 and j == 0:
-                    self.spawn_room_coords = [
-                        (min(room.columns), min(room.index)),
-                        (max(room.columns), max(room.index))
-                    ]
+                x_min, x_max = x_min, x_min + room.shape[1]
+                y_min, y_max = y_min, y_min + room.shape[0]
 
+                self.room_coords[room_idx] = {
+                    "x_limits": (x_min, x_max),
+                    "y_limits": (y_min, y_max),
+                }
+
+                x_min = x_max
+                room_idx += 1
+
+            y_min = y_max
+
+        # concat all the rooms into a single env
         row_dfs = [pd.concat(rooms[i], axis=1, ignore_index=True) for i in rooms]
-
         field_map = pd.concat(row_dfs, axis=0, ignore_index=True)
 
         # astype(object) allows literal_eval to convert strings to tuples where needed
         for y, row in field_map.iterrows():
-
             for x in row.index:
                 cell = field_map.loc[y, x]
                 if pd.isnull(cell):
@@ -586,6 +594,7 @@ class LBFGameEnv(MultiGridEnv):
         self.grid = Grid(width, height, self.world)
         self.init_grid: Grid = self.grid.copy()
 
+        # when a room is "completed", all objects in room_despawn_objects[room_idx] are removed
         self.room_despawn_objects: dict[int, list] = defaultdict(list)
 
         # place objects from field_map, wait until after self.init_grid is defined to place agents and fruit
@@ -595,7 +604,6 @@ class LBFGameEnv(MultiGridEnv):
         else:
             # add outer wall to stop agents from going off the edge of the env
             self.grid.wall_rect(x=0, y=0, w=self.width, h=self.height)
-
 
         # spawn agents
         self._spawn_agents(self.min_agent_levels, self.max_agent_levels)
@@ -634,6 +642,7 @@ class LBFGameEnv(MultiGridEnv):
         for y, row in self.field_map.iterrows():
             for x in row.index:
                 cell = row[x]
+                room_idx = self._get_object_room((x, y))
 
                 if pd.isnull(cell):
                     # empty cells
@@ -660,58 +669,60 @@ class LBFGameEnv(MultiGridEnv):
 
                             case "f":
                                 # place fruit
-                                level, room_idx = obj_args[0], obj_args[1]
+                                level = obj_args[0]
+
                                 obj = Fruit(
                                     world=self.world,
                                     level=level,
                                     color=self.world.IDX_TO_COLOR[3],
                                 )
                                 self.place_object(obj, pos=(x, y))
-
-                                # why does this get called a ton of times?
                                 self.num_fruit_per_room[room_idx] += 1
                                 num_spawned_objects["f"] += 1
 
                             case "g":
                                 # place goals + assign to agents
+                                assigned_agent_idx = obj_args[0]
                                 obj = Goal(self.world, color="yellow")
                                 self.place_object(obj, pos=(x, y))
-
-                                # each goal assigned to all agents
-                                if len(obj_args) == 1:
-                                    room_idx = obj_args[0]
-                                    for agent in self.agents:
+                                for agent in self.agents:
+                                    if agent.index == assigned_agent_idx:
                                         agent.add_goal_pos((x, y), room_idx)
-
-                                elif len(obj_args) == 2:
-                                    room_idx, assigned_agent_idx = (
-                                        obj_args[0],
-                                        obj_args[1],
-                                    )
-                                    for agent in self.agents:
-                                        if agent.index == assigned_agent_idx:
-                                            agent.add_goal_pos((x, y), room_idx)
-
-                                self.room_despawn_objects[room_idx].append(obj)
-
-                            case "d":
-                                # when a room is "completed", all objects in room_despawn_objects[room_idx] are removed
-                                obj = Wall(self.world, type="wall", color="grey")
-                                self.place_object(obj, pos=(x, y))
-                                room_idx = obj_args[0]
                                 self.room_despawn_objects[room_idx].append(obj)
 
                 elif isinstance(cell, str):
                     obj_type = cell
                     match obj_type.lower():
+                        case "g":
+                            obj = Goal(self.world, color="yellow")
+                            self.place_object(obj, pos=(x, y))
+
+                            # each goal assigned to all agents
+                            for agent in self.agents:
+                                agent.add_goal_pos((x, y), room_idx)
+
                         case "w":
                             obj = Wall(self.world, type="wall", color="grey")
                             self.place_object(obj, pos=(x, y))
+
+                        case "d":
+                            obj = Wall(self.world, type="wall", color="grey")
+                            self.place_object(obj, pos=(x, y))
+                            self.room_despawn_objects[room_idx].append(obj)
 
                 else:
                     raise NotImplementedError("invalid object in field map config file")
 
         return num_spawned_objects
+
+    def _get_object_room(self, pos: Position) -> int:
+        (x, y) = pos
+        for room_idx, room_coords in self.room_coords.items():
+            x_min, x_max = room_coords["x_limits"]
+            y_min, y_max = room_coords["y_limits"]
+
+            if (x_min <= x < x_max) and (y_min <= y < y_max):
+                return room_idx
 
     def _spawn_agents(
         self,
@@ -737,11 +748,12 @@ class LBFGameEnv(MultiGridEnv):
                 attempts = 0
                 while attempts < self.spawn_attempts:
                     # make sure the agents spawn in the first room
-                    min_x, max_x = self.spawn_room_coords[0][0], self.spawn_room_coords[1][0]
-                    min_y, max_y = self.spawn_room_coords[0][1], self.spawn_room_coords[1][1]
+                    x_min, x_max = self.room_coords[self.agent_spawn_room]["x_limits"]
+                    y_min, y_max = self.room_coords[self.agent_spawn_room]["y_limits"]
+
                     pos = (
-                        self.np_random.integers(min_x, max_x),
-                        self.np_random.integers(min_y, max_y),
+                        self.np_random.integers(x_min, x_max),
+                        self.np_random.integers(y_min, y_max),
                     )
 
                     if self._valid_agent_cell(self.grid.get(*pos)):
@@ -813,6 +825,8 @@ class LBFGameEnv(MultiGridEnv):
                     ),
                     pos=pos,
                 )
+                room_idx = self._get_object_room(pos)
+                self.num_fruit_per_room[room_idx] += 1
                 num_spawned_fruit += 1
 
         return num_spawned_fruit
@@ -1020,7 +1034,7 @@ class LBFGameEnv(MultiGridEnv):
             terminated = self.num_fruit_collected_per_room[0] == self._num_fruit_spawned
         else:
             # if > 1 room, reach the end of the final room
-            # TODO needs to be made a little more complext o handle non-sequential rooms
+            # TODO needs to be made a little more-complex handle non-sequential rooms
             terminated = self.current_room == self.num_rooms
 
         return terminated
@@ -1054,7 +1068,8 @@ class LBFGameEnv(MultiGridEnv):
                 obs = self.get_obs()
                 state = np.concatenate(obs)
 
-            case "multigrid_encode":
+            case "multigrid_flattened":
+                # NOTE: compared to original, currently does NOT have the coordinates of other objects in the ego agent's frame, so that could reduce training performance
                 state = self.grid.encode()
                 state = state.flatten()
 
@@ -1070,7 +1085,7 @@ class LBFGameEnv(MultiGridEnv):
             case "original":
                 state_size: int = self._get_obs_size() * self.num_agents
 
-            case "multigrid_encode":
+            case "multigrid_flattened":
                 state = self.get_state()
                 state_size = prod(state.shape)
 
@@ -1095,6 +1110,12 @@ class LBFGameEnv(MultiGridEnv):
             case "original":
                 # same as _make_gym_obs from original LBF
                 obs = self._get_original_obs()
+
+            case "multigrid_flattened":
+                obs_list = self.gen_obs()
+                for i, obs in enumerate(obs_list):
+                    obs_list[i] = obs.flatten()
+                obs = np.vstack(obs_list)
 
             case _:
                 raise NotImplementedError
@@ -1194,6 +1215,8 @@ class LBFGameEnv(MultiGridEnv):
         match self.obs_type:
             case "original":
                 obs_size: int = self.observation_space.shape[1]
+            case "multigrid_flattened":
+                obs_size: int = self.observation_space.shape[1]
 
             case _:
                 raise NotImplementedError
@@ -1249,6 +1272,11 @@ class LBFGameEnv(MultiGridEnv):
                     1, -1
                 )
 
+                # following original env
+                # team_obs_space = spaces.Tuple(
+                #     tuple([obs_space] * len(self.agents))
+                # )
+
                 # get joint obs space for the team
                 team_obs_space = spaces.Box(
                     low=np.repeat(min_obs_single, repeats=self.num_agents, axis=0),
@@ -1256,10 +1284,16 @@ class LBFGameEnv(MultiGridEnv):
                     dtype=np.int_,
                 )
 
-                # following original env
-                # team_obs_space = spaces.Tuple(
-                #     tuple([obs_space] * len(self.agents))
-                # )
+            case "multigrid_flattened":
+                team_obs_space = spaces.Box(
+                    low=0,
+                    high=255,
+                    shape=(
+                        self.num_agents,
+                        self.world.encode_dim * self.sight * self.sight,
+                    ),
+                    dtype=np.int_,
+                )
 
             case _:
                 raise NotImplementedError
