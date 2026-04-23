@@ -10,7 +10,7 @@ import yaml
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from gymnasium import spaces, Env
+from gymnasium import spaces
 
 from gym_multigrid.core.agent import Agent, LBFActions
 from gym_multigrid.core.constants import DIR_TO_VEC, TILE_PIXELS
@@ -20,6 +20,8 @@ from gym_multigrid.core.world import LBFWorld, World
 from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.multigrid import MultiGridEnv
+
+from gym_multigrid.envs.mdp import ProjectMDP
 
 
 # from gym_multigrid.policy import AgentPolicy
@@ -79,8 +81,11 @@ class LBFAgent(Agent):
                 (self.room_goals[room_idx], np.array([pos]))
             )
 
-    def at_goal(self, current_room: int) -> bool:
-        if np.any(np.all(self.pos == self.room_goals[current_room], axis=1)):
+    def in_goal_set(self, current_room: int, pos: Position = None) -> bool:
+        if pos is None:
+            pos = self.pos
+
+        if np.any(np.all(pos == self.room_goals[current_room], axis=1)):
             return True
         else:
             return False
@@ -126,7 +131,6 @@ class LBFAgent(Agent):
         )
 
         self._render_level(img)
-
 
 class Fruit(WorldObj):
     def __init__(
@@ -224,164 +228,6 @@ class Fruit(WorldObj):
             )
 
 
-class MDPAgent:
-    # simple agent class for a simple MDP
-    def __init__(self, init_state: int) -> None:
-        self.state = init_state
-
-    def reset(self, init_state: int):
-        self.state = init_state
-
-
-class ProjectMDP(Env):
-    """Using terminology from the project scheduling literature, this MDP represents a project which consists of multiple tasks with ordering (precedence) constraints, pre-defined transitions, and state-dependent action spaces."""
-
-    def __init__(
-        self,
-        num_rooms: int,
-        task_type: Literal["atomic", "composed"],
-        num_comms_values: int,
-    ):
-        super().__init__()
-
-        self.agent = MDPAgent(init_state=0)
-        self.tasks: list[tuple]
-        self.init_state: int
-        self.goal_state: int
-        self.fail_state: int
-        self.state_space: NDArray[np.int_]
-        self.successor_map: dict[tuple[int, tuple], int]
-        self._build_env(
-            num_rooms=num_rooms, task_type=task_type, num_comms_values=num_comms_values
-        )
-
-        # n_waypoints = n_agents is a mathematically different task from !=
-        # you want to use a pandas df here for easier bookkeeping
-        # self.observation_space: spaces.Discrete
-        # self.action_space: spaces.Discrete
-
-        # self.df_state: pd.DataFrame
-        # df_task
-
-    def _build_env(
-        self,
-        num_rooms: int,
-        task_type: Literal["atomic", "composed"],
-        num_comms_values: int,
-    ):
-        """
-        assume 1 set of waypoints per room
-        set of atomic tasks that can advance the state in the MDP
-         - clear a room of fruit
-         - all agents reach a waypoint for the current room
-         - composed task = "current room cleared of fruit" and "all agents reach the current room's waypoint" are True
-        """
-
-        match (num_rooms, task_type):
-            case (2, "composed"):
-                """
-                0 -> 1 -> 2
-                """
-                # need to pre-define the tasks in the project MDP
-                # tasks = edges in a graph
-                self.tasks: list[tuple] = [(0, 1), (1, 2)]
-
-            case _:
-                raise NotImplementedError
-
-        self.state_space = np.arange(0, len(self.tasks) + 2)
-        self.init_state = int(self.state_space[0])
-        self.goal_state = int(self.state_space[-2])
-        self.fail_state = int(self.state_space[-1])
-
-        # include dummy action for self-transition of absorbing states
-        self.tasks.append((self.goal_state, self.goal_state))
-        self.tasks.append((self.fail_state, self.fail_state))
-
-        self.observation_space = spaces.Discrete(n=len(self.state_space))
-        self.action_space = spaces.Tuple(
-            (
-                spaces.Discrete(n=len(self.tasks)),
-                spaces.Discrete(n=num_comms_values),
-            )
-        )
-
-        # comms actions need to be be discretized to n_comms_levels
-
-        # transition probs
-        self.transition_probs: pd.DataFrame
-        transition_probs: list[dict] = []
-
-        # init probs as None until we have real data
-        self.successor_map = {}
-        for edge in self.tasks:
-            curr_state, chosen_next_state = edge
-            if edge not in [
-                (self.goal_state, self.goal_state),
-                (self.fail_state, self.fail_state),
-            ]:
-                for comms_val in range(num_comms_values):
-                    action = (chosen_next_state, comms_val)
-                    next_states = [chosen_next_state, self.fail_state]
-                    next_state_types = [
-                        "goal" if chosen_next_state == self.goal_state else "normal"
-                    ]
-                    next_state_types += ["fail"]
-
-                    for next_state, next_state_type in zip(
-                        next_states, next_state_types
-                    ):
-                        self.successor_map[(curr_state, action)] = chosen_next_state
-                        transition_probs.append(
-                            {
-                                "state": curr_state,
-                                "action": action,
-                                "next_state": next_state,
-                                "next_state_type": next_state_type,
-                                "prob": None,
-                            }
-                        )
-
-            else:
-                # add dummy actions for self-transition for goal state and fail state
-                # dummy action for absorbing states always has a comms val of 0 since it isn't a real task
-                action = (chosen_next_state, 0)
-
-                transition_probs.append(
-                    {
-                        "state": curr_state,
-                        "action": action,
-                        "next_state": chosen_next_state,
-                        "next_state_type": (
-                            "goal" if chosen_next_state == self.goal_state else "fail"
-                        ),
-                        "prob": None,
-                    }
-                )
-
-        self.transition_probs = pd.DataFrame.from_records(transition_probs)
-
-    def step(self, action: int):
-        # move agent based on action + transition function
-        pass
-
-    def reset(self, seed: Optional[int] = None) -> None:
-        super().reset(seed=seed)
-        # TODO needs to use the base env's np_random if possible to avoid issues w/ seeding
-        pass
-
-    def _set_action_space(self):
-        # MDP movement actions as well as comms allocation actions
-        pass
-
-    def _set_observation_space(self):
-        pass
-
-    def render(self):
-        # low priority, get other things working first
-        pass
-
-
 class LBFGameEnv(MultiGridEnv):
     """
     Environment in which the agents have to collect the balls. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
@@ -394,10 +240,9 @@ class LBFGameEnv(MultiGridEnv):
 
     def __init__(
         self,
-        map: Optional[str] = None,
+        map_name: Optional[str] = None,
         width: Optional[int] = 10,
         height: Optional[int] = 10,
-        num_rooms: int = 1,
         n_agents: int = 4,
         sight: int = 2,
         min_agent_level: int = 1,
@@ -420,7 +265,7 @@ class LBFGameEnv(MultiGridEnv):
 
         Parameters
         ----------
-        map:
+        map_name:
             name of the map to load (yaml file)
             if None, just 1 room w/ some width and height
 
@@ -434,7 +279,7 @@ class LBFGameEnv(MultiGridEnv):
             Colour index for each fruit type.
         fruits_reward : list[float]
             Reward given for collecting each fruit type.
-        use_mdp: bool, whether to use the project MDP
+        use_mdp: bool, whether to use the project MDP or not
         state_type: Literal["original", "multigrid_flattened"] = "original"
             format for the state, orignal breaks when using Goal objects since they were not in the original LBF env
         obs_type: Literal["original", "multigrid"] = "original"
@@ -443,21 +288,22 @@ class LBFGameEnv(MultiGridEnv):
         self.num_agents = n_agents
 
         # multi-room support
-        self.num_rooms = num_rooms
         self.field_map: pd.DataFrame | None = None
-        self.room_coords: dict[int, tuple]
         self.agent_spawn_room = 0
+        self.room_coords: dict[int, tuple]
+        self.num_rooms: int
 
         if map is not None:
             if width is not None or height is not None:
                 warn("(height, width) and field map provided, using field map size.")
 
-            self.field_map = self._load_field_map(map)
+            self.field_map = self._load_field_map(map_name)
             height, width = self.field_map.shape
 
         else:
             # add 2 b/c of the outer wall that automatically spawns
             # when no map is specified
+            self.num_rooms = 1,
             width = width + 2
             height = height + 2
 
@@ -468,12 +314,12 @@ class LBFGameEnv(MultiGridEnv):
                 }
             }
 
-        if use_project_mdp:
-            self.p_mdp = ProjectMDP(
-                num_rooms=self.num_rooms,
-                task_type=task_type,
-                num_comms_values=num_comms_values,
-            )
+        # if use_project_mdp:
+        #     self.p_mdp = ProjectMDP(
+        #         num_rooms=self.num_rooms,
+        #         task_type=task_type,
+        #         num_comms_values=num_comms_values,
+        #     )
 
         # reward config
         self.failed_load_penalty = failed_load_penalty
@@ -538,9 +384,9 @@ class LBFGameEnv(MultiGridEnv):
         )
 
     # grid generation
-    def _load_field_map(self, map: str) -> pd.DataFrame:
+    def _load_field_map(self, map_name: str) -> pd.DataFrame:
         # read the room layout yaml file to compose the rooms into a cohesive env
-        map_dir = join(dirname(__file__), "maps", "lbf", map)
+        map_dir = join(dirname(__file__), "maps", "lbf", map_name)
         config_path = join(map_dir, "config.yaml")
         with open(config_path) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -569,9 +415,11 @@ class LBFGameEnv(MultiGridEnv):
 
             y_min = y_max
 
+
         # concat all the rooms into a single env
-        row_dfs = [pd.concat(rooms[i], axis=1, ignore_index=True) for i in rooms]
-        field_map = pd.concat(row_dfs, axis=0, ignore_index=True)
+        rows = [pd.concat(rooms[i], axis=1, ignore_index=True) for i in rooms]
+        field_map = pd.concat(rows, axis=0, ignore_index=True)
+        self.num_rooms = room_idx
 
         # astype(object) allows literal_eval to convert strings to tuples where needed
         for y, row in field_map.iterrows():
@@ -939,9 +787,23 @@ class LBFGameEnv(MultiGridEnv):
                 # Move agent
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
 
+                # if agent not at goal and reaches goal, + 0.6
+                if not agent.in_goal_set(self.current_room):
+                    if agent.in_goal_set(self.current_room, pos=next_pos):
+                        agent.reward += 0.6
+
+
+
+                print('\n breakpoint ')
+                __import__('ipdb').set_trace(context=3)
+                # if isinstance(next_cell, Goal):
+
+                # agent.reward +=
+                # if agent at goal and next pos is not a goal, -0.8
+
     def _update_room(self):
         reached_room_goal: list[bool] = [
-            agent.at_goal(self.current_room) for agent in self.agents
+            agent.in_goal_set(self.current_room) for agent in self.agents
         ]
 
         if all(reached_room_goal) and self.all_room_fruit_collected[self.current_room]:
