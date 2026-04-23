@@ -654,6 +654,12 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return pos
 
+    def despawn_object(self, obj: WorldObj):
+        self.init_grid.set(*obj.pos, None)
+        if obj == self.grid.get(*obj.pos):
+            # need this extra to despawn objects that agents cannot walk on, like walls
+            self.grid.set(*obj.pos, None)
+
     def agent_sees(self, a, x, y):
         """
         Check if a non-empty grid position is visible to the agent
