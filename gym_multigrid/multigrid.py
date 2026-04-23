@@ -554,6 +554,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         rand_dir: bool = False,
         max_tries: float = math.inf,
         reset_agent_status: bool = False,
+        init_grid: Grid | None = None,
     ) -> Position:
         """
         Set the agent's starting point at an empty position in the grid and reset the agent's state
@@ -579,6 +580,9 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             Whether to reset the agent's status (e.g., position, direction).
             If False, the agent's position and direction will not be reset.
         """
+        if init_grid is not None:
+            self.init_grid = init_grid
+
         if reset_agent_status:
             agent.reset()
         else:

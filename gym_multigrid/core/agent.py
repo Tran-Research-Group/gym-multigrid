@@ -328,6 +328,7 @@ class Agent(WorldObj):
             if isinstance(obj, WorldObj):
                 self.bg_color = obj.bg_color
 
+
     @property
     def dir_vec(self):
         """
