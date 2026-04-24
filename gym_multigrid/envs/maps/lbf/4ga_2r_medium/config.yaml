@@ -1,4 +1,4 @@
-# no pre-defined fruit locations
+# pre-defined fruit locations
 room_layout: [
   [room_1, room_2],
 ]
