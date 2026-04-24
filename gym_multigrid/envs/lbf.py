@@ -79,8 +79,7 @@ class LBFAgent(Agent):
 
         elif not np.any(np.all(pos == self.room_goals[room_idx], axis=1)):
             self.room_goals[room_idx] = np.vstack(
-                (self.room_goals[room_idx], np.array([pos]))
-            )
+                (self.room_goals[room_idx], pos))
 
     def in_goal_set(self, current_room: int, pos: Position = None) -> bool:
         if pos is None:
@@ -315,6 +314,7 @@ class LBFGameEnv(MultiGridEnv):
         observe_agent_levels: bool = True,
         state_type: Literal["original", "multigrid_flattened"] = "original",
         obs_type: Literal["original", "multigrid_flattened"] = "original",
+        highlight_visible_cells: bool = False,
         normalize_fruit_reward: bool = True,
         failed_load_penalty: float = 0.0,
         use_project_mdp: bool = False,
@@ -444,6 +444,7 @@ class LBFGameEnv(MultiGridEnv):
             partial_obs=partial_obs,
             actions_set=self.actions_set,
             render_mode="rgb_array",
+            highlight_visible_cells=highlight_visible_cells,
         )
 
     # grid generation
