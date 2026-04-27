@@ -371,14 +371,14 @@ class SaveTheCityEnv(MultiGridEnv):
                     burning.firefight_speed = agent.firefight_speed
                     burning.fight_fire()
                     if burning.fire_rate == 0:
-                        self._reward(i, rewards, 20, event="fire_extinguished")
+                        self._reward(i, rewards, 50, event="fire_extinguished")
 
 
         # Let buildings update themselves (burn if on fire)
         for building in self.buildings:
             result = building.step()
             if result == "burned_down":
-                rewards -= 50  # team penalty
+                rewards -= 100 / len(rewards)  # fixed team penalty of -100 distributed evenly
                 self.info["buildings_burned"] += 1
 
         # # Filter buildings to only alive ones

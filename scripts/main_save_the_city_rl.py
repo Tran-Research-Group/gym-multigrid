@@ -81,9 +81,9 @@ class SaveTheCityStatsCallback(BaseCallback):
             buildings_burned: int = info.get("buildings_burned", 0)
             truncated: bool = info.get("TimeLimit.truncated", False)
 
-            reward_from_extinguish = total_fires * 20
+            reward_from_extinguish = total_fires * 50
             reward_from_builds = total_buildings * 100
-            penalty_from_burns = buildings_burned * 50
+            penalty_from_burns = buildings_burned * 100
 
             ep_log: dict[str, Any] = {
                 "train/episode": self._episode_count,
