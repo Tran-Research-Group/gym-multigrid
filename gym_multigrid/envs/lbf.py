@@ -952,8 +952,8 @@ class LBFGameEnv(MultiGridEnv):
         # step info
         info = {}
 
-        # Agents only succeed at the task if terminated = True
-        info["battle_won"] = terminated
+        # Agents only succeed at the full "project" if terminated = True
+        info["project_completed"] = terminated
 
         return info
 
