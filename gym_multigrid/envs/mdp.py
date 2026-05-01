@@ -1,8 +1,10 @@
+import itertools as it
 import copy
 import pandas as pd
 from typing import Literal, Optional
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 import numpy as np
 from numpy.typing import NDArray
@@ -48,6 +50,10 @@ class ProjectMDP(Env):
         )
 
         self.task_completed: bool = False
+
+        # graph of the MDP for rendering
+        self.graph: Optional[nx.Graph] = None
+        self.node_colors: list[str]
 
         # n_waypoints = n_agents is a mathematically different task from !=
         # you want to use a pandas df here for easier bookkeeping
@@ -241,10 +247,6 @@ class ProjectMDP(Env):
         state = np.array([self.agent.state, self.task_completed])
         return state
 
-    def render(self):
-        # low priority, get other things working first
-        pass
-
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""
         env_info = {
@@ -264,166 +266,144 @@ class ProjectMDP(Env):
         return state_size
 
     def render(self):
-        # make an image of the MDP
-        ## use networkX to show the nodes + available edges between them
-        # hl_img = np.zeros_like(ll_img)
+        # make an image of the MDP using networkX to show the nodes + available edges between them
 
-        # init networkx graph for visualization
-        # you only have to do this once, otherwise you can update the coloring of a given node w/ the current state or whatever
-        ## all normal nodes have black outlines
-        ## fail node has red
-        ## if an agent in the node, it has a little circle in it
+        # TODO low priorirty - maybe be able to highlight the current chosen edge?
+        # current actions don't work for that, would have to revisit that
+        # current actions support "self transitions" so that wouldn't work nicely
 
-        ## show all edges (next state + comms allocations)
-        ## low priorirty - maybe be able to highlight the current chosen edge?
-        ### current actions don't work for that, would have to revisit that
-        ### current actions support "self transitions" so that wouldn't work nicely
+        # only set up the graph
+        if self.graph is None:
+            self.graph = nx.MultiDiGraph()
 
-        graph = nx.MultiDiGraph()
-        edge_labels = {}
+            for state in self.state_space:
+                df_state = self.transition_probs.loc[
+                    (self.transition_probs.state == state)
+                    & (self.transition_probs.next_state == state)
+                ]
 
-        success_edges = []
-        fail_edges = []
-
-        for state in self.state_space:
-            df_tmp = self.transition_probs.loc[self.transition_probs.state == state]
-            for _, row in df_tmp.iterrows():
-                graph.add_edges_from(
-                    [
-                        (
-                            row.state,
-                            row.next_state,
-                            {"action": row.action, "edge_type": row.next_state_type},
-                        ),
-                    ]
+                state_type = df_state.next_state_type.item()
+                self.graph.add_node(
+                    int(state), **{"state_type": state_type, "current_state": False}
                 )
 
-        fig, ax = plt.subplots(figsize=(6, 4))
-        # plot the graph
-        pos = nx.planar_layout(graph)
-        # pos = nx.spring_layout(graph, k=0.15, iterations=20)
-        # pos = nx.spectral_layout(graph)
+                # get all outgoing edges for this state
+                df_edge = self.transition_probs.loc[
+                    (self.transition_probs.state == state)
+                ]
+                for _, row in df_edge.iterrows():
+                    self.graph.add_edges_from(
+                        [
+                            (
+                                row.state,
+                                row.next_state,
+                                {"action": row.action},
+                            ),
+                        ]
+                    )
 
-        nx.draw(graph, pos)
-        import os
+            self.node_colors: list[str] = []
 
+            for node in self.graph.nodes:
+                if self.graph.nodes[node]["state_type"] == "normal":
+                    self.node_colors.append("cyan")
+                elif self.graph.nodes[node]["state_type"] == "fail":
+                    self.node_colors.append("red")
+                elif self.graph.nodes[node]["state_type"] == "goal":
+                    self.node_colors.append("yellow")
+
+        # add an outline to the agent's current state
+        node_edge_colors: list[str] = []
+        for i, node in enumerate(self.graph.nodes):
+            if node == self.agent.state:
+                node_edge_colors.append("black")
+            else:
+                node_edge_colors.append(self.node_colors[i])
+
+        fig, ax = plt.subplots(figsize=(5, 3))
+
+        # render the graph
+        ax = self._draw_labeled_multigraph(
+            G=self.graph, edge_label="action", node_edge_colors=node_edge_colors, ax=ax
+        )
+
+        img: NDArray = self._fig_to_array(fig)
+        return img
+
+    def _draw_labeled_multigraph(
+        self, G, edge_label: str, node_edge_colors: list[str], ax=None
+    ):
+        """
+        https://networkx.org/documentation/stable/auto_examples/drawing/plot_multigraphs.html
+        Length of connectionstyle must be at least that of a maximum number of edges
+        between pair of nodes. This number is maximum one-sided
+        for directed graph and maximum total connections for undirected graph.
+        """
+        # Works with arc3 and angle3 connectionstyles
+        connectionstyle = [f"arc3,rad={r}" for r in it.accumulate([0.15] * 4)]
+
+        # spectral is a decent layout
+        pos = nx.spectral_layout(G)
+        # pos = nx.spring_layout(G, k=5/np.sqrt(G.order()))
+        # pos = nx.planar_layout(G)
+        # pos = nx.shell_layout(G)
+
+        # draw nodes + labels
+        nx.draw_networkx_nodes(
+            G, pos, node_color=self.node_colors, edgecolors=node_edge_colors, ax=ax
+        )
+        nx.draw_networkx_labels(G, pos, font_size=10, ax=ax)
+
+        # draw edges + labels
+        labels = {}
+        for *edge, attrs in G.edges(keys=True, data=True):
+            labels[tuple(edge)] = f"a={attrs[edge_label]}"
+
+        nx.draw_networkx_edges(
+            G, pos, edge_color="gray", connectionstyle=connectionstyle, ax=ax
+        )
+        nx.draw_networkx_edge_labels(
+            G,
+            pos,
+            labels,
+            connectionstyle=connectionstyle,
+            label_pos=0.5,
+            font_color="black",
+            font_size=6,
+            ax=ax,
+        )
+        # image formatting
         plt.box(False)
         plt.tight_layout()
-        save_path = os.path.join(f"hlmdp.png")
-        plt.savefig(save_path, dpi=200)
-        print("\n breakpoint ")
-        __import__("ipdb").set_trace(context=3)
+        return ax
+        # plt.savefig("hlmdp.png", dpi=200)
 
-        # # populate edge data from the high-level MDP solution
-        # graph.add_node(self.env.u_fail)
+    def _fig_to_array(self, fig: plt.Figure) -> NDArray:
+        """
+        Convert matplotlib figure to numpy array (faster, in-memory method).
 
-        # for u in self.env.state_space:
-        #     if u != self.env.u_fail:
-        #         graph.add_node(u)
+        Parameters
+        ----------
+        fig : plt.Figure
+            Matplotlib figure object
 
-        #         if u != self.env.u_goal:
-        #             for action in self.env.avail_actions[u]:
-        #                 u_next = self.env.successor[u, action]
+        Returns
+        -------
+        np.ndarray
+            Image array with shape (height, width, 3) in RGB format
+        """
+        # Render figure to RGBA buffer
+        fig.canvas.draw()
 
-        #                 # only show the action index on the edges
-        #                 # edge_labels[(u, final_state)] = f"a: {action}"
+        # Get pixel buffer from canvas
+        buf = fig.canvas.buffer_rgba()
 
-        #                 # # show a bunch on information on the edges (gets cut off b/c some edges are too short)
-        #                 # state_action_occ_str = (
-        #                 #     "$x$"
-        #                 #     + f"$(u={u}, u'={action})$: {round(self.opt_vars.state_action_occupancy[u, action].x, 3)}\n"
-        #                 # )
-        #                 # policy_str = (
-        #                 #     "$\pi$"
-        #                 #     + f"$(u'={action}|u={u})$: {round(self.policy[u, action], 3)}\n"
-        #                 # )
-        #                 # optimal_comms_val_str = f"$\lambda_{action}^*$: {round(self.optimal_comms_vals[action], 3)}\n"
-        #                 # success_prob_str = (
-        #                 #     "$\hat{p}_{u u' w}$"
-        #                 #     + f"($\lambda_{action}^*$): {round(self.chosen_success_probs[action], 3)}"
-        #                 # )
-        #                 # edge_labels[(u, u_next)] = (
-        #                 #     state_action_occ_str
-        #                 #     + policy_str
-        #                 #     + optimal_comms_val_str
-        #                 #     + success_prob_str
-        #                 # )
-        #                 # graph.add_edge(u, u_next, action_idx=action)
+        # Get figure dimensions
+        w, h = fig.canvas.get_width_height()
 
-        #                 # add edges from all start states to a fail state
-        #                 # success_prob_str = "$\hat{p}_{u u' w}$" + f"($\lambda_{action}^*$): {round(1.0 - self.chosen_success_probs[action], 3)}"
-        #                 # edge_labels[(u, self.env.u_fail)] = success_prob_str
-        #                 graph.add_edge(u, self.env.u_fail, action_idx=action)
+        # Reshape to (height, width, 4) for RGBA, then drop the alpha channel
+        arr = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)
 
-        # fig, ax = plt.subplots(figsize=(6, 4))
+        arr = arr[:, :, :3]
 
-        # # place a text box in upper left in axes coords
-        # text_str = (
-        #     f"Specified Goal Reach Probability: {self.success_prob_spec}\n"
-        #     + f"Chosen Goal Reach Probability: {round(self.goal_reach_prob, 3)}\n"
-        #     + f"Total Comms. Cost: {round(self.get_objective_value(), 3)}"
-        # )
-        # props = dict(boxstyle="round", facecolor="wheat", alpha=0.5)
-        # ax.text(
-        #     0.02,
-        #     0.98,
-        #     text_str,
-        #     transform=ax.transAxes,
-        #     fontsize=8,
-        #     verticalalignment="top",
-        #     bbox=props,
-        # )
-
-        # # plot the graph
-        # pos = nx.planar_layout(graph)
-        # # pos = nx.spring_layout(graph, k=0.15, iterations=20)
-        # # pos = nx.spectral_layout(graph)
-        # node_labels = {}
-        # for node in graph.nodes:
-        #     if node != self.env.u_fail:
-        #         node_labels[node] = node
-        #     else:
-        #         node_labels[node] = "x"
-
-        # nx.draw_networkx_nodes(graph, pos)
-        # nx.draw_networkx_labels(graph, pos, labels=node_labels)
-
-        # edges = list(graph.edges())
-        # success_edges = []
-        # fail_edges = []
-        # for e in edges:
-        #     if e[1] != self.env.u_fail:
-        #         success_edges.append(e)
-        #     else:
-        #         fail_edges.append(e)
-
-        # nx.draw_networkx_edges(graph, pos, edgelist=success_edges, edge_color="k")
-        # nx.draw_networkx_edges(graph, pos, edgelist=fail_edges, edge_color="r")
-        # nx.draw_networkx_edge_labels(
-        #     graph,
-        #     pos,
-        #     label_pos=0.5,
-        #     edge_labels=edge_labels,
-        #     font_size=7,
-        #     rotate=False,
-        # )
-        # plt.box(False)
-        # plt.tight_layout()
-        # save_dir = os.path.join(
-        #     self.eval_dir,
-        #     "hlm_visualization",
-        #     self.comms_formulation,
-        # )
-        # os.makedirs(save_dir, exist_ok=True)
-        # save_path = os.path.join(
-        #     save_dir, f"hlm__succes_spec_{self.success_prob_spec}.png"
-        # )
-        # plt.savefig(save_path, dpi=200)
-        # plt.close(fig)
-
-        # # print("\n\n")
-        # # print(f"Policy: \n{self.policy}\n")
-        # # print(f"Chosen success probabilities: {self.chosen_success_probs}")
-        # # print(f"Communication values: {self.optimal_comms_vals}")
-        # # print(f"Summed communication values: {sum(self.optimal_comms_vals.values())}")
-        # # print(f"Goal reach probability: {self.goal_reach_prob}")
+        return arr
