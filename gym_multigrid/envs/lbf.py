@@ -21,13 +21,9 @@ from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.multigrid import MultiGridEnv
 
-from gym_multigrid.envs.mdp import ProjectMDP
-
-
 # from gym_multigrid.policy import AgentPolicy
 # from gym_multigrid.policy.prey_pred import PREY_PRED_POLICIES
 from gym_multigrid.policy.prey_pred.utils import a_star
-
 
 
 class LBFAgent(Agent):
@@ -78,8 +74,7 @@ class LBFAgent(Agent):
             self.room_goals[room_idx] = pos
 
         elif not np.any(np.all(pos == self.room_goals[room_idx], axis=1)):
-            self.room_goals[room_idx] = np.vstack(
-                (self.room_goals[room_idx], pos))
+            self.room_goals[room_idx] = np.vstack((self.room_goals[room_idx], pos))
 
     def in_goal_set(self, current_room: int, pos: Position = None) -> bool:
         if pos is None:
@@ -131,6 +126,7 @@ class LBFAgent(Agent):
         )
 
         self._render_level(img)
+
 
 class Fruit(WorldObj):
     def __init__(
@@ -228,7 +224,6 @@ class Fruit(WorldObj):
             )
 
 
-
 class RewardConfig:
     def __init__(
         self,
@@ -259,7 +254,9 @@ class RewardConfig:
         # reach goal serves as the base reward that all others are derived from
         # using reward multipliers. This helps design a reward function that can work for
         # different team sizes
-        self.agent_reach_goal_reward: float = self.base_goal_reward * agent_reach_goal_mult
+        self.agent_reach_goal_reward: float = (
+            self.base_goal_reward * agent_reach_goal_mult
+        )
 
         self.agent_leave_goal_reward: float = (
             self.agent_reach_goal_reward * agent_leave_goal_mult
@@ -285,7 +282,6 @@ class RewardConfig:
         #     self.agent_reach_goal_reward * max_dense_reach_goal_proportion
         # )
         # self.max_dense_reward_per_agent: float = self.max_dense_reward / num_agents
-
 
 
 class LBFGameEnv(MultiGridEnv):
@@ -317,8 +313,7 @@ class LBFGameEnv(MultiGridEnv):
         highlight_visible_cells: bool = False,
         normalize_fruit_reward: bool = True,
         failed_load_penalty: float = 0.0,
-        use_project_mdp: bool = False,
-        task_type: Optional[Literal["atomic", "composed"]] = None,
+        team_bandwidth_allocation_action: bool = False,
         num_comms_values: Optional[int] = 4,
     ):
         """
@@ -369,7 +364,7 @@ class LBFGameEnv(MultiGridEnv):
         else:
             # add 2 b/c of the outer wall that automatically spawns
             # when no map is specified
-            self.num_rooms = 1,
+            self.num_rooms = (1,)
             width = width + 2
             height = height + 2
 
@@ -380,14 +375,11 @@ class LBFGameEnv(MultiGridEnv):
                 }
             }
 
-        # if use_project_mdp:
-        #     self.p_mdp = ProjectMDP(
-        #         num_rooms=self.num_rooms,
-        #         task_type=task_type,
-        #         num_comms_values=num_comms_values,
-        #     )
+        # whether or not to include an action that represents the allocation of bandwidth to a team
+        self.team_bandwidth_allocation_action: bool = team_bandwidth_allocation_action
+        self.num_comms_values: Optional[int] = num_comms_values
 
-
+        # hierarchical model of environment project the tasks that comprise it
         self.max_num_fruit: int = max_num_fruit
         self._num_fruit_spawned: int = 0
 
@@ -479,7 +471,6 @@ class LBFGameEnv(MultiGridEnv):
 
             y_min = y_max
 
-
         # concat all the rooms into a single env
         rows = [pd.concat(rooms[i], axis=1, ignore_index=True) for i in rooms]
         field_map = pd.concat(rows, axis=0, ignore_index=True)
@@ -518,7 +509,6 @@ class LBFGameEnv(MultiGridEnv):
         # objects spawned before init_grid is initialized will respawn after an agent steps on them and leaves that cell
         # need separate logic to modify self.init_grid to despawn those objects if desired
         self.init_grid: Grid = self.grid.copy()
-
 
         # spawn agents
         self._spawn_agents(self.min_agent_levels, self.max_agent_levels)
@@ -620,7 +610,7 @@ class LBFGameEnv(MultiGridEnv):
         return num_spawned_objects
 
     def _get_object_room(self, pos: Position) -> int:
-        (x, y) = pos
+        x, y = pos
         for room_idx, room_coords in self.room_coords.items():
             x_min, x_max = room_coords["x_limits"]
             y_min, y_max = room_coords["y_limits"]
@@ -768,7 +758,7 @@ class LBFGameEnv(MultiGridEnv):
 
         Parameters
         ----------
-        action : int
+        action :
             The action to take.
 
         Returns
@@ -785,6 +775,7 @@ class LBFGameEnv(MultiGridEnv):
             Additional information about the environment.
         """
         terminated: bool = False
+
         actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
 
         for a in self.agents:
@@ -810,8 +801,9 @@ class LBFGameEnv(MultiGridEnv):
         self._load_fruit(loading_agents)
 
         # update waypoints
-        self._update_room()
+        room_completed = self._update_room()
 
+        # check if entire project is complete
         terminated = self._terminated()
 
         # truncated handled by TimeLimit wrapper
@@ -820,7 +812,7 @@ class LBFGameEnv(MultiGridEnv):
         obs: NDArray[np.int_] = self.get_obs()
         agent_rewards = [a.reward for a in self.agents]
         reward: float = float(np.sum(agent_rewards))
-        info = self._get_info(terminated=terminated)
+        info = self._get_info(terminated=terminated, room_completed=room_completed)
 
         return (
             obs,
@@ -840,17 +832,22 @@ class LBFGameEnv(MultiGridEnv):
                 # do movements for non colliding players
                 agent = agents[0]
 
-                if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(self.current_room, pos=next_pos):
+                if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(
+                    self.current_room, pos=next_pos
+                ):
                     agent.reward += self.reward_config.agent_reach_goal_reward
 
                 # if agent at goal and next pos is not a goal, get penalty
-                if agent.in_goal_set(self.current_room) and not agent.in_goal_set(self.current_room, pos=next_pos):
+                if agent.in_goal_set(self.current_room) and not agent.in_goal_set(
+                    self.current_room, pos=next_pos
+                ):
                     agent.reward += self.reward_config.agent_leave_goal_reward
 
                 # Move agent
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
 
-    def _update_room(self):
+    def _update_room(self) -> bool:
+        room_completed = False
         reached_room_goal: list[bool] = [
             agent.in_goal_set(self.current_room) for agent in self.agents
         ]
@@ -864,6 +861,9 @@ class LBFGameEnv(MultiGridEnv):
 
             # move on to the next room
             self.current_room += 1
+            room_completed = True
+
+        return room_completed
 
     def _load_fruit(self, loading_agents: set):
         while loading_agents:
@@ -939,7 +939,7 @@ class LBFGameEnv(MultiGridEnv):
         terminated = False
 
         if self.num_rooms == 1:
-            # if 1 room, simply collect all fruit to complete the task
+            # if 1 room, simply collect all fruit to complete the current task
             terminated = self.num_fruit_collected_per_room[0] == self._num_fruit_spawned
         else:
             # if > 1 room, reach the end of the final room
@@ -948,12 +948,13 @@ class LBFGameEnv(MultiGridEnv):
 
         return terminated
 
-    def _get_info(self, terminated: bool = False) -> dict:
+    def _get_info(self, terminated: bool = False, room_completed: bool = False) -> dict:
         # step info
         info = {}
 
         # Agents only succeed at the full "project" if terminated = True
         info["project_completed"] = terminated
+        info["task_completed"] = room_completed
 
         return info
 
@@ -1082,7 +1083,7 @@ class LBFGameEnv(MultiGridEnv):
         # ego agent is first in its observations of the agents
         if ego_agent is not None:
             # ego agent's position in its local frame
-            (y, x) = self._transform_to_ego_agent_frame(
+            y, x = self._transform_to_ego_agent_frame(
                 center=ego_agent.pos, sight=self.sight, position=ego_agent.pos
             )
             obj_obs[0, :] = np.array([y, x, ego_agent.level])
@@ -1258,10 +1259,17 @@ class LBFGameEnv(MultiGridEnv):
         return valid
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
-        action_space = spaces.Tuple(
-            tuple([spaces.Discrete(len(self.actions))] * len(self.agents))
-        )
+        env_agent_action_space = spaces.Discrete(len(self.actions))
+        action_space = [env_agent_action_space] * len(self.agents)
         ac_dim = len(self.actions)
+
+        if self.team_bandwidth_allocation_action:
+            comms_action_space = spaces.Box(low=0, high=1)
+            action_space.append(comms_action_space)
+            ac_dim = ac_dim + 1
+
+        # convert from list of spaces to gymnasium space
+        action_space = spaces.Tuple(action_space)
 
         return action_space, ac_dim
 
