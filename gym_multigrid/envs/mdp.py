@@ -6,7 +6,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle
 
 import numpy as np
 from numpy.typing import NDArray
@@ -295,7 +294,11 @@ class ProjectMDP(Env):
         state_size = int(np.prod(state.shape))
         return state_size
 
-    def render(self, action: Optional[dict] = None):
+    def render(
+        self,
+        action: Optional[dict] = None,
+        img_shape: tuple[float] = (6, 3),
+    ):
         # make an image of the MDP using networkX to show the nodes + available edges between them
         # only set up the MDP graph once during training
         if self.graph is None:
@@ -349,15 +352,18 @@ class ProjectMDP(Env):
         if action is not None:
             action_tuple = self._get_action_tuple(action)
             for i, (*edge, attrs) in enumerate(self.graph.edges(keys=True, data=True)):
-                if attrs["action"] == action_tuple:
+                if edge[0] == self.agent.state and attrs["action"] == action_tuple:
                     if edge[1] == self.fail_state:
                         edge_outline_colors[i] = "red"
                     else:
                         edge_outline_colors[i] = "green"
                     edge_outline_widths[i] = self.edge_widths["highlight"]
 
+        fig, ax = plt.subplots(figsize=img_shape)
+
         # render the graph
-        fig = self._draw_labeled_multigraph(
+        self._draw_labeled_multigraph(
+            ax=ax,
             G=self.graph,
             edge_label="action",
             node_outline_colors=node_outline_colors,
@@ -372,6 +378,7 @@ class ProjectMDP(Env):
 
     def _draw_labeled_multigraph(
         self,
+        ax,
         G,
         edge_label: str,
         node_outline_colors: list,
@@ -386,8 +393,6 @@ class ProjectMDP(Env):
         for directed graph and maximum total connections for undirected graph.
         """
         # Works with arc3 and angle3 connectionstyles
-        fig, ax = plt.subplots(figsize=(6, 3))
-
         connectionstyle = [f"arc3,rad={r}" for r in it.accumulate([0.15] * 4)]
 
         # spectral is a decent layout
@@ -453,14 +458,25 @@ class ProjectMDP(Env):
             ),
             # Circle((0, 0), radius=0.05, color=self.colors["yellow"], label="Project Success"),
             # Circle((0, 0), radius=0.05, color=self.colors["red"], label="Project Failure"),
-            Line2D([0], [0], color="green", lw=1, label="Task Success"),
-            Line2D([0], [0], color="red", lw=1, label="Task Failure"),
+            Line2D(
+                [0],
+                [0],
+                color="green",
+                lw=self.edge_widths["highlight"],
+                label="Task Success",
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="red",
+                lw=self.edge_widths["highlight"],
+                label="Task Failure",
+            ),
         ]
 
-        plt.legend(handles=handles)
+        plt.legend(handles=handles, fontsize=8)
         plt.box(False)
         plt.tight_layout()
-        return fig
 
     def _fig_to_array(self, fig: Figure) -> NDArray:
         """
