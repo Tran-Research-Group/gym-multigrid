@@ -5,11 +5,15 @@ from typing import Literal, Optional
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+from matplotlib.patches import Circle
 
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
 from gymnasium import spaces, Env
+
+from gym_multigrid.core.constants import COLORS
 
 
 class MDPAgent:
@@ -51,9 +55,15 @@ class ProjectMDP(Env):
 
         self.task_completed: bool = False
 
-        # graph of the MDP for rendering
+        # stuff for MDP rendering
         self.graph: Optional[nx.Graph] = None
-        self.node_colors: list[str]
+        # scale colors to be in [0, 1] for rendering
+        self.colors = {k: v / 255 for k, v in COLORS.items()}
+        self.node_colors: list
+        self.edge_widths: dict = {
+            "normal": 1,
+            "highlight": 2.5,
+        }
 
         # n_waypoints = n_agents is a mathematically different task from !=
         # you want to use a pandas df here for easier bookkeeping
@@ -89,14 +99,14 @@ class ProjectMDP(Env):
             case _:
                 raise NotImplementedError
 
-        self.state_space = np.arange(0, len(self.tasks) + 2)
-        self.init_state = int(self.state_space[0])
-        self.goal_state = int(self.state_space[-2])
-        self.fail_state = int(self.state_space[-1])
+        self.state_space = [i for i in range(0, len(self.tasks) + 2)]
+        self.init_state = self.state_space[0]
+        self.goal_state = self.state_space[-2]
+        self.fail_state = self.state_space[-1]
 
-        # include "stay" task for self-transition for all states
-        for state in self.state_space:
-            self.tasks.append((state.item(), state.item()))
+        # include "stay" task for self-transition of absorbing states
+        for state in [self.goal_state, self.fail_state]:
+            self.tasks.append((state, state))
 
         self.observation_space = spaces.Discrete(n=len(self.state_space))
 
@@ -124,21 +134,15 @@ class ProjectMDP(Env):
                 # add dummy actions for self-transition for goal state and fail state
                 # dummy action for absorbing states always has a comms val of 0 since it isn't a real task
                 action = (chosen_next_state, 0.0)
-                match chosen_next_state:
-                    case self.goal_state:
-                        next_state_type = "goal"
-                    case self.fail_state:
-                        next_state_type = "fail"
-                    case _:
-                        next_state_type = "normal"
 
                 self.successor_map[(curr_state, action)] = chosen_next_state
                 transition_probs.append(
                     {
                         "state": curr_state,
+                        "state_type": self._get_state_type(curr_state),
                         "action": action,
                         "next_state": chosen_next_state,
-                        "next_state_type": next_state_type,
+                        "next_state_type": self._get_state_type(chosen_next_state),
                         "prob": 1.0,
                     }
                 )
@@ -149,9 +153,8 @@ class ProjectMDP(Env):
 
                     next_states = [chosen_next_state, self.fail_state]
                     next_state_types = [
-                        "goal" if chosen_next_state == self.goal_state else "normal"
+                        self._get_state_type(state) for state in next_states
                     ]
-                    next_state_types += ["fail"]
 
                     for next_state, next_state_type in zip(
                         next_states, next_state_types
@@ -160,6 +163,7 @@ class ProjectMDP(Env):
                         transition_probs.append(
                             {
                                 "state": curr_state,
+                                "state_type": self._get_state_type(curr_state),
                                 "action": action,
                                 "next_state": next_state,
                                 "next_state_type": next_state_type,
@@ -169,35 +173,43 @@ class ProjectMDP(Env):
 
         self.transition_probs = pd.DataFrame.from_records(transition_probs)
 
+    def _get_state_type(self, state: int) -> Literal["goal", "fail", "normal"]:
+        match state:
+            case self.goal_state:
+                state_type = "goal"
+            case self.fail_state:
+                state_type = "fail"
+            case _:
+                state_type = "normal"
+        return state_type
+
     def step(
-        self, action: dict, task_completed: bool, task_failed: bool
-    ) -> tuple[int, float, bool, dict]:
-        chosen_next_state = action["chosen_next_state"]
-        comms_val_raw = action["comms_allocation"]
+        self,
+        action: dict,
+        task_completed: bool,
+        project_failed: bool,
+    ) -> tuple[int, float, bool, bool, dict]:
 
         # Due to how time steps work in the PYMARL runner, need to set task_completed
         # so it is seen in the get_state() method to populate pre_transition_data to be used to select actions
         self.task_completed = False
 
-        if task_failed:
+        if project_failed:
             next_state = self.fail_state
 
-        else:
-            if task_completed:
-                self.task_completed = True
-
+        elif task_completed:
+            self.task_completed = True
+            action_tuple = self._get_action_tuple(action)
             # take action given by the hl agent
-            # Discretize comms value to nearest level
-            # only used if sampling from the action space for development purposes
-            comms_val: float = self.comms_values[
-                np.argmin(np.abs(np.array(self.comms_values) - comms_val_raw))
-            ]
-            action_tuple = (chosen_next_state, comms_val)
             next_state = self.successor_map[(self.agent.state, action_tuple)]
 
-            # update agent state
-            self.agent.prev_state = copy.deepcopy(self.agent.state)
-            self.agent.state = next_state
+        else:
+            # task still in progress
+            next_state = self.agent.state
+
+        # update agent state
+        self.agent.prev_state = copy.deepcopy(self.agent.state)
+        self.agent.state = next_state
 
         # Determine reward and termination
         terminated = self.agent.state == self.goal_state
@@ -206,6 +218,10 @@ class ProjectMDP(Env):
         # reward = 1.0 if terminated else (-0.01 if failed else 0.0)
         reward = 0.0
 
+        # truncated handled by TimeLimit wrapper on this MDP
+        # or the low-level env in a hierarchical setup
+        truncated = False
+
         obs = self.get_state()
         env_info: dict = {"project_failed": project_failed}
 
@@ -213,8 +229,22 @@ class ProjectMDP(Env):
             obs,
             reward,
             terminated,
+            truncated,
             env_info,
         )
+
+    def _get_action_tuple(self, action: dict) -> tuple:
+        chosen_next_state = action["chosen_next_state"]
+        comms_val_raw = action["comms_allocation"]
+
+        # Discretize comms value to nearest level
+        # only used if sampling from the action space for development purposes
+        comms_val: float = self.comms_values[
+            np.argmin(np.abs(np.array(self.comms_values) - comms_val_raw))
+        ]
+
+        action_tuple = (chosen_next_state, comms_val)
+        return action_tuple
 
     def reset(
         self, seed: Optional[int] = None, options: dict = None
@@ -265,32 +295,24 @@ class ProjectMDP(Env):
         state_size = int(np.prod(state.shape))
         return state_size
 
-    def render(self):
+    def render(self, action: Optional[dict] = None):
         # make an image of the MDP using networkX to show the nodes + available edges between them
-
-        # TODO low priorirty - maybe be able to highlight the current chosen edge?
-        # current actions don't work for that, would have to revisit that
-        # current actions support "self transitions" so that wouldn't work nicely
-
-        # only set up the graph
+        # only set up the MDP graph once during training
         if self.graph is None:
             self.graph = nx.MultiDiGraph()
 
             for state in self.state_space:
-                df_state = self.transition_probs.loc[
-                    (self.transition_probs.state == state)
-                    & (self.transition_probs.next_state == state)
-                ]
+                state_row = self.transition_probs.loc[
+                    self.transition_probs.state == state
+                ].iloc[0]
 
-                state_type = df_state.next_state_type.item()
-                self.graph.add_node(
-                    int(state), **{"state_type": state_type, "current_state": False}
-                )
+                self.graph.add_node(state, **{"state_type": state_row.state_type})
 
                 # get all outgoing edges for this state
                 df_edge = self.transition_probs.loc[
                     (self.transition_probs.state == state)
                 ]
+
                 for _, row in df_edge.iterrows():
                     self.graph.add_edges_from(
                         [
@@ -302,36 +324,60 @@ class ProjectMDP(Env):
                         ]
                     )
 
-            self.node_colors: list[str] = []
+            self.node_colors: list = []
 
             for node in self.graph.nodes:
                 if self.graph.nodes[node]["state_type"] == "normal":
-                    self.node_colors.append("cyan")
+                    self.node_colors.append(self.colors["light_grey"])
                 elif self.graph.nodes[node]["state_type"] == "fail":
-                    self.node_colors.append("red")
+                    self.node_colors.append(self.colors["red"])
                 elif self.graph.nodes[node]["state_type"] == "goal":
-                    self.node_colors.append("yellow")
+                    self.node_colors.append(self.colors["yellow"])
 
         # add an outline to the agent's current state
-        node_edge_colors: list[str] = []
+        node_outline_colors: list = [self.colors["white"]] * len(self.graph.nodes)
+        node_outline_widths: list = [self.edge_widths["normal"]] * len(self.graph.nodes)
         for i, node in enumerate(self.graph.nodes):
             if node == self.agent.state:
-                node_edge_colors.append("black")
-            else:
-                node_edge_colors.append(self.node_colors[i])
+                node_outline_colors[i] = self.colors["black"]
+                node_outline_widths[i] = self.edge_widths["highlight"]
+                break
 
-        fig, ax = plt.subplots(figsize=(5, 3))
+        # highlight chosen action
+        edge_outline_colors: list = ["gray"] * len(self.graph.edges)
+        edge_outline_widths: list = [self.edge_widths["normal"]] * len(self.graph.edges)
+        if action is not None:
+            action_tuple = self._get_action_tuple(action)
+            for i, (*edge, attrs) in enumerate(self.graph.edges(keys=True, data=True)):
+                if attrs["action"] == action_tuple:
+                    if edge[1] == self.fail_state:
+                        edge_outline_colors[i] = "red"
+                    else:
+                        edge_outline_colors[i] = "green"
+                    edge_outline_widths[i] = self.edge_widths["highlight"]
 
         # render the graph
-        ax = self._draw_labeled_multigraph(
-            G=self.graph, edge_label="action", node_edge_colors=node_edge_colors, ax=ax
+        fig = self._draw_labeled_multigraph(
+            G=self.graph,
+            edge_label="action",
+            node_outline_colors=node_outline_colors,
+            node_outline_widths=node_outline_widths,
+            edge_outline_colors=edge_outline_colors,
+            edge_outline_widths=edge_outline_widths,
         )
 
         img: NDArray = self._fig_to_array(fig)
+
         return img
 
     def _draw_labeled_multigraph(
-        self, G, edge_label: str, node_edge_colors: list[str], ax=None
+        self,
+        G,
+        edge_label: str,
+        node_outline_colors: list,
+        node_outline_widths: list,
+        edge_outline_colors: list,
+        edge_outline_widths: list,
     ):
         """
         https://networkx.org/documentation/stable/auto_examples/drawing/plot_multigraphs.html
@@ -340,6 +386,8 @@ class ProjectMDP(Env):
         for directed graph and maximum total connections for undirected graph.
         """
         # Works with arc3 and angle3 connectionstyles
+        fig, ax = plt.subplots(figsize=(6, 3))
+
         connectionstyle = [f"arc3,rad={r}" for r in it.accumulate([0.15] * 4)]
 
         # spectral is a decent layout
@@ -350,7 +398,12 @@ class ProjectMDP(Env):
 
         # draw nodes + labels
         nx.draw_networkx_nodes(
-            G, pos, node_color=self.node_colors, edgecolors=node_edge_colors, ax=ax
+            G,
+            pos,
+            node_color=self.node_colors,
+            edgecolors=node_outline_colors,
+            linewidths=node_outline_widths,
+            ax=ax,
         )
         nx.draw_networkx_labels(G, pos, font_size=10, ax=ax)
 
@@ -360,7 +413,12 @@ class ProjectMDP(Env):
             labels[tuple(edge)] = f"a={attrs[edge_label]}"
 
         nx.draw_networkx_edges(
-            G, pos, edge_color="gray", connectionstyle=connectionstyle, ax=ax
+            G,
+            pos,
+            edge_color=edge_outline_colors,
+            width=edge_outline_widths,
+            connectionstyle=connectionstyle,
+            ax=ax,
         )
         nx.draw_networkx_edge_labels(
             G,
@@ -372,13 +430,39 @@ class ProjectMDP(Env):
             font_size=6,
             ax=ax,
         )
+
         # image formatting
+        handles = [
+            Line2D(
+                [0],
+                [0],
+                color="white",
+                marker="o",
+                markerfacecolor=self.colors["yellow"],
+                markersize=10,
+                label="Project Success",
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="white",
+                marker="o",
+                markerfacecolor=self.colors["red"],
+                markersize=10,
+                label="Project Failure",
+            ),
+            # Circle((0, 0), radius=0.05, color=self.colors["yellow"], label="Project Success"),
+            # Circle((0, 0), radius=0.05, color=self.colors["red"], label="Project Failure"),
+            Line2D([0], [0], color="green", lw=1, label="Task Success"),
+            Line2D([0], [0], color="red", lw=1, label="Task Failure"),
+        ]
+
+        plt.legend(handles=handles)
         plt.box(False)
         plt.tight_layout()
-        return ax
-        # plt.savefig("hlmdp.png", dpi=200)
+        return fig
 
-    def _fig_to_array(self, fig: plt.Figure) -> NDArray:
+    def _fig_to_array(self, fig: Figure) -> NDArray:
         """
         Convert matplotlib figure to numpy array (faster, in-memory method).
 
@@ -400,6 +484,7 @@ class ProjectMDP(Env):
 
         # Get figure dimensions
         w, h = fig.canvas.get_width_height()
+        plt.close()
 
         # Reshape to (height, width, 4) for RGBA, then drop the alpha channel
         arr = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)

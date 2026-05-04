@@ -953,7 +953,8 @@ class LBFGameEnv(MultiGridEnv):
         info = {}
 
         # Agents only succeed at the full "project" if terminated = True
-        info["project_completed"] = terminated
+        # info["project_completed"] = terminated
+
         info["task_completed"] = room_completed
 
         return info
