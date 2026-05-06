@@ -259,7 +259,7 @@ class RewardConfig:
         )
 
         self.agent_leave_goal_reward: float = (
-            self.agent_reach_goal_reward * agent_leave_goal_mult
+            self.base_goal_reward * agent_leave_goal_mult
         )
 
         # reward for entire team, needs to be multiplied by number of agents
@@ -383,12 +383,20 @@ class LBFGameEnv(MultiGridEnv):
         self.max_num_fruit: int = max_num_fruit
         self._num_fruit_spawned: int = 0
 
-        self.sight = sight
+        self.state_type = state_type
+
+        # obs options for this specific env
+        self.env_obs_type = obs_type
+        match self.env_obs_type:
+            # in both cases, sight is like the "radius" of the square obs centered on the agent
+            # this is here b/c multigrid and the original LBF obs handle it a little differently
+            case "original":
+                self.sight = sight
+            case "multigrid_flattened":
+                self.sight = 2 * sight + 1
+
         self.force_coop = force_coop
         self._observe_agent_levels = observe_agent_levels
-
-        self.state_type = state_type
-        self.obs_type = obs_type
 
         self.min_agent_levels = np.array([min_agent_level] * self.num_agents)
         self.max_agent_levels = np.array([max_agent_level] * self.num_agents)
@@ -399,7 +407,6 @@ class LBFGameEnv(MultiGridEnv):
 
         self.world = LBFWorld
         self.actions_set = LBFActions
-        partial_obs: bool = False
 
         # initial encoding for objects in the observation
         self.init_object_obs = np.array([-1, -1, 0]).reshape(1, -1)
@@ -433,9 +440,10 @@ class LBFGameEnv(MultiGridEnv):
             world=self.world,
             see_through_walls=False,
             agents=agents,
-            partial_obs=partial_obs,
             actions_set=self.actions_set,
             render_mode="rgb_array",
+            obs_type="symmetrical",
+            agent_view_size=self.sight,
             highlight_visible_cells=highlight_visible_cells,
         )
 
@@ -1009,13 +1017,15 @@ class LBFGameEnv(MultiGridEnv):
         """
         # return an obs of size (num_agents, num_obs_features)
         # use multigrid's basic obs for now, come back to this later
-        match self.obs_type:
+        match self.env_obs_type:
             case "original":
                 # same as _make_gym_obs from original LBF
                 obs = self._get_original_obs()
 
             case "multigrid_flattened":
                 obs_list = self.gen_obs()
+
+                # add option to filter out other agents from each obs
                 for i, obs in enumerate(obs_list):
                     obs_list[i] = obs.flatten()
                 obs = np.vstack(obs_list)
@@ -1115,7 +1125,7 @@ class LBFGameEnv(MultiGridEnv):
 
     def _get_obs_size(self) -> int:
         """standard function to interface with EPyMARL training loop, returns the flattened size of a single agent's observation."""
-        match self.obs_type:
+        match self.env_obs_type:
             case "original":
                 obs_size: int = self.observation_space.shape[1]
             case "multigrid_flattened":
@@ -1127,7 +1137,7 @@ class LBFGameEnv(MultiGridEnv):
         return obs_size
 
     def _set_observation_space(self) -> spaces.Space:
-        match self.obs_type:
+        match self.env_obs_type:
             case "original":
                 # get obs space for a single agent
                 agent_levels = sorted(self.max_agent_levels)
@@ -1188,6 +1198,7 @@ class LBFGameEnv(MultiGridEnv):
                 )
 
             case "multigrid_flattened":
+                # agent obs is a square with radius of self.view_size centered on the agent
                 team_obs_space = spaces.Box(
                     low=0,
                     high=255,

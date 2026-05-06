@@ -1,6 +1,6 @@
 import enum
 import math
-from typing import Any, Type, TypeAlias, TypeVar
+from typing import Any, Type, TypeAlias, TypeVar, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -411,7 +411,7 @@ class Agent(WorldObj):
 
         return vx, vy
 
-    def get_view_exts(self):
+    def get_view_exts(self, obs_type: Literal["directional", "symmetrical"] = "directional"):
         """
         Get the extents of the square set of tiles visible to the agent
         Note: the bottom extent indices are not included in the set
@@ -423,30 +423,40 @@ class Agent(WorldObj):
         """
 
         assert self.view_size is not None
+        match obs_type:
 
-        # Facing right
-        if self.dir == 0:
-            topX = self.pos[0]
-            topY = self.pos[1] - self.view_size // 2
-        # Facing down
-        elif self.dir == 1:
-            topX = self.pos[0] - self.view_size // 2
-            topY = self.pos[1]
-        # Facing left
-        elif self.dir == 2:
-            topX = self.pos[0] - self.view_size + 1
-            topY = self.pos[1] - self.view_size // 2
-        # Facing up
-        elif self.dir == 3:
-            topX = self.pos[0] - self.view_size // 2
-            topY = self.pos[1] - self.view_size + 1
-        else:
-            assert False, "invalid agent direction"
+            case "directional":
+                match self.dir:
+                    # Facing right
+                    case 0:
+                        top_x = self.pos[0]
+                        top_y = self.pos[1] - self.view_size // 2
+                    # facing down
+                    case 1:
+                        top_x = self.pos[0] - self.view_size // 2
+                        top_y = self.pos[1]
+                    # Facing left
+                    case 2:
+                        top_x = self.pos[0] - self.view_size + 1
+                        top_y = self.pos[1] - self.view_size // 2
+                    # Facing up
+                    case 3:
+                        top_x = self.pos[0] - self.view_size // 2
+                        top_y = self.pos[1] - self.view_size + 1
+                    case _:
+                        assert False, "invalid agent direction"
 
-        botX = topX + self.view_size
-        botY = topY + self.view_size
+            case "symmetrical":
+                top_x = self.pos[0] - self.view_size // 2
+                top_y = self.pos[1] - self.view_size // 2
 
-        return (topX, topY, botX, botY)
+            case _:
+                raise NotImplementedError("Invalid obs_type")
+
+        bot_x = top_x + self.view_size
+        bot_y = top_y + self.view_size
+
+        return (top_x, top_y, bot_x, bot_y)
 
     def relative_coords(self, x, y):
         """

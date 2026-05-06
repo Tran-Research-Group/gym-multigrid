@@ -166,7 +166,7 @@ def point_in_triangle(a, b, c) -> Callable[[float, float], bool]:
     return fn
 
 
-def highlight_img(img, color=(255, 255, 255), alpha=0.30):
+def highlight_img(img, color=(255, 255, 255), alpha=0.15):
     """
     Add highlighting to an image
     """

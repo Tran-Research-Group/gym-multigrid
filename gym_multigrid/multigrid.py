@@ -148,6 +148,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         close_window: bool = False,
         tile_size: int = TILE_PIXELS,
         partial_obs: bool = False,
+        obs_type: Literal["directional", "symmetrical"] = "directional",
         agent_view_size: int | None = None,
         see_through_walls: bool = False,
         highlight_visible_cells: bool = False,
@@ -182,6 +183,9 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         partial_obs : bool = False
             Whether agents have partial or full observation.
             If True, the agent's observation is a square view area centered on the agent, specified by agent_view_size.
+        obs_type: Literal["directional", "symmetrical"] = "directional"
+            If directional, agent obs is in the direction it is facing
+            If symmetrical, agent obs is a square with side length of 2 * self.view_size + 1 centered on the agent
         agent_view_size : int | None = None
             Size of the square view area centered on the agent
         see_through_walls : bool = False
@@ -201,6 +205,8 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         # Does the agents have partial or full observation?
         self.partial_obs: bool = partial_obs
+        self.obs_type: Literal["directional", "symmetrical"] = obs_type
+
         self.see_through_walls: bool = see_through_walls and self.partial_obs
         self.highlight_visible_cells: bool = highlight_visible_cells
         if self.partial_obs and agent_view_size is None:
@@ -785,23 +791,26 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         vis_masks = []
 
         for a in self.agents:
-            topX, topY, botX, botY = a.get_view_exts()
-            grid = self.grid.slice(topX, topY, a.view_size, a.view_size)
+            top_x, top_y, _, _ = a.get_view_exts(self.obs_type)
+            grid = self.grid.slice(top_x, top_y, a.view_size, a.view_size)
 
-            for i in range(a.dir + 1):
-                grid = grid.rotate_left()
+            if self.obs_type == "directional":
+                for i in range(a.dir + 1):
+                    grid = grid.rotate_left()
 
-            # Process occluders and visibility
-            # Note that this incurs some performance cost
             if self.partial_obs and not self.see_through_walls:
-                if a.view_size is None:
-                    raise ValueError(
-                        "Agent view size must be set for partial observation"
-                    )
-                vis_mask = grid.process_vis(
-                    agent_pos=(a.view_size // 2, a.view_size - 1)
-                )
+                # Process occluders and visibility
+                # Note that this incurs some performance cost
+                match self.obs_type:
+                    case "directional":
+                        agent_pos_in_obs = (a.view_size // 2, a.view_size - 1)
+                    case "symmetrical":
+                        agent_pos_in_obs = (a.view_size // 2, a.view_size // 2)
+
+                # NOTE: process_vis does not support symmetrical obs_type right now
+                vis_mask = grid.process_vis(agent_pos=agent_pos_in_obs)
             else:
+                # agent can see all objects in its observation range
                 vis_mask = np.ones(shape=(grid.width, grid.height), dtype=np.bool)
 
             grids.append(grid)
@@ -817,13 +826,23 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
         grids, vis_masks = self.gen_obs_grid()
 
         # Encode the partially observable view into a numpy array
-        obs = [
-            grid.encode_for_agents(
-                agent_pos=(grid.width // 2, grid.height - 1),
-                vis_mask=vis_mask,
+        obs: list = []
+
+        for grid, vis_mask in zip(grids, vis_masks):
+            match self.obs_type:
+                case "directional":
+                    agent_pos_in_obs = (grid.width // 2, grid.height - 1)
+
+                case "symmetrical":
+                    agent_pos_in_obs = (grid.width // 2, grid.height // 2)
+
+            obs.append(
+                grid.encode_for_agents(
+                    agent_pos=agent_pos_in_obs,
+                    vis_mask=vis_mask,
+                )
             )
-            for grid, vis_mask in zip(grids, vis_masks)
-        ]
+
         return obs
 
     def get_obs_render(self, obs, tile_size=TILE_PIXELS // 2):
@@ -931,13 +950,22 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
                     raise ValueError(
                         "Agent view size must be set for highlighting visible cells"
                     )
+
                 f_vec = a.dir_vec
                 r_vec = a.right_vec
-                top_left = (
-                    a.pos + f_vec * (a.view_size - 1) - r_vec * (a.view_size // 2)
-                )
 
-                # Mask of which cells to highlight
+                # Determine top-left corner based on observation type
+                match self.obs_type:
+                    case "directional":
+                        top_left = (
+                            a.pos
+                            + f_vec * (a.view_size - 1)
+                            - r_vec * (a.view_size // 2)
+                        )
+                    case "symmetrical":
+                        # this may not be right, double check
+                        half_size = a.view_size // 2
+                        top_left = a.pos - np.array([half_size, half_size])
 
                 # For each cell in the visibility mask
                 for vis_j in range(0, a.view_size):
@@ -947,7 +975,14 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
                             continue
 
                         # Compute the world coordinates of this cell
-                        abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
+                        match self.obs_type:
+                            case "directional":
+                                abs_i, abs_j = (
+                                    top_left - (f_vec * vis_j) + (r_vec * vis_i)
+                                )
+                            case "symmetrical":
+                                abs_i = top_left[0] + vis_i
+                                abs_j = top_left[1] + vis_j
 
                         if abs_i < 0 or abs_i >= self.width:
                             continue

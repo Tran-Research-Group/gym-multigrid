@@ -318,11 +318,9 @@ class Grid:
 
         # Highlight the cell  if needed
         if len(highlights) > 0:
+            # brighten the for each agent that sees it
             for h in highlights:
-                highlight_img(
-                    img,
-                    color=world.COLORS[world.IDX_TO_COLOR[h % len(world.IDX_TO_COLOR)]],
-                )
+                highlight_img(img, color=world.COLORS["white"])
 
         # Downsample the image to perform supersampling/anti-aliasing
         img = downsample(img, subdivs)
