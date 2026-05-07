@@ -43,6 +43,13 @@ class Grid:
         self.height: int = height
         self.world: World = world
 
+        if self.world.encode_dim == 3:
+            self.empty_encoding = np.array([self.world.OBJECT_TO_IDX["empty"], 0, 0])
+        elif self.world.encode_dim == 6:
+            self.empty_encoding = np.array(
+                [self.world.OBJECT_TO_IDX["empty"], 0, 0, 0, 0, 0]
+            )
+
         self.grid: list[WorldObj | None] = [None for _ in range(width * height)]
 
     def __contains__(self, key: WorldObj | tuple) -> bool:
@@ -465,21 +472,17 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
-                        array[i, j, 1] = 0
-                        array[i, j, 2] = 0
-                        if self.world.encode_dim > 3:
-                            array[i, j, 3] = 0
-                            array[i, j, 4] = 0
-                            array[i, j, 5] = 0
-
+                        array[i, j, :] = self.empty_encoding
                     else:
                         array[i, j, :] = v.encode()
 
         return array
 
     def encode_for_agents(
-        self, agent_pos: tuple[int, int], vis_mask: NDArray[np.bool_] | None = None
+        self,
+        agent_pos: tuple[int, int],
+        vis_mask: NDArray[np.bool_] | None = None,
+        observe_other_agents: bool = False,
     ) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
@@ -509,15 +512,16 @@ class Grid:
                     v = self.get(i, j)
 
                     if v is None:
-                        array[i, j, 0] = self.world.OBJECT_TO_IDX["empty"]
-                        array[i, j, 1] = 0
-                        array[i, j, 2] = 0
-                        if self.world.encode_dim > 3:
-                            array[i, j, 3] = 0
-                            array[i, j, 4] = 0
-                            array[i, j, 5] = 0
-
+                        array[i, j, :] = self.empty_encoding
+                    elif (
+                        v.type == "agent"
+                        and (not observe_other_agents)
+                        and (not np.array_equal(agent_pos, (i, j)))
+                    ):
+                        # agent can't observe other agents
+                        array[i, j, :] = self.empty_encoding
                     else:
+                        # agent can observe itself
                         array[i, j, :] = v.encode(
                             current_agent=np.array_equal(agent_pos, (i, j))
                         )

@@ -310,6 +310,7 @@ class LBFGameEnv(MultiGridEnv):
         observe_agent_levels: bool = True,
         state_type: Literal["original", "multigrid_flattened"] = "original",
         obs_type: Literal["original", "multigrid_flattened"] = "original",
+        observe_other_agents: bool = True,
         highlight_visible_cells: bool = False,
         normalize_fruit_reward: bool = True,
         failed_load_penalty: float = 0.0,
@@ -395,9 +396,11 @@ class LBFGameEnv(MultiGridEnv):
             case "multigrid_flattened":
                 self.sight = 2 * sight + 1
 
-        self.force_coop = force_coop
-        self._observe_agent_levels = observe_agent_levels
+        # if observe_other_agents=False, agents cannot see the other agents and those cells replaced with empty spaces
+        self.observe_other_agents = observe_other_agents
+        self.observe_agent_levels = observe_agent_levels
 
+        self.force_coop = force_coop
         self.min_agent_levels = np.array([min_agent_level] * self.num_agents)
         self.max_agent_levels = np.array([max_agent_level] * self.num_agents)
 
@@ -1023,9 +1026,8 @@ class LBFGameEnv(MultiGridEnv):
                 obs = self._get_original_obs()
 
             case "multigrid_flattened":
-                obs_list = self.gen_obs()
+                obs_list = self.gen_obs(observe_other_agents=self.observe_other_agents)
 
-                # add option to filter out other agents from each obs
                 for i, obs in enumerate(obs_list):
                     obs_list[i] = obs.flatten()
                 obs = np.vstack(obs_list)
@@ -1110,7 +1112,7 @@ class LBFGameEnv(MultiGridEnv):
             obj_obs[i, :] = np.array([y, x, level])
 
         # remove agent levels from the obs
-        if (not self._observe_agent_levels) and (obj_type == "agent"):
+        if (not self.observe_agent_levels) and (obj_type == "agent"):
             obj_obs = obj_obs[:, 0:2]
 
         return obj_obs
@@ -1164,7 +1166,7 @@ class LBFGameEnv(MultiGridEnv):
                 min_agent_obs_single = self.init_object_obs
                 max_agent_obs_single = np.array([[*max_pos, max(agent_levels)]])
 
-                if not self._observe_agent_levels:
+                if not self.observe_agent_levels:
                     min_agent_obs_single = min_agent_obs_single[:, 0:2]
                     max_agent_obs_single = max_agent_obs_single[:, 0:2]
 
