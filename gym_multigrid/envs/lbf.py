@@ -227,13 +227,32 @@ class Fruit(WorldObj):
 class RewardConfig:
     def __init__(
         self,
-        num_agents: float,
+        num_agents: int,
+        normalize_fruit_reward: bool = True,
+        failed_load_penalty: float = 0.0,
         agent_reach_goal_mult: float = 0.5,
         agent_leave_goal_mult: float = -0.7,
-        # move_mult: float = 0.0,
         all_agents_reach_goal_proportion_per_agent: float = 2.0,
+        # move_mult: float = 0.0,
         # max_dense_reach_goal_proportion: float,
     ) -> None:
+        """
+        all signs for rewarding events assume to be handled in their definition since we only use the "+=" operator in the code below for simplicity and easier design
+        values are <=0 for "penalties" and >= 0 for "rewards"
+
+        Parameters
+        ----------
+        num_agents : int
+        normalize_fruit_reward : bool, optional
+        failed_load_penalty : float, optional
+            value <= 0, by default 0.0
+        agent_reach_goal_mult : float, optional
+            value >= 0 for "rewards", by default 0.5
+        agent_leave_goal_mult : float, optional
+            <= 0, by default -0.7
+        all_agents_reach_goal_proportion_per_agent : float, optional
+            _description_, by default 2.0
+        """
         # does NOT consider fruit loading rewards since those are based on fruit levels
 
         # this setup worked well for 3 agents
@@ -243,6 +262,9 @@ class RewardConfig:
         # agent_reach_goal_reward=0.9,
         # agent_leave_goal_reward=-1.0,
         # all_agents_at_goal_reward=10.0,
+
+        self.normalize_fruit_reward = normalize_fruit_reward
+        self.failed_load_penalty: float = failed_load_penalty
 
         # overall scaling for all rewards in the env
         # use to prevent rewards from getting to large
@@ -286,7 +308,7 @@ class RewardConfig:
 
 class LBFGameEnv(MultiGridEnv):
     """
-    Environment in which the agents have to collect the balls. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
+        Environment in which the agents have to collect fruit. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
     """
 
     metadata = {
@@ -312,8 +334,13 @@ class LBFGameEnv(MultiGridEnv):
         obs_type: Literal["original", "multigrid_flattened"] = "original",
         observe_other_agents: bool = True,
         highlight_visible_cells: bool = False,
-        normalize_fruit_reward: bool = True,
-        failed_load_penalty: float = 0.0,
+        reward_config: dict[str, float | bool] = {
+            "agent_reach_goal_mult": 0.5,
+            "agent_leave_goal_mult": -0.7,
+            "all_agents_reach_goal_proportion_per_agent": 2.0,
+            "failed_load_penalty": 0.0,
+            "normalize_fruit_reward": True,
+        },
         team_bandwidth_allocation_action: bool = False,
         num_comms_values: Optional[int] = 4,
     ):
@@ -343,17 +370,14 @@ class LBFGameEnv(MultiGridEnv):
             format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
         """
         self.num_agents = n_agents
-
-        # reward config
-        self.failed_load_penalty = failed_load_penalty
-        self._normalize_fruit_reward = normalize_fruit_reward
-        self.reward_config = RewardConfig(num_agents=self.num_agents)
+        self.reward_config = RewardConfig(num_agents=self.num_agents, **reward_config)
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
         self.agent_spawn_room = 0
         self.room_coords: dict[int, tuple]
         self.num_rooms: int
+        self.room_has_goals: dict[int, bool] = {0: False}
 
         if map is not None:
             if width is not None or height is not None:
@@ -476,6 +500,7 @@ class LBFGameEnv(MultiGridEnv):
                     "x_limits": (x_min, x_max),
                     "y_limits": (y_min, y_max),
                 }
+                self.room_has_goals[room_idx] = False
 
                 x_min = x_max
                 room_idx += 1
@@ -526,15 +551,15 @@ class LBFGameEnv(MultiGridEnv):
 
         # spawn fruit
         if self.max_fruit_level is not None:
-            max_fruit_levels = self.max_fruit_level
+            max_fruit_level = self.max_fruit_level * np.ones(self.max_num_fruit)
         else:
             # sum of 3 highest-level agents
             agent_levels = sorted([agent.level for agent in self.agents])
-            max_fruit_levels = sum(agent_levels[:3]) * np.ones(self.max_num_fruit)
+            max_fruit_level = sum(agent_levels[:3])
 
         self._num_fruit_spawned = self._spawn_fruit(
             min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
-            max_levels=max_fruit_levels,
+            max_levels=max_fruit_level * np.ones(self.max_num_fruit),
         )
 
     def _parse_field_map(self, obj_place: Optional[list] = None) -> dict:
@@ -592,6 +617,7 @@ class LBFGameEnv(MultiGridEnv):
                                 for agent in self.agents:
                                     if agent.index == assigned_agent_idx:
                                         agent.add_goal_pos((x, y), room_idx)
+                                self.room_has_goals[room_idx] = True
                                 self.room_despawn_objects[room_idx].append(obj)
 
                 elif isinstance(cell, str):
@@ -604,6 +630,7 @@ class LBFGameEnv(MultiGridEnv):
                             # each goal assigned to all agents
                             for agent in self.agents:
                                 agent.add_goal_pos((x, y), room_idx)
+                            self.room_has_goals[room_idx] = True
                             self.room_despawn_objects[room_idx].append(obj)
 
                         case "w":
@@ -699,10 +726,12 @@ class LBFGameEnv(MultiGridEnv):
 
             while num_spawned_fruit < self.max_num_fruit and attempts < 1000:
                 attempts += 1
-                # -1 to avoid including the outer wall in the sample
+
+                # offset by 2 here to avoid avoid spawning a high-level fruit along the wall or in the corner
+                # where there may not be enough available sides for the agents to surround and load it
                 pos = (
-                    self.np_random.integers(1, self.width - 1),
-                    self.np_random.integers(1, self.height - 1),
+                    self.np_random.integers(2, self.width - 2),
+                    self.np_random.integers(2, self.height - 2),
                 )
 
                 # check if any fruit in the neighborhood
@@ -843,30 +872,48 @@ class LBFGameEnv(MultiGridEnv):
                 # do movements for non colliding players
                 agent = agents[0]
 
-                if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(
-                    self.current_room, pos=next_pos
-                ):
-                    agent.reward += self.reward_config.agent_reach_goal_reward
-
-                # if agent at goal and next pos is not a goal, get penalty
-                if agent.in_goal_set(self.current_room) and not agent.in_goal_set(
-                    self.current_room, pos=next_pos
-                ):
-                    agent.reward += self.reward_config.agent_leave_goal_reward
+                # run goal logic if there are goals in the current room
+                self._goal_reward_logic(agent, next_pos)
 
                 # Move agent
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
 
+    def _goal_reward_logic(self, agent, next_pos):
+        if self.room_has_goals[self.current_room]:
+            # if not at goal and reach goal, get a reward
+            if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(
+                self.current_room, pos=next_pos
+            ):
+                agent.reward += self.reward_config.agent_reach_goal_reward
+
+            # if agent at goal and next pos is not a goal, get penalty
+            if agent.in_goal_set(self.current_room) and not agent.in_goal_set(
+                self.current_room, pos=next_pos
+            ):
+                agent.reward += self.reward_config.agent_leave_goal_reward
+
     def _update_room(self) -> bool:
         room_completed = False
-        reached_room_goal: list[bool] = [
-            agent.in_goal_set(self.current_room) for agent in self.agents
-        ]
 
-        if all(reached_room_goal) and self.all_room_fruit_collected[self.current_room]:
-            # print(
-            #     f"All agents reached goals for room {self.current_room}. Moving to next room."
-            # )
+        # if there are goals in the room, reaching goals after collecting all fruit completes this room
+        if self.room_has_goals[self.current_room]:
+            reached_room_goal: list[bool] = [
+                agent.in_goal_set(self.current_room) for agent in self.agents
+            ]
+
+            if all(reached_room_goal) and self.all_room_fruit_collected[self.current_room]:
+                # print(
+                #     f"All agents reached goals for room {self.current_room}. Moving to next room."
+                # )
+                for obj in self.room_despawn_objects[self.current_room]:
+                    self.despawn_object(obj)
+
+                # move on to the next room
+                self.current_room += 1
+                room_completed = True
+
+        # otherwise collecting all fruit completes this room
+        elif self.all_room_fruit_collected[self.current_room]:
             for obj in self.room_despawn_objects[self.current_room]:
                 self.despawn_object(obj)
 
@@ -898,13 +945,13 @@ class LBFGameEnv(MultiGridEnv):
                     # failed to load
                     if tot_agent_levels < fruit_level:
                         for a in adj_agents:
-                            a.reward -= self.failed_load_penalty
+                            a.reward += self.reward_config.failed_load_penalty
                     else:
                         # the fruit was loaded and each player scores points
                         for a in adj_agents:
                             a.reward += float(a.level * fruit_level)
 
-                            if self._normalize_fruit_reward:
+                            if self.reward_config.normalize_fruit_reward:
                                 a.reward = a.reward / float(
                                     tot_agent_levels * self._num_fruit_spawned
                                 )
@@ -949,13 +996,9 @@ class LBFGameEnv(MultiGridEnv):
         # Terminate the episode if all rooms have been cleared or max steps reached
         terminated = False
 
-        if self.num_rooms == 1:
-            # if 1 room, simply collect all fruit to complete the current task
-            terminated = self.num_fruit_collected_per_room[0] == self._num_fruit_spawned
-        else:
-            # if > 1 room, reach the end of the final room
-            # TODO needs to be made a little more-complex handle non-sequential rooms
-            terminated = self.current_room == self.num_rooms
+        # project is completed when you reach the end of the final room
+        # TODO needs to be updated to handle non-sequential rooms
+        terminated = self.current_room == self.num_rooms
 
         return terminated
 
