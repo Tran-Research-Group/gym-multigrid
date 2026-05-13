@@ -341,8 +341,8 @@ class LBFGameEnv(MultiGridEnv):
             "failed_load_penalty": 0.0,
             "normalize_fruit_reward": True,
         },
-        team_bandwidth_allocation_action: bool = False,
-        num_comms_values: Optional[int] = 4,
+        # team_bandwidth_allocation_action: bool = False,
+        # num_comms_values: Optional[int] = 4,
     ):
         """
         Initialize the LBFGameEnv.
@@ -401,8 +401,8 @@ class LBFGameEnv(MultiGridEnv):
             }
 
         # whether or not to include an action that represents the allocation of bandwidth to a team
-        self.team_bandwidth_allocation_action: bool = team_bandwidth_allocation_action
-        self.num_comms_values: Optional[int] = num_comms_values
+        # self.team_bandwidth_allocation_action: bool = team_bandwidth_allocation_action
+        # self.num_comms_values: Optional[int] = num_comms_values
 
         # hierarchical model of environment project the tasks that comprise it
         self.max_num_fruit: int = max_num_fruit
@@ -1320,10 +1320,10 @@ class LBFGameEnv(MultiGridEnv):
         action_space = [env_agent_action_space] * len(self.agents)
         ac_dim = len(self.actions)
 
-        if self.team_bandwidth_allocation_action:
-            comms_action_space = spaces.Box(low=0, high=1)
-            action_space.append(comms_action_space)
-            ac_dim = ac_dim + 1
+        # if self.team_bandwidth_allocation_action:
+        #     comms_action_space = spaces.Box(low=0, high=1)
+        #     action_space.append(comms_action_space)
+        #     ac_dim = ac_dim + 1
 
         # convert from list of spaces to gymnasium space
         action_space = spaces.Tuple(action_space)
