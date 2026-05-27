@@ -163,36 +163,40 @@ class Fruit(WorldObj):
     def can_pickup(self):
         return True
 
-    def check_capture_condition(self, grid: Grid) -> bool:
+    def check_load_condition(self, grid: Grid, loading_agents: list[LBFAgent]) -> bool:
         """
-        Check if the fruit can be collected.
+        Check if the fruit was collected by its surrounding agents.
 
         Parameters
         ----------
         grid : Grid
             The grid of the environment.
+        loading_agents : list[LBFAgent]
+            list of all agents taking the load action in the env
 
         Returns
         -------
-        capturable : bool
-            True if the fruit can be collected, False otherwise.
+        curr_fruit_loading_agents: list[LBFAgent]
+            agents that attempted to load this fruit
+        load_success : bool
+            True if the fruit was loaded by the agents in curr_fruit_loading_agents
+        tot_agent_levels: int
+            total level of the agents that contributed to loading this fruit
         """
-        level_neighbor_agents: int = 0
-
-        agent_ids: list[int] = []
+        tot_agent_levels: int = 0
+        curr_fruit_loading_agents: list[LBFAgent] = []
 
         for neighbor_pos in self.neighbor_pos:
             cell = grid.get(*neighbor_pos)
-            if isinstance(cell, Agent):
-                level_neighbor_agents += cell.level
-                agent_ids.append(cell.index)
+            if isinstance(cell, Agent) and cell in loading_agents:
+                tot_agent_levels += cell.level
+                curr_fruit_loading_agents.append(cell)
             else:
                 pass
 
-        capturable: bool = level_neighbor_agents >= self.level
-        # agent_ids = agent_ids if capturable else []
+        load_success: bool = tot_agent_levels >= self.level
 
-        return capturable
+        return curr_fruit_loading_agents, load_success, tot_agent_levels
 
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
@@ -308,7 +312,7 @@ class RewardConfig:
 
 class LBFGameEnv(MultiGridEnv):
     """
-        Environment in which the agents have to collect fruit. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
+    Environment in which the agents have to collect fruit. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
     """
 
     metadata = {
@@ -876,7 +880,15 @@ class LBFGameEnv(MultiGridEnv):
                 self._goal_reward_logic(agent, next_pos)
 
                 # Move agent
+                # if agent.index == 2:
+                #     print(agent.pos)
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
+
+                # if agent.index == 2:
+                #     print(agent.pos)
+                #     print('\n breakpoint ')
+                #     __import__('ipdb').set_trace(context=3)
+
 
     def _goal_reward_logic(self, agent, next_pos):
         if self.room_has_goals[self.current_room]:
@@ -901,7 +913,10 @@ class LBFGameEnv(MultiGridEnv):
                 agent.in_goal_set(self.current_room) for agent in self.agents
             ]
 
-            if all(reached_room_goal) and self.all_room_fruit_collected[self.current_room]:
+            if (
+                all(reached_room_goal)
+                and self.all_room_fruit_collected[self.current_room]
+            ):
                 # print(
                 #     f"All agents reached goals for room {self.current_room}. Moving to next room."
                 # )
@@ -924,31 +939,21 @@ class LBFGameEnv(MultiGridEnv):
         return room_completed
 
     def _load_fruit(self, loading_agents: set):
-        while loading_agents:
-            agent = loading_agents.pop()
+        loading_agents_tmp = loading_agents.copy()
+
+        while loading_agents_tmp:
+            agent = loading_agents_tmp.pop()
             for neighbor_pos in agent.neighbor_pos:
                 cell = self.grid.get(*neighbor_pos)
-                if isinstance(cell, Fruit) and cell.check_capture_condition(self.grid):
-                    fruit_level = cell.level
-                    fruit_pos = neighbor_pos
+                if isinstance(cell, Fruit):
+                    curr_fruit_loading_agents, load_success, tot_agent_levels = (
+                        cell.check_load_condition(self.grid, list(loading_agents))
+                    )
 
-                    # get the agents that helped load the fruit
-                    adj_agents: list[LBFAgent] = []
-                    for fruit_neighbor_pos in cell.neighbor_pos:
-                        fruit_neighbor_cell = self.grid.get(*fruit_neighbor_pos)
-                        if isinstance(fruit_neighbor_cell, LBFAgent):
-                            adj_agents.append(fruit_neighbor_cell)
-
-                    adj_agent_levels = [int(a.level) for a in adj_agents]
-                    tot_agent_levels = sum(adj_agent_levels)
-
-                    # failed to load
-                    if tot_agent_levels < fruit_level:
-                        for a in adj_agents:
-                            a.reward += self.reward_config.failed_load_penalty
-                    else:
-                        # the fruit was loaded and each player scores points
-                        for a in adj_agents:
+                    if load_success:
+                        fruit_level = cell.level
+                        # the fruit was loaded and each player that helped load scores points
+                        for a in curr_fruit_loading_agents:
                             a.reward += float(a.level * fruit_level)
 
                             if self.reward_config.normalize_fruit_reward:
@@ -956,12 +961,17 @@ class LBFGameEnv(MultiGridEnv):
                                     tot_agent_levels * self._num_fruit_spawned
                                 )
 
+                        # despawn the fruit from the env
+                        self.grid.set(*cell.pos, None)
                         cell.pos = np.array([-1, -1])
-                        self.grid.set(*fruit_pos, None)
                         self.num_fruit_collected_per_room[self.current_room] += 1
 
+                    else:
+                        for a in curr_fruit_loading_agents:
+                            a.reward += self.reward_config.failed_load_penalty
+
                     # remove these agents so they are not checked again
-                    loading_agents -= set(adj_agents)
+                    loading_agents_tmp -= set(curr_fruit_loading_agents)
 
                     # print(
                     #     f"Agents {[agent.index for agent in adj_agents]} with levels {adj_agent_levels} collected fruit at {fruit_pos} with level {fruit_level}"
@@ -990,6 +1000,9 @@ class LBFGameEnv(MultiGridEnv):
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
+        # convert from np ints to ints if needed
+        if isinstance(next_pos[0], np.int_):
+            next_pos = tuple(map(int, next_pos))
         return next_pos
 
     def _terminated(self) -> bool:
