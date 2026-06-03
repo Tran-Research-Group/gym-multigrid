@@ -532,7 +532,7 @@ class LBFGameEnv(MultiGridEnv):
 
         return field_map
 
-    def _gen_grid(self, width: int, height: int):
+    def _gen_grid(self, width: int, height: int, start_room: int = 0):
         # Create a blank grid for this episode
         self.grid = Grid(width, height, self.world)
 
@@ -565,6 +565,13 @@ class LBFGameEnv(MultiGridEnv):
             min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
             max_levels=max_fruit_level * np.ones(self.max_num_fruit),
         )
+
+        # If a start_room was provided prior to grid generation, apply adjustments
+        # via helper that encapsulates the logic for starting mid-episode.
+        if start_room > 0:
+            self._apply_start_room_adjustments(start_room)
+
+
 
     def _parse_field_map(self, obj_place: Optional[list] = None) -> dict:
         """
@@ -650,6 +657,64 @@ class LBFGameEnv(MultiGridEnv):
                     raise NotImplementedError("invalid object in field map config file")
 
         return num_spawned_objects
+
+    def _apply_start_room_adjustments(self, start_room: int) -> None:
+        """Apply adjustments to the grid and agents so the environment appears
+        as if earlier rooms were already completed.
+        """
+        # Despawn fruits and update counters for previous rooms
+        self._despawn_previous_room_fruits_and_objects(start_room)
+
+        # Place agents on the goals/waypoints of the most recent completed room
+        self._place_agents_for_start_room(start_room)
+
+    def _despawn_previous_room_fruits_and_objects(self, start_room: int) -> None:
+        grid_enc = self.grid.encode()
+        fruit_idx = self.world.OBJECT_TO_IDX["fruit"]
+        for i in range(grid_enc.shape[0]):
+            for j in range(grid_enc.shape[1]):
+                if grid_enc[i, j, 0] == fruit_idx:
+                    room_idx = self._get_object_room((i, j))
+                    if room_idx < start_room:
+                        obj = self.grid.get(i, j)
+                        if obj is not None:
+                            self.despawn_object(obj)
+                            if self.num_fruit_per_room.get(room_idx, 0) > 0:
+                                self.num_fruit_per_room[room_idx] -= 1
+                            self.num_fruit_collected_per_room[room_idx] = (
+                                self.num_fruit_per_room.get(room_idx, 0)
+                            )
+                            self.all_room_fruit_collected[room_idx] = True
+
+        # Also despawn room-specific objects (doors, waypoints)
+        for room_idx in range(start_room):
+            for obj in list(self.room_despawn_objects.get(room_idx, [])):
+                try:
+                    self.despawn_object(obj)
+                except Exception:
+                    pass
+
+    def _place_agents_for_start_room(self, start_room: int) -> None:
+        # Choose most-recent completed room with goals
+        completed_rooms = [
+            r for r in range(self.num_rooms) if (r < start_room and self.room_has_goals.get(r, False))
+        ]
+        if len(completed_rooms) > 0:
+            prev_room = max(completed_rooms)
+        else:
+            prev_room = start_room - 1
+
+        for agent in self.agents:
+            if prev_room in agent.room_goals and len(agent.room_goals[prev_room]) > 0:
+                goal_pos = tuple(agent.room_goals[prev_room][0])
+                try:
+                    if agent.pos is not None:
+                        self.despawn_object(agent)
+                except Exception:
+                    pass
+
+                agent.reset(init_pos=goal_pos, level=agent.level)
+                self.place_agent(agent, pos=goal_pos, init_grid=self.init_grid)
 
     def _get_object_room(self, pos: Position) -> int:
         x, y = pos
@@ -783,10 +848,16 @@ class LBFGameEnv(MultiGridEnv):
         self.all_room_fruit_collected = [False for _ in range(self.num_rooms)]
 
         # reset other params
-        self.current_room: int = 0
+        start_room = 0
+        if options is not None and "start_room" in options:
+            start_room = options["start_room"]
 
-        # generate new env layout
-        self._gen_grid(self.width, self.height)
+        self.current_room: int = start_room
+        for room_idx in range(start_room):
+            self.all_room_fruit_collected[room_idx] = True
+
+        # generate new env layout; pass start_room so _gen_grid can adjust spawned objects/agents accordingly
+        self._gen_grid(self.width, self.height, start_room=start_room)
 
         obs: NDArray[np.int_] = self.get_obs()
         info: dict[str, Any] = self._get_info()
@@ -813,8 +884,8 @@ class LBFGameEnv(MultiGridEnv):
             The reward for the action.
         terminated: bool
             Whether the episode has terminated.
-        terminated: bool
-            Whether the episode has terminated.
+        truncated: bool
+            Whether the episode has been truncated (out of time).
         info : dict[str, Any]
             Additional information about the environment.
         """

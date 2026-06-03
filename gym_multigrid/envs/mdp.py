@@ -35,7 +35,7 @@ class ProjectMDP(Env):
         self,
         num_rooms: int,
         task_type: Literal["atomic", "composed"],
-        num_comms_values: int,
+        comms_values: list[float],
     ):
         super().__init__()
 
@@ -46,10 +46,11 @@ class ProjectMDP(Env):
         self.fail_state: int
         self.state_space: NDArray[np.int_]
         self.successor_map: dict[tuple[int, tuple], int]
+        self.comms_values = comms_values
+
         self._build_env(
             num_rooms=num_rooms,
             task_type=task_type,
-            num_comms_values=num_comms_values,
         )
 
         self.task_completed: bool = False
@@ -76,7 +77,6 @@ class ProjectMDP(Env):
         self,
         num_rooms: int,
         task_type: Literal["atomic", "composed"],
-        num_comms_values: int,
     ):
         """
         assume 1 set of waypoints per room
@@ -111,15 +111,11 @@ class ProjectMDP(Env):
 
         # Action space: 2D discrete-continuous vector (task_idx, comms_val in [0, 1])
         self.n_tasks = len(self.tasks)
-        self.n_comms_values = num_comms_values
         self.action_space = spaces.Box(
             low=np.array([0, 0.0]),
             high=np.array([self.n_tasks - 1, 1.0]),
             dtype=np.float32,
         )
-
-        # Discretize comms values from [0, 1] to n_comms_values levels
-        self.comms_values = [i.item() for i in np.linspace(0, 1, num_comms_values)]
 
         # transition probs
         self.transition_probs: pd.DataFrame
@@ -141,7 +137,6 @@ class ProjectMDP(Env):
                         "state_type": self._get_state_type(curr_state),
                         "action": action,
                         "next_state": chosen_next_state,
-                        "next_state_type": self._get_state_type(chosen_next_state),
                         "prob": 1.0,
                     }
                 )
@@ -151,13 +146,7 @@ class ProjectMDP(Env):
                     action = (chosen_next_state, comms_val)
 
                     next_states = [chosen_next_state, self.fail_state]
-                    next_state_types = [
-                        self._get_state_type(state) for state in next_states
-                    ]
-
-                    for next_state, next_state_type in zip(
-                        next_states, next_state_types
-                    ):
+                    for next_state in next_states:
                         self.successor_map[(curr_state, action)] = chosen_next_state
                         transition_probs.append(
                             {
@@ -165,7 +154,6 @@ class ProjectMDP(Env):
                                 "state_type": self._get_state_type(curr_state),
                                 "action": action,
                                 "next_state": next_state,
-                                "next_state_type": next_state_type,
                                 "prob": None,
                             }
                         )
@@ -256,7 +244,7 @@ class ProjectMDP(Env):
         seed : Optional[int]
             Random seed for reproducibility
         options : dict, optional
-            Additional options (unused for now)
+            Additional options for starting state, e.g. {'hl_start_state': 1}
 
         Returns
         -------
@@ -264,11 +252,15 @@ class ProjectMDP(Env):
             (observation, info) where observation is the initial MDP state
         """
         super().reset(seed=seed)
-        self.agent.reset(self.init_state)
+        start_state = self.init_state
+        if options is not None and "hl_start_state" in options:
+            start_state = int(options["hl_start_state"])
+
+        self.agent.reset(start_state)
         self.task_completed = False
 
         obs: NDArray = self.get_state()
-        info: dict = {}
+        info: dict = {"hl_start_state": self.agent.state}
 
         return obs, info
 
