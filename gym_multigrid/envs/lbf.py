@@ -798,8 +798,8 @@ class LBFGameEnv(MultiGridEnv):
                 # offset by 2 here to avoid avoid spawning a high-level fruit along the wall or in the corner
                 # where there may not be enough available sides for the agents to surround and load it
                 pos = (
-                    self.np_random.integers(2, self.width - 2),
-                    self.np_random.integers(2, self.height - 2),
+                    self.np_random.integers(1, self.width - 1),
+                    self.np_random.integers(1, self.height - 1),
                 )
 
                 # check if any fruit in the neighborhood
@@ -809,8 +809,13 @@ class LBFGameEnv(MultiGridEnv):
                     :, 0
                 ]
 
+                # fruit cannot spawn:
+                # next to a wall (helps prevent generation of un-solvable tasks, e.g. level 4 fruit w/ 2 sides blocked by a wall and only level 1 agents available)
+                # next to or near another fruit (helps prevent generation of un-solvable tasks, helps space out the fruit)
+                # on a space another object already occupies (prevent spawning on goals, walls, agents, etc.)
                 if (
-                    np.any(radius_objects == self.world.OBJECT_TO_IDX["fruit"])
+                    np.any(radius_objects == self.world.OBJECT_TO_IDX["wall"])
+                    or np.any(radius_objects == self.world.OBJECT_TO_IDX["fruit"])
                     or np.any(plus_objects == self.world.OBJECT_TO_IDX["fruit"])
                     or (grid[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
                 ):
