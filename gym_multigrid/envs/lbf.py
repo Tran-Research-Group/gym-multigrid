@@ -572,7 +572,6 @@ class LBFGameEnv(MultiGridEnv):
             self._apply_start_room_adjustments(start_room)
 
 
-
     def _parse_field_map(self, obj_place: Optional[list] = None) -> dict:
         """
         obj_place: list of object types to place
@@ -960,9 +959,9 @@ class LBFGameEnv(MultiGridEnv):
                 #     print('\n breakpoint ')
                 #     __import__('ipdb').set_trace(context=3)
 
-
     def _goal_reward_logic(self, agent, next_pos):
-        if self.room_has_goals[self.current_room]:
+        # only enable goal rewards + penalties if all fruit has been collected in the room
+        if self.room_has_goals[self.current_room] and self.all_room_fruit_collected[self.current_room]:
             # if not at goal and reach goal, get a reward
             if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(
                 self.current_room, pos=next_pos
