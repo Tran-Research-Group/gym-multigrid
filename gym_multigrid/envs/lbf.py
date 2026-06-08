@@ -795,7 +795,13 @@ class LBFGameEnv(MultiGridEnv):
 
         if self.field_map is not None:
             # parse field map to spawn any agents defined there
-            num_spawned_fruit = self._parse_field_map(obj_place=["f"])["f"]
+            num_manually_placed_fruit = self._parse_field_map(obj_place=["f"])["f"]
+
+            # if any manually placed fruit, skip rest of random fruit placement logic
+            if num_manually_placed_fruit > 0:
+                num_spawned_fruit = num_manually_placed_fruit
+                self.max_num_fruit = num_manually_placed_fruit
+                return num_spawned_fruit
 
         if num_spawned_fruit < self.max_num_fruit:
             attempts = 0
@@ -858,7 +864,8 @@ class LBFGameEnv(MultiGridEnv):
                 self.num_fruit_per_room[room_idx] += 1
                 num_spawned_fruit += 1
 
-        return num_spawned_fruit
+            return num_spawned_fruit
+
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
