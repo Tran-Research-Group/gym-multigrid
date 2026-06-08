@@ -49,8 +49,8 @@ class ProjectMDP(Env):
     def __init__(
         self,
         num_rooms: int,
-        task_type: Literal["atomic", "composed"],
         comms_values: list[float],
+        task_type: Literal["atomic", "composed"] = "composed",
     ):
         super().__init__()
 
