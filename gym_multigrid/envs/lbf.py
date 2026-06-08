@@ -67,6 +67,12 @@ class LBFAgent(Agent):
     def pos(self) -> Position:
         return (self._pos[0], self._pos[1])
 
+    @pos.setter
+    def pos(self, pos: Position) -> None:
+        self._pos = pos
+        if pos is not None:
+            self.neighbor_pos = pos + self.neighbor_pos_offsets
+
     def add_goal_pos(self, pos: Position, room_idx: int):
         pos = np.array([pos])
 
@@ -84,12 +90,6 @@ class LBFAgent(Agent):
             return True
         else:
             return False
-
-    @pos.setter
-    def pos(self, pos: Position) -> None:
-        self._pos = pos
-        if pos is not None:
-            self.neighbor_pos = pos + self.neighbor_pos_offsets
 
     def reset(self, level: int, init_pos: tuple[int, int]) -> None:
         super().reset()
@@ -863,7 +863,7 @@ class LBFGameEnv(MultiGridEnv):
         # generate new env layout; pass start_room so _gen_grid can adjust spawned objects/agents accordingly
         self._gen_grid(self.width, self.height, start_room=start_room)
 
-        obs: NDArray[np.int_] = self.get_obs()
+        obs: NDArray[np.int_] = self.obs
         info: dict[str, Any] = self._get_info()
 
         return obs, info
@@ -928,7 +928,7 @@ class LBFGameEnv(MultiGridEnv):
         # truncated handled by TimeLimit wrapper
         truncated = False
 
-        obs: NDArray[np.int_] = self.get_obs()
+        obs: NDArray[np.int_] = self.obs
         agent_rewards = [a.reward for a in self.agents]
         reward: float = float(np.sum(agent_rewards))
         info = self._get_info(terminated=terminated, room_completed=room_completed)
@@ -1102,15 +1102,19 @@ class LBFGameEnv(MultiGridEnv):
         return info
 
     # state
-    def get_state(self):
+    @property
+    def state(self):
+        # define as a class attribute so you can access the state using env.state
+        # no matter how many layers of wrappers are around this env
         # return a state of size (n_state_features)
+
         # use multigrid's basic state for now, come back to this later
         match self.state_type:
             case "original":
                 # reproduce the original LBF "state" by concatenating all agent obs into a long vector
                 # NOTE: technically not a "state" from an RL theory perspective since
                 # there may be info not observed by any agent given their limited obs range
-                obs = self.get_obs()
+                obs = self.obs
                 state = np.concatenate(obs)
 
             case "multigrid_flattened":
@@ -1131,8 +1135,7 @@ class LBFGameEnv(MultiGridEnv):
                 state_size: int = self._get_obs_size() * self.num_agents
 
             case "multigrid_flattened":
-                state = self.get_state()
-                state_size = prod(state.shape)
+                state_size = prod(self.state.shape)
 
             case _:
                 raise NotImplementedError
@@ -1140,7 +1143,8 @@ class LBFGameEnv(MultiGridEnv):
         return state_size
 
     # obs
-    def get_obs(self) -> NDArray:
+    @property
+    def obs(self) -> NDArray:
         """get the team's joint observation
 
         Returns
@@ -1348,16 +1352,17 @@ class LBFGameEnv(MultiGridEnv):
         return team_obs_space
 
     # actions
-    def get_avail_actions(self):
+    @property
+    def avail_actions(self):
         # added this method to interface with PYMARL training loop
         # returns list of agent lists, where each agent's list has binary values representing
         # available actions
         # based on the MAIC paper's implementation of LBF with some minor cleanup
         # https://github.com/mansicer/MAIC/blob/main/src/envs/lbforaging/foraging.py
 
-        return [self.get_avail_agent_actions(agent) for agent in self.agents]
+        return [self._get_avail_agent_actions(agent) for agent in self.agents]
 
-    def get_avail_agent_actions(self, agent: LBFAgent) -> list[int]:
+    def _get_avail_agent_actions(self, agent: LBFAgent) -> list[int]:
         avail_actions = [0] * len(self.actions)
         agent_actions = [
             action

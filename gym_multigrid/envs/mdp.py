@@ -1,5 +1,4 @@
 import itertools as it
-import copy
 import pandas as pd
 from typing import Literal, Optional
 import networkx as nx
@@ -19,12 +18,28 @@ class MDPAgent:
 
     # simple agent class for a simple MDP
     def __init__(self, init_state: int) -> None:
-        self.state = init_state
-        self.prev_state = init_state
+        self._state = init_state
+        self._prev_state = init_state
 
     def reset(self, init_state: int):
-        self.state = init_state
-        self.prev_state = init_state
+        self._state = init_state
+        self._prev_state = init_state
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, value):
+        self._state = value
+
+    @property
+    def prev_state(self):
+        return self._prev_state
+
+    @prev_state.setter
+    def prev_state(self, value):
+        self._prev_state = value
 
 
 class ProjectMDP(Env):
@@ -178,7 +193,7 @@ class ProjectMDP(Env):
     ) -> tuple[int, float, bool, bool, dict]:
 
         # Due to how time steps work in the PYMARL runner, need to set task_completed
-        # so it is seen in the get_state() method to populate pre_transition_data to be used to select actions
+        # so it is seen in the state getter to populate pre_transition_data to be used to select actions
         self.task_completed = False
 
         if project_failed:
@@ -195,7 +210,7 @@ class ProjectMDP(Env):
             next_state = self.agent.state
 
         # update agent state
-        self.agent.prev_state = copy.deepcopy(self.agent.state)
+        self.agent.prev_state = self.agent.state
         self.agent.state = next_state
 
         # Determine reward and termination
@@ -209,7 +224,7 @@ class ProjectMDP(Env):
         # or the low-level env in a hierarchical setup
         truncated = False
 
-        obs = self.get_state()
+        obs = self.state
         env_info: dict = {"project_failed": project_failed}
 
         return (
@@ -259,14 +274,14 @@ class ProjectMDP(Env):
         self.agent.reset(start_state)
         self.task_completed = False
 
-        obs: NDArray = self.get_state()
+        obs: NDArray = self.state
         info: dict = {"hl_start_state": self.agent.state}
 
         return obs, info
 
-    def get_state(self) -> NDArray:
-        state = np.array([self.agent.state, self.task_completed])
-        return state
+    @property
+    def state(self) -> NDArray:
+        return np.array([self.agent.state, self.task_completed])
 
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""
@@ -282,8 +297,7 @@ class ProjectMDP(Env):
         """standard function to interface with EPyMARL training loop,
         returns the flattened size of the global state."""
         # size of agent.shape
-        state = self.get_state()
-        state_size = int(np.prod(state.shape))
+        state_size = int(np.prod(self.state.shape))
         return state_size
 
     def render(
