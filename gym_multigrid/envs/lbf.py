@@ -906,8 +906,7 @@ class LBFGameEnv(MultiGridEnv):
 
     # step
     def step(
-        self, action: NDArray[np.int_] | np.int_
-    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+        self, action: NDArray[np.int_] | np.int_,) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
         """
         Take a step in the environment.
 
@@ -1508,6 +1507,14 @@ class LBFGameEnv(MultiGridEnv):
         updated_img = np.concatenate([img, info_img], axis=1)
 
         return updated_img
+
+    @property
+    def t_render(self):
+        return self._t_render
+
+    @t_render.setter
+    def t_render(self, t):
+        self._t_render = t
 
     # helper methods
     def _get_neighborhood(
