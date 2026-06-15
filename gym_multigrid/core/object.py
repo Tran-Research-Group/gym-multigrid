@@ -2,7 +2,7 @@ from typing import Any, Final, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
-from cv2 import putText, FONT_HERSHEY_COMPLEX, LINE_AA
+from cv2 import putText
 
 
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
@@ -14,6 +14,7 @@ from gym_multigrid.utils.rendering import (
     point_in_line,
     point_in_rect,
     point_in_star,
+    FontConfig,
 )
 
 
@@ -245,25 +246,54 @@ class WorldObj:
         """Draw this object with the given renderer"""
         raise NotImplementedError
 
-    def _render_level(self, img: NDArray) -> NDArray:
-        # Calculate pixel position for text (roughly centered)
-        text_x = int(1.1 * self.tile_size)
-        text_y = int(1.7 * self.tile_size)
+    def _render_object_info(
+        self, img: NDArray, level=False, index=False) -> NDArray:
+        if index:
+            text_x, text_y = int(0.9 * self.tile_size), int(1.4 * self.tile_size)
+            img = self._put_agent_info(
+                img, text_x, text_y, f"i{self.index}", font_scale=1, font_thickness=2
+            )
+
+        if level:
+            if not index:
+                # center the object's level, make it larger
+                text_x, text_y = int(0.9 *self.tile_size), int(1.8 * self.tile_size)
+                font_scale = 1.2
+                font_thickness = 3
+            else:
+                # place level under the agent index
+                text_x, text_y = int(0.9 * self.tile_size), int(2.4 * self.tile_size)
+                font_scale = 1.0
+                font_thickness = 2
+
+            img = self._put_agent_info(
+                img,
+                text_x,
+                text_y,
+                f"L{self.level}",
+                font_scale=font_scale,
+                font_thickness=font_thickness,
+            )
+
+        return img
+
+    def _put_agent_info(
+        self, img, text_x: int, text_y: int, info: str, font_scale=1.2, font_thickness=3
+    ):
+        img = putText(
+            img,
+            info,
+            (text_x, text_y),
+            fontFace=FontConfig.fontFace,
+            fontScale=font_scale,
+            thickness=font_thickness,
+            color=(255, 255, 255),
+            lineType=FontConfig.lineType,
+        )
 
         # badge behind text to make it visible
         # badge_x, badge_y = img.shape[0] // 2, img.shape[1] // 2
         # img = cv2.circle(img, center=(badge_x, badge_y), radius=self.tile_size // 2, color=(155, 155, 155), thickness=cv2.FILLED, lineType=cv2.LINE_AA)
-
-        img = putText(
-            img,
-            str(self.level),
-            (text_x, text_y),
-            fontFace=FONT_HERSHEY_COMPLEX,
-            fontScale=1.2,
-            color=(255, 255, 255),
-            thickness=3,
-            lineType=LINE_AA,
-        )
 
         return img
 

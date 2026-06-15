@@ -3,6 +3,12 @@ from typing import Callable
 
 import numpy as np
 from numpy.typing import NDArray
+from cv2 import FONT_HERSHEY_SIMPLEX, LINE_AA
+
+class FontConfig:
+
+    fontFace = FONT_HERSHEY_SIMPLEX
+    lineType = LINE_AA
 
 
 def downsample(img: NDArray, factor: int):

@@ -6,6 +6,7 @@ from typing import Any, Type, Literal, Optional
 from math import prod
 from ast import literal_eval
 import yaml
+from cv2 import putText
 
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ from gym_multigrid.core.constants import DIR_TO_VEC, TILE_PIXELS
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
-from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect
+from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect, FontConfig
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.multigrid import MultiGridEnv
 
@@ -125,7 +126,7 @@ class LBFAgent(Agent):
             bg_color=self.bg_color,
         )
 
-        self._render_level(img)
+        self._render_object_info(img, level=True, index=True)
 
 
 class Fruit(WorldObj):
@@ -200,7 +201,7 @@ class Fruit(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
-        self._render_level(img)
+        self._render_object_info(img, level=True)
 
     def reset(self) -> None:
         super().reset()
@@ -812,7 +813,10 @@ class LBFGameEnv(MultiGridEnv):
             min_levels = min_levels[fruit_permutation]
             max_levels = max_levels[fruit_permutation]
 
-            while num_spawned_fruit < self.max_num_fruit and attempts < self.spawn_attempts:
+            while (
+                num_spawned_fruit < self.max_num_fruit
+                and attempts < self.spawn_attempts
+            ):
                 attempts += 1
 
                 # offset by 2 here to avoid avoid spawning a high-level fruit along the wall or in the corner
@@ -866,21 +870,24 @@ class LBFGameEnv(MultiGridEnv):
 
             return num_spawned_fruit
 
-
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
         # despawn any agents or fruit from the previous episode
         self._reset_gym(seed=seed)
 
+        # used to render actions
+        self._pre_step_actions = [None] * self.num_agents
+        self._t_render = None
+
         # reset fruit tracking
         self.num_fruit_per_room: dict[int, int] = defaultdict(int)
         self.num_fruit_collected_per_room = {
             room_idx: 0 for room_idx in range(self.num_rooms)
         }
-        self.all_room_fruit_collected = [False for _ in range(self.num_rooms)]
+        self.all_room_fruit_collected = [False] * self.num_rooms
 
-        # reset other params
+        # current room / task
         start_room = 0
         if options is not None and "start_room" in options:
             start_room = options["start_room"]
@@ -889,7 +896,7 @@ class LBFGameEnv(MultiGridEnv):
         for room_idx in range(start_room):
             self.all_room_fruit_collected[room_idx] = True
 
-        # generate new env layout; pass start_room so _gen_grid can adjust spawned objects/agents accordingly
+        # generate new env layout
         self._gen_grid(self.width, self.height, start_room=start_room)
 
         obs: NDArray[np.int_] = self.obs
@@ -984,14 +991,7 @@ class LBFGameEnv(MultiGridEnv):
                 self._goal_reward_logic(agent, next_pos)
 
                 # Move agent
-                # if agent.index == 2:
-                #     print(agent.pos)
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
-
-                # if agent.index == 2:
-                #     print(agent.pos)
-                #     print('\n breakpoint ')
-                #     __import__('ipdb').set_trace(context=3)
 
     def _goal_reward_logic(self, agent, next_pos):
         # only enable goal rewards + penalties if all fruit has been collected in the room
@@ -1454,6 +1454,60 @@ class LBFGameEnv(MultiGridEnv):
         action_space = spaces.Tuple(action_space)
 
         return action_space, ac_dim
+
+    # rendering
+    def render(self):
+        img = super().render()
+
+        # render actions in a separate image that we then append to base env image
+        # determine info image width and create a blank white image
+        info_img = 255 * np.ones((img.shape[0], 4 * self.tile_size, 3), dtype=img.dtype)
+
+        # draw each agent's action as text stacked vertically
+        line_height = int(self.tile_size * 0.9)
+
+        # header indicating these are pre-transition actions
+        header_lines = f"Pre-transition\nactions, t={self._t_render}:"
+        header_y = int(self.tile_size * 0.5)
+        for line in header_lines.split("\n"):
+            putText(
+                info_img,
+                line,
+                (10, header_y),
+                fontFace=FontConfig.fontFace,
+                fontScale=0.4,
+                color=(0, 0, 0),
+                thickness=1,
+                lineType=FontConfig.lineType,
+            )
+            header_y += int(self.tile_size * 0.5)
+
+        # start_y set below header to avoid overlap
+        start_y = header_y + int(line_height * 0.8)
+        # actions
+        for i, action in enumerate(self._pre_step_actions):
+
+            # convert from int to action name if not none
+            if action is not None:
+                action = self.actions(action).name.title()
+            text = f"Agent {i}: {action}"
+
+            y = start_y + i * line_height
+            putText(
+                info_img,
+                text,
+                (10, y),
+                fontFace=FontConfig.fontFace,
+                fontScale=0.4,
+                color=(0, 0, 0),
+                thickness=1,
+                lineType=FontConfig.lineType,
+            )
+
+        # append info image to the right of env image
+        updated_img = np.concatenate([img, info_img], axis=1)
+
+        return updated_img
 
     # helper methods
     def _get_neighborhood(
