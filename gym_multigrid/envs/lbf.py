@@ -6,7 +6,7 @@ from typing import Any, Type, Literal, Optional
 from math import prod
 from ast import literal_eval
 import yaml
-from cv2 import putText
+from cv2 import putText, resize, INTER_CUBIC
 
 import numpy as np
 import pandas as pd
@@ -318,7 +318,7 @@ class LBFGameEnv(MultiGridEnv):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "render_fps": 10,
+        "render_fps": 4,
     }
 
     def __init__(
@@ -1504,9 +1504,20 @@ class LBFGameEnv(MultiGridEnv):
             )
 
         # append info image to the right of env image
-        updated_img = np.concatenate([img, info_img], axis=1)
+        img = np.concatenate([img, info_img], axis=1)
 
-        return updated_img
+        # upscale until at least 360p
+        upscale_mult = 1
+        min_target_dims = (360, 640)
+        while (upscale_mult * img.shape[0] < min_target_dims[0]) or (
+            upscale_mult * img.shape[1] < min_target_dims[1]
+        ):
+            upscale_mult += 1
+
+        new_dims = (img.shape[1] * upscale_mult, img.shape[0] * upscale_mult,)
+        img = resize(img, new_dims, interpolation=INTER_CUBIC)
+
+        return img
 
     @property
     def t_render(self):
