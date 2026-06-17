@@ -295,7 +295,12 @@ class Grid:
         if obj is not None:
             # get object index if it has one to differentiate objects with same encoding
             obj_index = (obj.index,) if hasattr(obj, "index") else ()
-            key = key + obj.encode() + obj_index
+            assigned_agent_index = (
+                (obj.assigned_agent_index,)
+                if hasattr(obj, "assigned_agent_index")
+                else ()
+            )
+            key = key + obj.encode() + obj_index + assigned_agent_index
 
         if cell_location != 0:
             key = (key, (cell_location, np.array(selfish_boundary_color).tobytes()))

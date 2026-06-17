@@ -14,11 +14,16 @@ from numpy.typing import NDArray
 from gymnasium import spaces
 
 from gym_multigrid.core.agent import Agent, LBFActions
-from gym_multigrid.core.constants import DIR_TO_VEC, TILE_PIXELS
+from gym_multigrid.core.constants import DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
-from gym_multigrid.utils.rendering import fill_coords, point_in_circle, point_in_rect, FontConfig
+from gym_multigrid.utils.rendering import (
+    fill_coords,
+    point_in_circle,
+    point_in_rect,
+    FontConfig,
+)
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.multigrid import MultiGridEnv
 
@@ -32,18 +37,16 @@ class LBFAgent(Agent):
         self,
         world: World,
         index: int,
-        color: str,
+        color: str = "red",
         view_size: Optional[int] = None,
         init_pos: Optional[tuple[int, int]] = None,
         init_grid: Optional[Grid] = None,
         level: Optional[int] = None,
-        tile_size: int = TILE_PIXELS,
     ):
 
         self.init_pos = init_pos
         self.init_grid = init_grid
         self.level = level
-        self.tile_size = tile_size
 
         self.reward: float = 0.0
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
@@ -126,19 +129,17 @@ class LBFAgent(Agent):
             bg_color=self.bg_color,
         )
 
-        self._render_object_info(img, level=True, index=True)
+        self._render_object_info(img, info=("index", "level"))
 
 
 class Fruit(WorldObj):
     def __init__(
         self,
         world: World,
-        color: str,
         level: int,
-        tile_size: int = TILE_PIXELS,
+        color: str = "green",
     ):
         self.level = level
-        self.tile_size = tile_size
 
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -201,7 +202,7 @@ class Fruit(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
-        self._render_object_info(img, level=True)
+        self._render_object_info(img, info=("level",))
 
     def reset(self) -> None:
         super().reset()
@@ -464,7 +465,6 @@ class LBFGameEnv(MultiGridEnv):
                 LBFAgent(
                     world=self.world,
                     index=i,
-                    color=self.world.IDX_TO_COLOR[0],
                     view_size=self.sight,
                 )
             )
@@ -626,7 +626,6 @@ class LBFGameEnv(MultiGridEnv):
                                 obj = Fruit(
                                     world=self.world,
                                     level=level,
-                                    color=self.world.IDX_TO_COLOR[3],
                                 )
                                 self.place_object(obj, pos=(x, y))
                                 self.num_fruit_per_room[room_idx] += 1
@@ -635,7 +634,11 @@ class LBFGameEnv(MultiGridEnv):
                             case "g":
                                 # place goals + assign to agents
                                 assigned_agent_idx = obj_args[0]
-                                obj = Goal(self.world, color="yellow")
+                                obj = Goal(
+                                    self.world,
+                                    color="dark_yellow",
+                                    assigned_agent_index=assigned_agent_idx,
+                                )
                                 self.place_object(obj, pos=(x, y))
                                 for agent in self.agents:
                                     if agent.index == assigned_agent_idx:
@@ -647,7 +650,7 @@ class LBFGameEnv(MultiGridEnv):
                     obj_type = cell
                     match obj_type.lower():
                         case "g":
-                            obj = Goal(self.world, color="yellow")
+                            obj = Goal(self.world)
                             self.place_object(obj, pos=(x, y))
 
                             # each goal assigned to all agents
@@ -860,7 +863,6 @@ class LBFGameEnv(MultiGridEnv):
                             min_levels[num_spawned_fruit],
                             max_levels[num_spawned_fruit] + 1,
                         ),
-                        color=self.world.IDX_TO_COLOR[3],
                     ),
                     pos=pos,
                 )
@@ -906,7 +908,9 @@ class LBFGameEnv(MultiGridEnv):
 
     # step
     def step(
-        self, action: NDArray[np.int_] | np.int_,) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
+        self,
+        action: NDArray[np.int_] | np.int_,
+    ) -> tuple[NDArray[np.int_], float, bool, bool, dict[str, Any]]:
         """
         Take a step in the environment.
 
@@ -1514,7 +1518,10 @@ class LBFGameEnv(MultiGridEnv):
         ):
             upscale_mult += 1
 
-        new_dims = (img.shape[1] * upscale_mult, img.shape[0] * upscale_mult,)
+        new_dims = (
+            img.shape[1] * upscale_mult,
+            img.shape[0] * upscale_mult,
+        )
         img = resize(img, new_dims, interpolation=INTER_CUBIC)
 
         return img

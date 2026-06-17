@@ -22,11 +22,12 @@ COLORS = {
     "medium_red": np.array([231, 80, 80]),
 }
 
-# Accessible colors for colorblind people from https://www.nature.com/articles/nmeth.1618
+# Accessible colors for people with colorblindness from https://www.nature.com/articles/nmeth.1618
 ACCESSIBLE_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([213, 94, 0]),
     "orange": np.array([230, 159, 0]),
     "yellow": np.array([240, 228, 66]),
+    "dark_yellow": np.array([186, 142, 35]),
     "green": np.array([0, 158, 115]),
     "blue": np.array([0, 114, 178]),
     "sky_blue": np.array([86, 180, 233]),

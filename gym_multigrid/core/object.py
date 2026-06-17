@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from cv2 import putText
 
 
-from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE
+from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
 from gym_multigrid.core.world import World
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
@@ -56,6 +56,7 @@ class WorldObj:
         self.init_bg_color: Final[str | None] = bg_color
         self.reward: float = reward
         self.absorbing: bool = absorbing
+        self.info_strs: dict | None = None
 
         # Initial position of the object
         self.init_pos: Position = (-1, -1)
@@ -247,38 +248,34 @@ class WorldObj:
         raise NotImplementedError
 
     def _render_object_info(
-        self, img: NDArray, level=False, index=False) -> NDArray:
-        if index:
-            text_x, text_y = int(0.9 * self.tile_size), int(1.4 * self.tile_size)
-            img = self._put_agent_info(
-                img, text_x, text_y, f"i{self.index}", font_scale=1, font_thickness=2
-            )
+        self, img: NDArray, info: tuple[Literal["index", "level", "assigned_agent_index"], ...],
+    ) -> NDArray:
+        if self.info_strs is None:
+            self.info_strs = {
+                "index": f"i{getattr(self, 'index', None)}",
+                "level": f"L{getattr(self, 'level', None)}",
+                "assigned_agent_index": f"i{getattr(self, 'assigned_agent_index', None)}",
+            }
 
-        if level:
-            if not index:
-                # center the object's level, make it larger
-                text_x, text_y = int(0.9 *self.tile_size), int(1.8 * self.tile_size)
-                font_scale = 1.2
-                font_thickness = 3
-            else:
-                # place level under the agent index
-                text_x, text_y = int(0.9 * self.tile_size), int(2.4 * self.tile_size)
-                font_scale = 1.0
-                font_thickness = 2
+        # only room for around 2 properties on each cell using standard text size
+        render_text = [self.info_strs[i] for i in info]
 
-            img = self._put_agent_info(
-                img,
-                text_x,
-                text_y,
-                f"L{self.level}",
-                font_scale=font_scale,
-                font_thickness=font_thickness,
-            )
+        # leave space for multiple lines
+        text_x, text_y = int(0.9 * TILE_PIXELS), int(1.4 * TILE_PIXELS)
+
+        if len(render_text) == 1:
+            # centered text
+            text_x, text_y = int(0.9 * TILE_PIXELS), int(1.8 * TILE_PIXELS)
+
+        delta_y = TILE_PIXELS
+        for text in render_text:
+            img = self._add_info_text(img, text_x, text_y, text)
+            text_y = text_y + delta_y
 
         return img
 
-    def _put_agent_info(
-        self, img, text_x: int, text_y: int, info: str, font_scale=1.2, font_thickness=3
+    def _add_info_text(
+        self, img, text_x: int, text_y: int, info: str, font_scale=1, font_thickness=2
     ):
         img = putText(
             img,
@@ -330,6 +327,7 @@ class Goal(WorldObj):
         reward: float = 1,
         color: str | None = None,
         absorbing: bool = False,
+        assigned_agent_index: int | None = None,
     ):
         if color is None and index is not None:
             super().__init__(
@@ -341,12 +339,15 @@ class Goal(WorldObj):
             super().__init__(world, "goal", "green", absorbing=absorbing)
         self.index = index
         self.reward = reward
+        self.assigned_agent_index = assigned_agent_index
 
     def can_overlap(self):
         return True
 
     def render(self, img: NDArray[np.uint8]):
         fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
+        if self.assigned_agent_index is not None:
+            self._render_object_info(img, info=("assigned_agent_index",))
 
 
 class Switch(WorldObj):
