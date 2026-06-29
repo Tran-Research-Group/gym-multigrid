@@ -133,7 +133,7 @@ class ProjectMDP(Env):
         )
 
         # transition probs
-        self.transition_probs: pd.DataFrame
+        self._transition_probs: pd.DataFrame
         transition_probs: list[dict] = []
 
         # init probs as None until we have real data
@@ -173,7 +173,7 @@ class ProjectMDP(Env):
                             }
                         )
 
-        self.transition_probs = pd.DataFrame.from_records(transition_probs)
+        self._transition_probs = pd.DataFrame.from_records(transition_probs)
 
     def _get_state_type(self, state: int) -> Literal["goal", "fail", "normal"]:
         match state:
@@ -283,6 +283,36 @@ class ProjectMDP(Env):
     def state(self) -> NDArray:
         return np.array([self.agent.state, self.task_completed])
 
+    @property
+    def transition_probs(self):
+        return self._transition_probs
+
+    @transition_probs.setter
+    def transition_probs(self, df_data: pd.DataFrame):
+        # the trans agenda is here bwahaha >:D
+        df_trans = self._transition_probs
+
+        for _, row in df_data.iterrows():
+            # task success rate
+            df_trans.loc[
+                (df_trans.state == row.hl_start_state)
+                & (df_trans.action == (row.hl_task[1], row.comms_value))
+                & (df_trans.next_state == row.hl_task[1]),
+                "prob",
+            ] = (
+                1.0 - row.test_project_failed_mean
+            )
+
+            # fail rate
+            df_trans.loc[
+                (df_trans.state == row.hl_start_state)
+                & (df_trans.action == (row.hl_task[1], row.comms_value))
+                & (df_trans.next_state != row.hl_task[1]),
+                "prob",
+            ] = row.test_project_failed_mean
+
+
+
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""
         env_info = {
@@ -311,15 +341,15 @@ class ProjectMDP(Env):
             self.graph = nx.MultiDiGraph()
 
             for state in self.state_space:
-                state_row = self.transition_probs.loc[
-                    self.transition_probs.state == state
+                state_row = self._transition_probs.loc[
+                    self._transition_probs.state == state
                 ].iloc[0]
 
                 self.graph.add_node(state, **{"state_type": state_row.state_type})
 
                 # get all outgoing edges for this state
-                df_edge = self.transition_probs.loc[
-                    (self.transition_probs.state == state)
+                df_edge = self._transition_probs.loc[
+                    (self._transition_probs.state == state)
                 ]
 
                 for _, row in df_edge.iterrows():
