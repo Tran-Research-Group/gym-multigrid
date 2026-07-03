@@ -5,7 +5,8 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import NAV_DIR_TO_VEC, Actions, Agent, NavigationActions
+from gym_multigrid.core.agent import Actions, Agent, NavigationActions
+from gym_multigrid.core.constants import NAV_DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Wall, WorldObj, Zone
 from gym_multigrid.core.object import SimpleDoor as Door
