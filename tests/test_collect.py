@@ -1,7 +1,6 @@
 import gymnasium as gym
 import pytest
 
-import gym_multigrid
 
 
 @pytest.mark.parametrize("env_id", ["gym_multigrid:multigrid-collect-v0"])

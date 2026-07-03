@@ -2,7 +2,7 @@
 name = "gym-multigrid"
 version = "1.0.0"
 description = "Muti-agent gymnasium gridworld environments"
-authors = ["Mikihisa Yuasa <myuasa2@illinois.edu>", "Rupal Nigam"]
+authors = ["Mikihisa Yuasa <myuasa2@illinois.edu>", "Rupal Nigam", "Jaye Heglund <jheglun2@illinois.edu>"]
 license = "Apache-2.0"
 readme = "README.md"
 packages = [{ include = "gym_multigrid" }]

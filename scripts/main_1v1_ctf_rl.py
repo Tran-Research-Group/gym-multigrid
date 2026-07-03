@@ -1,14 +1,12 @@
-from collections import deque
 import os
 from typing import Any
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.logger import Logger
 import torch
 import imageio
 
-from gym_multigrid.envs.ctf import Ctf1v1Env, GameStats
+from gym_multigrid.envs.ctf import Ctf1v1Env
 
 
 class GameStatsLogCallback(BaseCallback):

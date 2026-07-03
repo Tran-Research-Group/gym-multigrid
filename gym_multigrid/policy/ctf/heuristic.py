@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Literal, Type, TypeVar
+from typing import Literal, Type
 
 import numpy as np
 from numpy.random import Generator

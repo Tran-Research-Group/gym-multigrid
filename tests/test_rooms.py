@@ -7,7 +7,6 @@ import pytest
 import yaml
 from numpy.typing import NDArray
 
-import gym_multigrid
 from gym_multigrid.core.agent import NavigationActions
 
 

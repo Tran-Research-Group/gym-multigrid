@@ -1,13 +1,8 @@
 import os
-from typing import Literal
 
 import gymnasium as gym
 import imageio
-import numpy as np
-import pytest
-from numpy.typing import NDArray
 
-from gym_multigrid.envs.labyrinth import LabyrinthEnv, RewardConfig
 
 
 def test_labyrinth() -> None:

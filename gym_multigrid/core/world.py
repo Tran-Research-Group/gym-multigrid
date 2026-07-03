@@ -7,7 +7,6 @@ from gym_multigrid.core.constants import (
     COLORS,
     CTF_COLORS,
     LABYRINTH_COLORS,
-    MAZE_COLORS,
 )
 
 

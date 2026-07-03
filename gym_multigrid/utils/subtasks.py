@@ -1,9 +1,8 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 import numpy as np
-from numpy.typing import NDArray
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import AgentGoal, Door, Wall, WorldObj, Zone

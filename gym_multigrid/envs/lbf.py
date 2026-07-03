@@ -348,8 +348,6 @@ class LBFGameEnv(MultiGridEnv):
             "failed_load_penalty": 0.0,
             "normalize_fruit_reward": True,
         },
-        # team_bandwidth_allocation_action: bool = False,
-        # num_comms_values: Optional[int] = 4,
     ):
         """
         Initialize the LBFGameEnv.
@@ -406,10 +404,6 @@ class LBFGameEnv(MultiGridEnv):
                     "y_limits": (0, height),
                 }
             }
-
-        # whether or not to include an action that represents the allocation of bandwidth to a team
-        # self.team_bandwidth_allocation_action: bool = team_bandwidth_allocation_action
-        # self.num_comms_values: Optional[int] = num_comms_values
 
         # hierarchical model of environment project the tasks that comprise it
         self.max_num_fruit_per_room = max_num_fruit_per_room
@@ -538,7 +532,7 @@ class LBFGameEnv(MultiGridEnv):
                     continue
                 elif isinstance(cell, str) and len(cell) > 1:
                     # insert quotes so ast sees the object encoding as a valid string
-                    cell = f'{cell[0: 1]}"{cell[1: 2]}"{cell[2:]}'
+                    cell = f'{cell[0:1]}"{cell[1:2]}"{cell[2:]}'
                     # convert to tuple data types from strings
                     field_map.at[y, x] = literal_eval(cell)
                 else:
@@ -1489,7 +1483,6 @@ class LBFGameEnv(MultiGridEnv):
         start_y = header_y + int(line_height * 0.8)
         # actions
         for i, action in enumerate(self._pre_step_actions):
-
             # convert from int to action name if not none
             if action is not None:
                 action = self.actions(action).name.title()

@@ -1,12 +1,9 @@
 from heapq import heapify, heappop, heappush
-from typing import Literal, NamedTuple, Union
+from typing import NamedTuple, Union
 
-import numpy as np
-from numpy.typing import NDArray
 
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObj
-from gym_multigrid.core.world import World
 
 
 class AStarNode(NamedTuple):

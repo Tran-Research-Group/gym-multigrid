@@ -8,14 +8,12 @@ from matplotlib.lines import Line2D
 
 import numpy as np
 from numpy.typing import NDArray
-import pandas as pd
 from gymnasium import spaces, Env
 
 from gym_multigrid.core.constants import COLORS
 
 
 class MDPAgent:
-
     # simple agent class for a simple MDP
     def __init__(self, init_state: int) -> None:
         self._state = init_state
@@ -49,7 +47,7 @@ class ProjectMDP(Env):
     def __init__(
         self,
         num_rooms: int,
-        comms_values: list[float],
+        message_budget_per_agent: list[int],
         task_type: Literal["atomic", "composed"] = "composed",
     ):
         super().__init__()
@@ -61,7 +59,7 @@ class ProjectMDP(Env):
         self.fail_state: int
         self.state_space: NDArray[np.int_]
         self.successor_map: dict[tuple[int, tuple], int]
-        self.comms_values = comms_values
+        self.message_budget_per_agent = message_budget_per_agent
 
         self._build_env(
             num_rooms=num_rooms,
@@ -299,9 +297,7 @@ class ProjectMDP(Env):
                 & (df_trans.action == (row.hl_task[1], row.comms_value))
                 & (df_trans.next_state == row.hl_task[1]),
                 "prob",
-            ] = (
-                1.0 - row.test_project_failed_mean
-            )
+            ] = 1.0 - row.test_project_failed_mean
 
             # fail rate
             df_trans.loc[
@@ -310,8 +306,6 @@ class ProjectMDP(Env):
                 & (df_trans.next_state != row.hl_task[1]),
                 "prob",
             ] = row.test_project_failed_mean
-
-
 
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""

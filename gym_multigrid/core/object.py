@@ -248,7 +248,9 @@ class WorldObj:
         raise NotImplementedError
 
     def _render_object_info(
-        self, img: NDArray, info: tuple[Literal["index", "level", "assigned_agent_index"], ...],
+        self,
+        img: NDArray,
+        info: tuple[Literal["index", "level", "assigned_agent_index"], ...],
     ) -> NDArray:
         if self.info_strs is None:
             self.info_strs = {

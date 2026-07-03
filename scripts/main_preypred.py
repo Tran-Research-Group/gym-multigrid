@@ -1,10 +1,8 @@
 import os
-import pprint
 
 import gymnasium as gym
 import imageio
 
-import gym_multigrid
 from gym_multigrid.envs.prey_pred import (
     GreedyPredatorPolicy,
     GreedyPredatorActionOption,

@@ -7,7 +7,6 @@ from typing import (
     Callable,
     Generic,
     Literal,
-    Optional,
     SupportsFloat,
     Type,
     TypeVar,
@@ -400,9 +399,9 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
     @property
     def steps_remaining(self):
-        assert (
-            self.max_steps is not None
-        ), "steps_remaining is only available if max_steps is set"
+        assert self.max_steps is not None, (
+            "steps_remaining is only available if max_steps is set"
+        )
         return self.max_steps - self.step_count
 
     def __str__(self):
@@ -793,9 +792,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         for a in self.agents:
             top_x, top_y, _, _ = a.get_view_exts(self.obs_type)
-            grid = self.grid.slice(
-                top_x, top_y, a.view_size, a.view_size
-            )
+            grid = self.grid.slice(top_x, top_y, a.view_size, a.view_size)
 
             if self.obs_type == "directional":
                 for i in range(a.dir + 1):
@@ -821,9 +818,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return grids, vis_masks
 
-    def gen_obs(
-        self, observe_other_agents: bool = True
-    ) -> list[NDArray]:
+    def gen_obs(self, observe_other_agents: bool = True) -> list[NDArray]:
         """
         Generate the agent's view (partially observable, low-resolution encoding)
         """
@@ -845,7 +840,7 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
                 grid.encode_for_agents(
                     agent_pos=agent_pos_in_obs,
                     vis_mask=vis_mask,
-                    observe_other_agents=observe_other_agents
+                    observe_other_agents=observe_other_agents,
                 )
             )
 

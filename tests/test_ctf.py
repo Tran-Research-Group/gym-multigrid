@@ -1,12 +1,10 @@
 import os
 
 import imageio
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from gym_multigrid.envs.ctf import Ctf1v1Env, CtfMvNEnv
-from gym_multigrid.utils.map import load_text_map
 
 
 def test_ctf_pos_map() -> None:

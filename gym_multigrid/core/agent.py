@@ -5,7 +5,7 @@ from typing import Any, Type, TypeAlias, TypeVar, Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from gym_multigrid.core.constants import DIR_TO_VEC, NAV_DIR_TO_VEC
+from gym_multigrid.core.constants import DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObj
 from gym_multigrid.core.world import World
@@ -104,6 +104,7 @@ class NavigationActions(enum.IntEnum):
     RIGHT = 3
     UP = 4
 
+
 class LBFActions(enum.IntEnum):
     # matches the order from original LBF action set
     STAY = 0
@@ -112,6 +113,7 @@ class LBFActions(enum.IntEnum):
     LEFT = 3
     RIGHT = 4
     LOAD = 5
+
 
 class Agent(WorldObj):
     """Defines the class for an agent in the environment"""
@@ -328,7 +330,6 @@ class Agent(WorldObj):
             if isinstance(obj, WorldObj):
                 self.bg_color = obj.bg_color
 
-
     @property
     def dir_vec(self):
         """
@@ -411,7 +412,9 @@ class Agent(WorldObj):
 
         return vx, vy
 
-    def get_view_exts(self, obs_type: Literal["directional", "symmetrical"] = "directional"):
+    def get_view_exts(
+        self, obs_type: Literal["directional", "symmetrical"] = "directional"
+    ):
         """
         Get the extents of the square set of tiles visible to the agent
         Note: the bottom extent indices are not included in the set
@@ -424,7 +427,6 @@ class Agent(WorldObj):
 
         assert self.view_size is not None
         match obs_type:
-
             case "directional":
                 match self.dir:
                     # Facing right

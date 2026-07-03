@@ -1,6 +1,5 @@
 import sys
 from typing import Callable
-import numpy as np
 from numpy.typing import NDArray
 
 # Only ask users to install matplotlib if they actually need it

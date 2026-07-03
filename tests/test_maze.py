@@ -2,10 +2,8 @@ import os
 
 import gymnasium as gym
 import imageio
-import numpy as np
 import pytest
 
-from gym_multigrid.envs.maze import LayoutConfig, MazeEnv
 
 
 def test_maze_run() -> None:
