@@ -47,7 +47,7 @@ class ProjectMDP(Env):
     def __init__(
         self,
         num_rooms: int,
-        message_budget_per_agent: list[int],
+        msg_budget_per_agent: list[int],
         task_type: Literal["atomic", "composed"] = "composed",
     ):
         super().__init__()
@@ -59,7 +59,7 @@ class ProjectMDP(Env):
         self.fail_state: int
         self.state_space: NDArray[np.int_]
         self.successor_map: dict[tuple[int, tuple], int]
-        self.message_budget_per_agent = message_budget_per_agent
+        self.msg_budget_per_agent = msg_budget_per_agent
 
         self._build_env(
             num_rooms=num_rooms,
@@ -155,7 +155,7 @@ class ProjectMDP(Env):
                 )
 
             else:
-                for budget in self.message_budget_per_agent:
+                for budget in self.msg_budget_per_agent:
                     action = (chosen_next_state, budget)
 
                     next_states = [chosen_next_state, self.fail_state]
@@ -235,12 +235,12 @@ class ProjectMDP(Env):
 
     def _get_action_tuple(self, action: dict) -> tuple:
         chosen_next_state = action["chosen_next_state"]
-        message_budget_raw = action["comms_budget"]
+        msg_budget_raw = action["comms_budget"]
 
         # Discretize comms value to nearest level
         # only used if sampling from the action space for development purposes
-        message_budget: float = self.message_budget_per_agent[
-            np.argmin(np.abs(np.array(self.message_budget_per_agent) - message_budget_raw))
+        message_budget: float = self.msg_budget_per_agent[
+            np.argmin(np.abs(np.array(self.msg_budget_per_agent) - msg_budget_raw))
         ]
 
         action_tuple = (chosen_next_state, message_budget)
@@ -294,7 +294,7 @@ class ProjectMDP(Env):
             # task success rate
             df_trans.loc[
                 (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.message_budget_per_agent))
+                & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
                 & (df_trans.next_state == row.hl_task[1]),
                 "prob",
             ] = 1.0 - row.test_project_failed_mean
@@ -302,7 +302,7 @@ class ProjectMDP(Env):
             # fail rate
             df_trans.loc[
                 (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.message_budget_per_agent))
+                & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
                 & (df_trans.next_state != row.hl_task[1]),
                 "prob",
             ] = row.test_project_failed_mean
