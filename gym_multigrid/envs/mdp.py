@@ -155,8 +155,8 @@ class ProjectMDP(Env):
                 )
 
             else:
-                for comms_val in self.comms_values:
-                    action = (chosen_next_state, comms_val)
+                for budget in self.message_budget_per_agent:
+                    action = (chosen_next_state, budget)
 
                     next_states = [chosen_next_state, self.fail_state]
                     for next_state in next_states:
@@ -235,15 +235,15 @@ class ProjectMDP(Env):
 
     def _get_action_tuple(self, action: dict) -> tuple:
         chosen_next_state = action["chosen_next_state"]
-        comms_val_raw = action["comms_allocation"]
+        message_budget_raw = action["comms_budget"]
 
         # Discretize comms value to nearest level
         # only used if sampling from the action space for development purposes
-        comms_val: float = self.comms_values[
-            np.argmin(np.abs(np.array(self.comms_values) - comms_val_raw))
+        message_budget: float = self.message_budget_per_agent[
+            np.argmin(np.abs(np.array(self.message_budget_per_agent) - message_budget_raw))
         ]
 
-        action_tuple = (chosen_next_state, comms_val)
+        action_tuple = (chosen_next_state, message_budget)
         return action_tuple
 
     def reset(
@@ -294,7 +294,7 @@ class ProjectMDP(Env):
             # task success rate
             df_trans.loc[
                 (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.comms_value))
+                & (df_trans.action == (row.hl_task[1], row.message_budget_per_agent))
                 & (df_trans.next_state == row.hl_task[1]),
                 "prob",
             ] = 1.0 - row.test_project_failed_mean
@@ -302,7 +302,7 @@ class ProjectMDP(Env):
             # fail rate
             df_trans.loc[
                 (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.comms_value))
+                & (df_trans.action == (row.hl_task[1], row.message_budget_per_agent))
                 & (df_trans.next_state != row.hl_task[1]),
                 "prob",
             ] = row.test_project_failed_mean
