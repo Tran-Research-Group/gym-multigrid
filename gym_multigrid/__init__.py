@@ -346,3 +346,9 @@ register(
     id="multigrid-lbf-v0",
     entry_point="gym_multigrid.envs:LBFGameEnv",
 )
+
+register(
+    id="multigrid-comms-sequence-v0",
+    entry_point="gym_multigrid.envs:CommsSequenceEnv",
+    max_episode_steps=50,
+)
