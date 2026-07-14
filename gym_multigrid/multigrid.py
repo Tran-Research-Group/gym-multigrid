@@ -666,25 +666,25 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
             # need this extra to despawn objects that agents cannot walk on, like walls
             self.grid.set(*obj.pos, None)
 
-    def agent_sees(self, a, x, y):
-        """
-        Check if a non-empty grid position is visible to the agent
-        """
-        raise NotImplementedError(
-            "agent_sees is not implemented in the base class. "
-            "Please implement it in your own environment."
-        )
-        coordinates = a.relative_coords(x, y)
-        if coordinates is None:
-            return False
-        vx, vy = coordinates
+    # def agent_sees(self, a, x, y):
+    #     """
+    #     Check if a non-empty grid position is visible to the agent
+    #     """
+    #     raise NotImplementedError(
+    #         "agent_sees is not implemented in the base class. "
+    #         "Please implement it in your own environment."
+    #     )
+    #     # coordinates = a.relative_coords(x, y)
+    #     # if coordinates is None:
+    #     #     return False
+    #     # vx, vy = coordinates
 
-        obs = self.gen_obs()
-        obs_grid, _ = self.grid.decode(obs["image"])
-        obs_cell = obs_grid.get(vx, vy)
-        world_cell = self.grid.get(x, y)
+    #     # obs = self.gen_obs()
+    #     # obs_grid, _ = self.grid.decode(obs["image"])
+    #     # obs_cell = obs_grid.get(vx, vy)
+    #     # world_cell = self.grid.get(x, y)
 
-        return obs_cell is not None and obs_cell.type == world_cell.type
+    #     # return obs_cell is not None and obs_cell.type == world_cell.type
 
     def step(self, action) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """
@@ -818,17 +818,17 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
 
         return grids, vis_masks
 
-    def gen_obs(self, observe_other_agents: bool = True) -> list[NDArray]:
+    def gen_obs(
+        self, observe_other_agents: bool = True, fruit_obs_mask: dict | None = None
+    ) -> list[NDArray]:
         """
         Generate the agent's view (partially observable, low-resolution encoding)
         """
-
-        grids, vis_masks = self.gen_obs_grid()
-
         # Encode the partially observable view into a numpy array
+        grids, vis_masks = self.gen_obs_grid()
         obs: list = []
 
-        for grid, vis_mask in zip(grids, vis_masks):
+        for agent, grid, vis_mask in zip(self.agents, grids, vis_masks):
             match self.obs_type:
                 case "directional":
                     agent_pos_in_obs = (grid.width // 2, grid.height - 1)
@@ -841,6 +841,8 @@ class MultiGridEnv(gym.Env[ObsType, np.int64 | NDArray[np.int64]]):
                     agent_pos=agent_pos_in_obs,
                     vis_mask=vis_mask,
                     observe_other_agents=observe_other_agents,
+                    fruit_obs_mask=fruit_obs_mask,
+                    agent=agent,
                 )
             )
 

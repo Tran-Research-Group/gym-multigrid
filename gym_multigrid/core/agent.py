@@ -1,10 +1,8 @@
 import enum
 import math
-from typing import Any, Type, TypeAlias, TypeVar, Literal
+from typing import Any, Literal, Type, TypeAlias, TypeVar
 
 import numpy as np
-from numpy.typing import NDArray
-
 from gym_multigrid.core.constants import DIR_TO_VEC
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import WorldObj
@@ -12,6 +10,8 @@ from gym_multigrid.core.world import World
 from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
+from numpy import ndarray
+from numpy.typing import NDArray
 
 Actions: TypeAlias = enum.IntEnum
 AgentT = TypeVar("AgentT", bound="Agent", covariant=True)
@@ -128,7 +128,7 @@ class Agent(WorldObj):
         color: str | None = None,
         bg_color: str | None = None,
         type: str = "agent",
-    ):
+    ) -> None:
         """Initialize the agent object
 
         Parameters
@@ -138,7 +138,7 @@ class Agent(WorldObj):
         index : int, optional
             a number useful to identify the instantiated agent, by default 0
         view_size : int, optional
-            the size of agent view, if partial observability holds, by default 7
+            the side length of agent's obs grid, if partial observability holds, by default 7
         actions : Type[Actions], optional
             set of actions available to the agent, by default DefaultActions
         dir_to_vec : list[NDArray], optional
@@ -191,7 +191,7 @@ class Agent(WorldObj):
         self.paused = False
         self.collided = False
 
-    def render(self, img):
+    def render(self, img) -> None:
         """Render the agent at its current position
 
         Parameters
@@ -287,7 +287,7 @@ class Agent(WorldObj):
         init_grid: Grid | None = None,
         dummy_move: bool = False,
         bg_color: str | None = None,
-    ):
+    ) -> None:
         """Move the agent to a new position
 
         Parameters
@@ -331,7 +331,7 @@ class Agent(WorldObj):
                 self.bg_color = obj.bg_color
 
     @property
-    def dir_vec(self):
+    def dir_vec(self) -> ndarray:
         """
         Get the direction vector for the agent, pointing in the direction
         of forward movement.
@@ -346,7 +346,7 @@ class Agent(WorldObj):
         return self.dir_to_vec[self.dir]
 
     @property
-    def right_vec(self):
+    def right_vec(self) -> ndarray:
         """
         Get the vector pointing to the right of the agent.
 
@@ -372,7 +372,38 @@ class Agent(WorldObj):
 
         return self.pos + self.dir_vec
 
-    def get_view_coords(self, i, j):
+    def can_view(
+        self,
+        x: int,
+        y: int,
+        obs_type: Literal["directional", "symmetrical"] = "directional",
+    ) -> bool:
+        """
+        check if a grid position is visible to the agent by view distance
+        does not check occlusion by other objects
+
+        Parameters
+        ----------
+        x : int
+            x-coordinate in the grid
+        y : int
+            y-coordinate in the grid
+
+        Returns
+        -------
+        bool
+            whether the grid position is visible to the agent
+        """
+
+        view_x, view_y = self.get_view_coords(x, y, obs_type)
+        return bool((0 <= view_x < self.view_size) and (0 <= view_y < self.view_size))
+
+    def get_view_coords(
+        self,
+        i: int,
+        j: int,
+        obs_type: Literal["directional", "symmetrical"] = "directional",
+    ):
         """
         Translate and rotate absolute grid coordinates (i, j) into the
         agent's partially observable view (sub-grid). Note that the resulting
@@ -390,25 +421,30 @@ class Agent(WorldObj):
         tuple
             the coordinates of the grid in the agent's view
         """
+        agent_x, agent_y = self.pos
 
-        ax, ay = self.pos
-        dx, dy = self.dir_vec
-        rx, ry = self.right_vec
+        match obs_type:
+            case "symmetrical":
+                # (vx, vy) is the object's position in an agent's local frame
+                vx = i - agent_x + self.view_size // 2
+                vy = j - agent_y + self.view_size // 2
 
-        # Compute the absolute coordinates of the top-left view corner
-        assert self.view_size is not None
-        sz = self.view_size
-        hs = self.view_size // 2
-        tx = ax + (dx * (sz - 1)) - (rx * hs)
-        ty = ay + (dy * (sz - 1)) - (ry * hs)
+            case "directional":
+                dx, dy = self.dir_vec
+                rx, ry = self.right_vec
 
-        lx = i - tx
-        ly = j - ty
+                # Compute the absolute coordinates of the top-left view corner
+                hs = self.view_size // 2
+                tx = agent_x + (dx * (self.view_size - 1)) - (rx * hs)
+                ty = agent_y + (dy * (self.view_size - 1)) - (ry * hs)
 
-        # Project the coordinates of the object relative to the top-left
-        # corner onto the agent's own coordinate system
-        vx = rx * lx + ry * ly
-        vy = -(dx * lx + dy * ly)
+                lx = i - tx
+                ly = j - ty
+
+                # Project the coordinates of the object relative to the top-left
+                # corner onto the agent's own coordinate system
+                vx = rx * lx + ry * ly
+                vy = -(dx * lx + dy * ly)
 
         return vx, vy
 
@@ -460,49 +496,6 @@ class Agent(WorldObj):
 
         return (top_x, top_y, bot_x, bot_y)
 
-    def relative_coords(self, x, y):
-        """
-        Check if a grid position belongs to the agent's field of view, and returns the corresponding coordinates
-
-        Parameters
-        ----------
-        x : int
-            x-coordinate in the grid
-        y : int
-            y-coordinate in the grid
-
-        Returns
-        -------
-        tuple | None
-            the coordinates of the grid position in the agent's view or None if the position is not visible
-        """
-
-        vx, vy = self.get_view_coords(x, y)
-
-        if vx < 0 or vy < 0 or vx >= self.view_size or vy >= self.view_size:
-            return None
-
-        return vx, vy
-
-    def in_view(self, x, y):
-        """
-        check if a grid position is visible to the agent
-
-        Parameters
-        ----------
-        x : int
-            x-coordinate in the grid
-        y : int
-            y-coordinate in the grid
-
-        Returns
-        -------
-        bool
-            whether the grid position is visible to the agent
-        """
-
-        return self.relative_coords(x, y) is not None
-
     def dir2vec(
         self, direction: int, in_tuple: bool = False
     ) -> NDArray[np.int_] | tuple[int, int]:
@@ -542,7 +535,7 @@ class PolicyAgent(Agent):
         color: str | None = None,
         bg_color: str | None = None,
         type: str = "agent",
-    ):
+    ) -> None:
         """Initialize the PolicyAgent object
 
         Parameters

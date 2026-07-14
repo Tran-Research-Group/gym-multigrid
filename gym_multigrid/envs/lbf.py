@@ -450,8 +450,10 @@ class LBFGameEnv(MultiGridEnv):
         state_type: Literal["original", "multigrid_flattened"] = "original",
         obs_type: Literal["original", "multigrid_flattened"] = "original",
         observe_other_agents: bool = True,
-        p_chosen_move: float = 1.0,
+        chosen_move_prob: float = 1.0,
         highlight_visible_cells: bool = False,
+        asymmetric_fruit_obs: bool = False,
+        fruit_obs_prob: float = 1.0,
         reward_config: dict[str, float | bool] = {
             "agent_reach_goal_mult": 0.5,
             "agent_leave_goal_mult": -0.7,
@@ -539,13 +541,18 @@ class LBFGameEnv(MultiGridEnv):
             # in both cases, sight is like the "radius" of the square obs centered on the agent
             # this is here b/c multigrid and the original LBF obs handle it a little differently
             case "original":
-                self._sight = sight
+                agent_view_size = sight
             case "multigrid_flattened":
-                self._sight = 2 * sight + 1
+                agent_view_size = 2 * sight + 1
 
         # if observe_other_agents=False, agents cannot see the other agents and those cells replaced with empty spaces
         self.observe_other_agents = observe_other_agents
         self.observe_agent_levels = observe_agent_levels
+
+        self.asymmetric_fruit_obs = asymmetric_fruit_obs
+        self.fruit_obs_prob = float(fruit_obs_prob)
+        if not 0.0 <= self.fruit_obs_prob <= 1.0:
+            raise ValueError("fruit_obs_prob must lie in [0, 1]")
 
         self.force_coop = force_coop
         self.min_agent_levels = np.array([min_agent_level] * self.num_agents)
@@ -563,7 +570,7 @@ class LBFGameEnv(MultiGridEnv):
             LBFAgent(
                 world=self.world,
                 index=i,
-                view_size=self._sight,
+                view_size=agent_view_size,
             )
             for i in range(self.num_agents)
         ]
@@ -577,7 +584,7 @@ class LBFGameEnv(MultiGridEnv):
             actions_set=self.action_set,
             render_mode="rgb_array",
             obs_type="symmetrical",
-            agent_view_size=self._sight,
+            agent_view_size=agent_view_size,
             highlight_visible_cells=highlight_visible_cells,
         )
 
@@ -592,7 +599,7 @@ class LBFGameEnv(MultiGridEnv):
         self.num_fruit_collected_per_room: dict[int, int]
 
         # stochastic transition dynamics
-        self.transition_prob = TransitionProbs(p_chosen_move, actions=self.actions)
+        self.transition_prob = TransitionProbs(chosen_move_prob, actions=self.actions)
 
     # grid generation
     def _load_field_map(self, map_name: str) -> pd.DataFrame:
@@ -932,9 +939,8 @@ class LBFGameEnv(MultiGridEnv):
                 )
 
                 # check if any fruit in the neighborhood
-                grid = self.grid.encode()
-                radius_objects = self._get_neighborhood(*pos)[:, :, 0]
-                plus_objects = self._get_neighborhood(*pos, radius=2, ignore_diag=True)[
+                radius_obs = self._get_neighborhood(*pos, radius=1)[:, :, 0]
+                plus_obs = self._get_neighborhood(*pos, radius=2, ignore_diag=True)[
                     :, 0
                 ]
 
@@ -950,11 +956,12 @@ class LBFGameEnv(MultiGridEnv):
                 # next to a wall (helps prevent generation of un-solvable tasks, e.g. level 4 fruit w/ 2 sides blocked by a wall and only level 1 agents available)
                 # next to or near another fruit (helps prevent generation of un-solvable tasks, helps space out the fruit)
                 # on a space another object already occupies (prevent spawning on goals, walls, agents, etc.)
+                grid_enc = self.grid.encode()
                 if (
-                    np.any(radius_objects == self.world.OBJECT_TO_IDX["wall"])
-                    or np.any(radius_objects == self.world.OBJECT_TO_IDX["fruit"])
-                    or np.any(plus_objects == self.world.OBJECT_TO_IDX["fruit"])
-                    or (grid[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
+                    np.any(radius_obs == self.world.OBJECT_TO_IDX["wall"])
+                    or np.any(radius_obs == self.world.OBJECT_TO_IDX["fruit"])
+                    or np.any(plus_obs == self.world.OBJECT_TO_IDX["fruit"])
+                    or (grid_enc[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
                 ):
                     continue
 
@@ -968,6 +975,7 @@ class LBFGameEnv(MultiGridEnv):
                     ),
                     pos=pos,
                 )
+
                 # update room counters
                 self.num_fruit_per_room[room_idx] += 1
                 num_spawned_fruit += 1
@@ -983,6 +991,8 @@ class LBFGameEnv(MultiGridEnv):
         # used to render actions
         self._pre_step_actions = [None] * self.num_agents
         self._t_render = None
+
+        self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = {}
 
         # reset fruit tracking
         self.num_fruit_per_room: dict[int, int] = defaultdict(int)
@@ -1070,6 +1080,7 @@ class LBFGameEnv(MultiGridEnv):
         truncated = False
 
         obs: NDArray[np.int_] = self.obs
+
         agent_rewards = [a.reward for a in self.agents]
         reward: float = float(np.sum(agent_rewards))
         info = self._get_info(terminated=terminated, room_completed=room_completed)
@@ -1309,7 +1320,13 @@ class LBFGameEnv(MultiGridEnv):
                 obs = self._get_original_obs()
 
             case "multigrid_flattened":
-                obs_list = self.gen_obs(observe_other_agents=self.observe_other_agents)
+                # dict where each key is (agent_idx, fruit_pos) and value is bool
+                fruit_obs_mask = self._compute_fruit_obs_decisions()
+
+                obs_list = self.gen_obs(
+                    observe_other_agents=self.observe_other_agents,
+                    fruit_obs_mask=fruit_obs_mask,
+                )
 
                 for i, obs in enumerate(obs_list):
                     obs_list[i] = obs.flatten()
@@ -1320,39 +1337,51 @@ class LBFGameEnv(MultiGridEnv):
 
         return obs
 
+    # original lbf's obs
     def _get_original_obs(self) -> NDArray:
-        joint_obs = np.vstack([self._get_agent_obs(agent) for agent in self.agents])
+        joint_obs = np.vstack(
+            [self._get_original_agent_obs(agent) for agent in self.agents]
+        )
 
         """
-        # not using this, low priority to implement
-        # if self._grid_observation:
-        #     layers = self._make_global_grid_arrays()
-        #     agents_bounds = [
-        #         self._get_agent_grid_bounds(*player.position) for player in self.players
-        #     ]
-        #     nobs = tuple(
-        #         [
-        #             layers[:, start_x:end_x, start_y:end_y]
-        #             for start_x, end_x, start_y, end_y in agents_bounds
-        #         ]
-        #     )
-        # else:
-        #   nobs = tuple([self._make_obs_array(obs) for obs in observations])
+            # not using this, low priority to implement
+            # if self._grid_observation:
+            #     layers = self._make_global_grid_arrays()
+            #     agents_bounds = [
+            #         self._get_agent_grid_bounds(*player.position) for player in self.players
+            #     ]
+            #     nobs = tuple(
+            #         [
+            #             layers[:, start_x:end_x, start_y:end_y]
+            #             for start_x, end_x, start_y, end_y in agents_bounds
+            #         ]
+            #     )
+            # else:
+            #   nobs = tuple([self._make_obs_array(obs) for obs in observations])
         """
 
         return joint_obs
 
-    def _get_agent_obs(self, agent: LBFAgent) -> NDArray:
+    def _get_original_agent_obs(
+        self,
+        agent: LBFAgent,
+    ) -> NDArray:
         # get the agent's local obs
-        radius_obs = self._get_neighborhood(*agent.pos, radius=self._sight)
+        radius_obs = self._get_neighborhood(*agent.pos, radius=self.agent_view_size)
 
-        fruit_obs = self._get_object_obs(
+        fruit_positions = np.vstack(
+            np.where(radius_obs[:, :, 0] == self.world.OBJECT_TO_IDX["fruit"])
+        ).T
+        fruit_mask = np.ones(len(fruit_positions), dtype=bool)
+
+        fruit_obs = self._get_original_object_obs(
             agent_radius_obs=radius_obs,
             obj_type="fruit",
             num_objects=self.max_num_fruit,
+            include_mask=fruit_mask,
         )
 
-        agent_obs = self._get_object_obs(
+        agent_obs = self._get_original_object_obs(
             agent_radius_obs=radius_obs,
             obj_type="agent",
             num_objects=self.num_agents,
@@ -1363,12 +1392,13 @@ class LBFGameEnv(MultiGridEnv):
 
         return obs
 
-    def _get_object_obs(
+    def _get_original_object_obs(
         self,
         agent_radius_obs: NDArray,
         obj_type: Literal["agent", "fruit"],
         num_objects: int,
         ego_agent: Optional[LBFAgent] = None,
+        include_mask: Optional[NDArray[np.bool_]] = None,
     ) -> NDArray:
         obj_obs = np.repeat(self.init_object_obs, repeats=num_objects, axis=0)
 
@@ -1379,18 +1409,21 @@ class LBFGameEnv(MultiGridEnv):
         # ego agent is first in its observations of the agents
         if ego_agent is not None:
             # ego agent's position in its local frame
-            y, x = self._transform_to_ego_agent_frame(
-                center=ego_agent.pos, sight=self._sight, position=ego_agent.pos
+            y, x = self._transform_to_neighborhood_original(
+                origin=ego_agent.pos, sight=self.agent_view_size, pos=ego_agent.pos
             )
             obj_obs[0, :] = np.array([y, x, ego_agent.level])
 
             # remove ego_agent to avoid double counting
-            rows_remove = np.argwhere(
-                np.all(obj_positions == np.array([y, x]), axis=1) == True
-            )
+            rows_remove = np.argwhere(np.all(obj_positions == np.array([y, x]), axis=1))
             obj_positions = np.delete(obj_positions, rows_remove, axis=0)
 
+        if include_mask is None:
+            include_mask = np.ones(len(obj_positions), dtype=bool)
+
         for i, (y, x) in enumerate(obj_positions):
+            if not include_mask[i]:
+                continue
             level = agent_radius_obs[y, x, 2]
             obj_obs[i, :] = np.array([y, x, level])
 
@@ -1400,12 +1433,71 @@ class LBFGameEnv(MultiGridEnv):
 
         return obj_obs
 
-    def _transform_to_ego_agent_frame(
-        self, center: tuple[int, int], sight: int, position: tuple[int, int]
+    # updated obs
+    def _compute_fruit_obs_decisions(
+        self,
+    ) -> dict[tuple[int, tuple[int, int]], bool] | None:
+        if not self.asymmetric_fruit_obs:
+            return None
+
+        # loop over the fruit positions and check if each agent can view it
+        fruit_positions = [
+            obj.pos
+            for obj in self.grid.grid
+            if hasattr(obj, "type") and obj.type == "fruit"
+        ]
+
+        fruit_agents: dict[tuple[int, int], list[LBFAgent]] = defaultdict(list)
+        for pos in fruit_positions:
+            for agent in self.agents:
+                if agent.can_view(*pos, obs_type=self.obs_type):
+                    fruit_agents[pos].append(agent)
+
+        # choose which agent gets to see the fruit based on order of observation
+        # key = (fruit_pos, agent), val = visibility bool
+        decisions: dict[tuple[int, tuple[int, int]], bool] = {}
+        for fruit_pos, agents in fruit_agents.items():
+            if self._fruit_obs_state.get(fruit_pos, None) is None:
+                self._fruit_obs_state[fruit_pos] = {"first_seen_agent": None}
+
+            # define the first agent that sees each fruit in an episode
+            if self._fruit_obs_state[fruit_pos]["first_seen_agent"] is None:
+                if len(agents) == 1:
+                    first_seen_agent = agents[0]
+                else:
+                    # if multiple agents see it at the same time, pick a random agent to be the one that sees it
+                    first_seen_agent = agents[int(self.np_random.integers(len(agents)))]
+
+                self._fruit_obs_state[fruit_pos]["first_seen_agent"] = first_seen_agent
+
+            # assign fruit obs based on probability
+            for agent in agents:
+                # use the fruit position in the agent's frame due to how encode_for_agents works
+                fruit_pos_in_agent_frame = agent.get_view_coords(
+                    *fruit_pos, obs_type=self.obs_type
+                )
+
+                if agent == self._fruit_obs_state[fruit_pos]["first_seen_agent"]:
+                    decisions[(agent, fruit_pos_in_agent_frame)] = True
+                else:
+                    # prob for other agents beyond the first one to observe the fruit,
+                    # gives asymmetric info to the agents
+                    decisions[(agent, fruit_pos_in_agent_frame)] = (
+                        self.np_random.random() < self.fruit_obs_prob
+                    )
+
+        return decisions
+
+    def _transform_to_neighborhood_original(
+        self, center: tuple[int, int], sight: int, pos: tuple[int, int]
     ) -> tuple[int, int]:
+        """
+        # this matches the original lbf's implementation, but
+        # I don't get the min(sight, center) thing
+        """
         return (
-            position[0] - center[0] + min(sight, center[0]),
-            position[1] - center[1] + min(sight, center[1]),
+            pos[0] - center[0] + min(sight, center[0]),
+            pos[1] - center[1] + min(sight, center[1]),
         )
 
     def _get_obs_size(self) -> int:
@@ -1489,7 +1581,9 @@ class LBFGameEnv(MultiGridEnv):
                     high=255,
                     shape=(
                         self.num_agents,
-                        self.world.encode_dim * self._sight * self._sight,
+                        self.world.encode_dim
+                        * self.agent_view_size
+                        * self.agent_view_size,
                     ),
                     dtype=np.int_,
                 )
@@ -1650,29 +1744,40 @@ class LBFGameEnv(MultiGridEnv):
 
     # helper methods
     def _get_neighborhood(
-        self, row: int, col: int, radius: int = 1, ignore_diag: bool = False
-    ) -> NDArray:
+        self,
+        row: int,
+        col: int,
+        radius: int = 1,
+        ignore_diag: bool = False,
+        return_object_type: Literal["fruit", "agent"] | None = None,
+    ):
         # neighborhood not same thing as adjacent, it's more general
+        # get global coords to use
+        x_min, x_max = max(row - radius, 0), min(row + radius + 1, self.width)
+        y_min, y_max = max(col - radius, 0), min(col + radius + 1, self.height)
+
+        if return_object_type is not None:
+            objects = []
+            # directly get the objects of the specified type from the grid
+            for i in range(x_min, x_max):
+                for j in range(y_min, y_max):
+                    cell = self.grid.get(i, j)
+                    if cell is not None and cell.type == return_object_type:
+                        objects.append(cell)
+
+            return objects
+
         grid = self.grid.encode()
 
         if ignore_diag:
-            # find objects in a plus-shape centered on the given position
+            # get object encodings in a plus-shape centered on (row, col)
             grids = []
-
-            x_min, x_max = max(row - radius, 0), min(row + radius + 1, self.width)
             grids.append(grid[x_min:x_max, col, :])
-
-            y_min, y_max = max(col - radius, 0), min(col + radius + 1, self.height)
             grids.append(grid[row, y_min:y_max, :])
-            neighbor_objects = np.concatenate(grids)
+            return np.concatenate(grids)
 
-        else:
-            x_min, x_max = max(row - radius, 0), min(row + radius + 1, self.width)
-            y_min, y_max = max(col - radius, 0), min(col + radius + 1, self.height)
-
-            neighbor_objects = grid[x_min:x_max, y_min:y_max, :]
-
-        return neighbor_objects
+        # get object encodings in a square centered on (row, col)
+        return grid[x_min:x_max, y_min:y_max, :]
 
     def _adjacent_fruit(self, agent: LBFAgent) -> bool:
         """

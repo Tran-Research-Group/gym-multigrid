@@ -3,8 +3,6 @@ from copy import deepcopy
 from typing import Type
 
 import numpy as np
-from numpy.typing import NDArray
-
 from gym_multigrid.core.constants import TILE_PIXELS
 from gym_multigrid.core.object import Wall, WorldObj
 from gym_multigrid.core.world import World
@@ -14,6 +12,7 @@ from gym_multigrid.utils.rendering import (
     highlight_img,
     point_in_rect,
 )
+from numpy.typing import NDArray
 
 
 class Grid:
@@ -213,6 +212,8 @@ class Grid:
         Rotate the grid to the left (counter-clockwise)
         """
 
+        # TODO pretty inefficient, creates + populates an entirely new grid object each time this method is called
+        # could just apply a transformation matrix to an existing grid object or whatever
         grid = Grid(self.height, self.width, self.world)
 
         for i in range(self.width):
@@ -222,15 +223,15 @@ class Grid:
 
         return grid
 
-    def slice(self, topX, topY, width, height):
+    def slice(self, top_x: int, top_y: int, width: int, height: int):
         """
         Get a subset of the grid. The subset is a rectangle of size width x height whose top-left corner is at (topX, topY).
 
         Parameters
         ----------
-        topX : int
+        top_x : int
             x-coordinate of the top-left corner of the subset of grid
-        topY : int
+        top_y : int
             y-coordinate of the top-left corner of the subset of grid
         width : int
             width of the subset of grid
@@ -238,12 +239,13 @@ class Grid:
             height of the subset of grid
         """
 
+        # TODO pretty inefficient, creates + populates an entirely new grid object each time this method is called
         grid = Grid(width, height, self.world)
 
         for j in range(0, height):
             for i in range(0, width):
-                x = topX + i
-                y = topY + j
+                x = top_x + i
+                y = top_y + j
 
                 if x >= 0 and x < self.width and y >= 0 and y < self.height:
                     v = self.get(x, y)
@@ -493,6 +495,8 @@ class Grid:
         agent_pos: tuple[int, int],
         vis_mask: NDArray[np.bool_] | None = None,
         observe_other_agents: bool = False,
+        fruit_obs_mask: dict | None = None,
+        agent=None,
     ) -> np.ndarray:
         """
         Produce a compact numpy encoding of the grid
@@ -520,15 +524,22 @@ class Grid:
             for j in range(self.height):
                 if vis_mask[i, j]:
                     v = self.get(i, j)
-
                     if v is None:
+                        array[i, j, :] = self.empty_encoding
+                    # TODO update this here now that you have the mask working as expected
+                    elif (
+                        v.type == "fruit"
+                        and fruit_obs_mask is not None
+                        and not fruit_obs_mask[(agent, (i, j))]
+                    ):
+                        # fruit obs mask may prevent the agent from observing the fruit
                         array[i, j, :] = self.empty_encoding
                     elif (
                         v.type == "agent"
-                        and (not observe_other_agents)
                         and (not np.array_equal(agent_pos, (i, j)))
+                        and (not observe_other_agents)
                     ):
-                        # agent can't observe other agents
+                        # agent cannot observe other agents
                         array[i, j, :] = self.empty_encoding
                     else:
                         # agent can observe itself
