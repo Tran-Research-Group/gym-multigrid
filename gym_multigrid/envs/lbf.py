@@ -311,7 +311,7 @@ class LBFGameEnv(MultiGridEnv):
             ):
                 is_available = bool(avail_actions.get(perturbed_action.name, 1))
                 if is_available:
-                    adjusted_actions.append(perturbed_action)
+                    adjusted_actions.append(perturbed_action.value)
                     adjusted_probs.append(float(prob))
                 else:
                     redistributed_prob += float(prob)
@@ -330,11 +330,10 @@ class LBFGameEnv(MultiGridEnv):
             probs = probs / probs.sum()
 
             if len(adjusted_actions) == 1:
-                return adjusted_actions[0].value
+                return adjusted_actions[0]
 
-            #################
             sampled_idx = np_random.choice(len(adjusted_actions), p=probs)
-            return adjusted_actions[sampled_idx].value
+            return adjusted_actions[sampled_idx]
 
     def __init__(
         self,
@@ -356,7 +355,7 @@ class LBFGameEnv(MultiGridEnv):
         observe_other_agents: bool = True,
         chosen_move_prob: float = 1.0,
         highlight_visible_cells: bool = False,
-        asymmetric_fruit_obs: bool = False,
+        asymmetric_fruit_obs: Literal["smacv2", "different_sensors"] | None = None,
         fruit_obs_prob: float = 1.0,
         reward_config: dict[str, float | bool] = {
             "agent_reach_goal_mult": 0.5,
@@ -365,7 +364,8 @@ class LBFGameEnv(MultiGridEnv):
             "failed_load_penalty": 0.0,
             "normalize_fruit_reward": True,
         },
-        action_blocking: bool = False,
+        action_blocking: bool = True,
+        num_agents_fruit_obs: int | None = None,
     ):
         """
         Initialize the LBFGameEnv.
@@ -397,6 +397,7 @@ class LBFGameEnv(MultiGridEnv):
         self.reward_config = self.RewardConfig(
             num_agents=self.num_agents, **reward_config
         )
+        self.num_agents_fruit_obs = num_agents_fruit_obs
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
@@ -1347,9 +1348,17 @@ class LBFGameEnv(MultiGridEnv):
     def _compute_fruit_obs_decisions(
         self,
     ) -> dict[tuple[int, tuple[int, int]], bool] | None:
-        if not self.asymmetric_fruit_obs:
-            return None
+        match self.asymmetric_fruit_obs:
+            case None:
+                return None
+            case "smacv2":
+                return self._fruit_obs_smacv2()
+            case "different_sensors":
+                return self._fruit_obs_different_sensors()
 
+    def _fruit_obs_smacv2(
+        self,
+    ):
         # loop over the fruit positions and check if each agent can view it
         fruit_positions = [
             obj.pos
@@ -1385,22 +1394,38 @@ class LBFGameEnv(MultiGridEnv):
                 ):
                     self._fruit_obs_state[fruit_pos].append(agent)
 
-                # # use the fruit position in the agent's frame due to how encode_for_agents works
-                # fruit_pos_in_agent_frame = agent.get_view_coords(
-                #     *fruit_pos, obs_type=self.obs_type
-                # )
-                # if agent == self._fruit_obs_state[fruit_pos]["first_seen_agent"]:
-                #     decisions[(agent, fruit_pos_in_agent_frame)] = True
-                # else:
-                #     # prob for other agents beyond the first one to observe the fruit,
-                #     # gives asymmetric info to the agents
-                #     decisions[(agent, fruit_pos_in_agent_frame)] = (
-                #         self.np_random.random() < self.fruit_obs_prob
-                #     )
-
         agent_fruit_obs_mask = {}
         for fruit_pos in fruit_positions:
             for agent in self._fruit_obs_state[fruit_pos]:
+                fruit_pos_in_agent_frame = agent.get_view_coords(
+                    *fruit_pos, obs_type=self.obs_type
+                )
+                agent_fruit_obs_mask |= {(agent, fruit_pos_in_agent_frame): True}
+
+        return agent_fruit_obs_mask
+
+    def _fruit_obs_different_sensors(self):
+        # given self.num_agents_fruit_obs and self.num_agents
+        # choose N agents at random and give them the ability to see the fruits
+        # the other agents cannot see the fruits, but might be able to interact with them in other ways
+        indices = self.np_random.choice(
+            self.num_agents, size=self.num_agents_fruit_obs, replace=False
+        )
+        obs_agents = [self.agents[i] for i in indices]
+
+        # loop over all fruit, get their positions and stuff so these agents can see them
+        fruit_positions = [
+            obj.pos
+            for obj in self.grid.grid
+            if hasattr(obj, "type") and obj.type == "fruit"
+        ]
+
+        agent_fruit_obs_mask = {}
+        for fruit_pos in fruit_positions:
+            for agent in obs_agents:
+                if len(self._fruit_obs_state[fruit_pos]) < self.num_agents_fruit_obs:
+                    self._fruit_obs_state[fruit_pos].append(agent)
+
                 fruit_pos_in_agent_frame = agent.get_view_coords(
                     *fruit_pos, obs_type=self.obs_type
                 )
@@ -1569,7 +1594,9 @@ class LBFGameEnv(MultiGridEnv):
 
         if self.action_blocking:
             # block actions that cause the agent to collide w/ an object
-            next_pos = self._get_next_pos(agent, action, stochastic_transitions=False)
+            next_pos = self._get_next_pos(
+                agent, action.value, stochastic_transitions=False
+            )
             return self._valid_agent_pos(next_pos) and avoid_edge
 
         return avoid_edge
@@ -1606,7 +1633,7 @@ class LBFGameEnv(MultiGridEnv):
 
         # draw each agent's action as text stacked vertically
         # extra spacing between different sections of text
-        y_text += 2 * line_height
+        y_text += line_height
         action_header = "Agent : Pre-step action"
         putText(info_img, action_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
 
@@ -1622,7 +1649,7 @@ class LBFGameEnv(MultiGridEnv):
             putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
 
         # print visibility of the fruit by the agents
-        y_text += 2 * line_height
+        y_text += line_height
         y_text += line_height
         fruit_obs_header = "Fruit : Obs. Agents"
         putText(info_img, fruit_obs_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
