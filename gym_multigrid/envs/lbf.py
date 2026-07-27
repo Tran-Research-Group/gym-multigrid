@@ -900,7 +900,7 @@ class LBFGameEnv(MultiGridEnv):
 
         # used to render actions
         self._pre_step_actions = [None] * self.num_agents
-        self._t_render = None
+        self._t_render = "Start"
 
         self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = defaultdict(list)
 
