@@ -1,9 +1,8 @@
 from ast import literal_eval
 from collections import defaultdict
-from enum import IntEnum
 from math import prod
 from os.path import dirname, join
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal, Optional
 from warnings import warn
 
 import numpy as np
@@ -15,120 +14,27 @@ from numpy import ndarray
 from numpy.random._generator import Generator
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import Agent, LBFActions
-from gym_multigrid.core.constants import DIR_TO_VEC
+from gym_multigrid.core.agent import LBFActions, LBFAgent
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
 from gym_multigrid.multigrid import MultiGridEnv
-from gym_multigrid.policy.prey_pred.utils import a_star
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
     FontConfig,
     fill_coords,
     point_in_circle,
-    point_in_rect,
 )
 
+RENDER_TEXT_CONFIG = {
+    "fontFace": FontConfig.fontFace,
+    "fontScale": 0.4,
+    "color": (0, 0, 0),
+    "thickness": 1,
+    "lineType": FontConfig.lineType,
+}
 
-class LBFAgent(Agent):
-    def __init__(
-        self,
-        world: World,
-        index: int,
-        color: str = "red",
-        view_size: Optional[int] = None,
-        init_pos: Optional[tuple[int, int]] = None,
-        init_grid: Optional[Grid] = None,
-        level: Optional[int] = None,
-    ) -> None:
-
-        self.init_pos = init_pos
-        self.init_grid = init_grid
-        self.level = level
-
-        self.reward: float = 0.0
-        self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
-            [[-1, 0], [1, 0], [0, -1], [0, 1]]
-        )
-        self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
-
-        # an agent may have multiple current goal states
-        self.room_goals: dict[int, NDArray] = {}
-
-        super().__init__(
-            world=world,
-            index=index,
-            actions=LBFActions,
-            color=color,
-            type="agent",
-            view_size=view_size,
-            dir_to_vec=DIR_TO_VEC,
-        )
-
-    @property
-    def pos(self) -> Position:
-        return (self._pos[0], self._pos[1])
-
-    @pos.setter
-    def pos(self, pos: Position) -> None:
-        self._pos = pos
-        if pos is not None:
-            self.neighbor_pos = pos + self.neighbor_pos_offsets
-
-    def add_goal_pos(self, pos: Position, room_idx: int) -> None:
-        pos = np.array([pos])
-
-        if room_idx not in self.room_goals:
-            self.room_goals[room_idx] = pos
-
-        elif not np.any(np.all(pos == self.room_goals[room_idx], axis=1)):
-            self.room_goals[room_idx] = np.vstack((self.room_goals[room_idx], pos))
-
-    def in_goal_set(self, current_room: int, pos: Position = None) -> bool:
-        if pos is None:
-            pos = self.pos
-
-        if np.any(np.all(pos == self.room_goals[current_room], axis=1)):
-            return True
-        else:
-            return False
-
-    def reset(self, level: int, init_pos: tuple[int, int]) -> None:
-        super().reset()
-        if self.pos is not None:
-            self.neighbor_pos = self.pos + self.neighbor_pos_offsets
-        else:
-            self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
-
-        self.level = level
-        self.init_pos = init_pos
-        self.reward: float = 0.0
-
-    def encode(self, current_agent: bool = False) -> tuple[int]:
-        """Encode a description of this object as a 3-tuple of integers
-
-        Parameters
-        ----------
-        current_agent : bool, optional
-            whether the agent is the current agent, by default False
-        """
-        if self.world.encode_dim == 3:
-            return (
-                self.world.OBJECT_TO_IDX[self.type],
-                self.world.COLOR_TO_IDX[self.color],
-                self.level,
-            )
-
-    def render(self, img: NDArray[np.uint8]) -> None:
-        fill_coords(
-            img,
-            point_in_rect(0.15, 0.85, 0.15, 0.85),
-            color=self.world.COLORS[self.color],
-            bg_color=self.bg_color,
-        )
-
-        self._render_object_info(img, info=("index", "level"))
+HEADER_TEXT_CONFIG = RENDER_TEXT_CONFIG | {"thickness": 2}
 
 
 class Fruit(WorldObj):
@@ -189,7 +95,7 @@ class Fruit(WorldObj):
 
         for neighbor_pos in self.neighbor_pos:
             cell = grid.get(*neighbor_pos)
-            if isinstance(cell, Agent) and cell in loading_agents:
+            if isinstance(cell, LBFAgent) and cell in loading_agents:
                 tot_agent_levels += cell.level
                 curr_fruit_loading_agents.append(cell)
             else:
@@ -229,196 +135,6 @@ class Fruit(WorldObj):
             )
 
 
-class RewardConfig:
-    def __init__(
-        self,
-        num_agents: int,
-        normalize_fruit_reward: bool = True,
-        failed_load_penalty: float = 0.0,
-        agent_reach_goal_mult: float = 0.5,
-        agent_leave_goal_mult: float = -0.7,
-        all_agents_reach_goal_proportion_per_agent: float = 2.0,
-        # move_mult: float = 0.0,
-        # max_dense_reach_goal_proportion: float,
-    ) -> None:
-        """
-        all signs for rewarding events assume to be handled in their definition since we only use the "+=" operator in the code below for simplicity and easier design
-        values are <=0 for "penalties" and >= 0 for "rewards"
-
-        Parameters
-        ----------
-        num_agents : int
-        normalize_fruit_reward : bool, optional
-        failed_load_penalty : float, optional
-            value <= 0, by default 0.0
-        agent_reach_goal_mult : float, optional
-            value >= 0 for "rewards", by default 0.5
-        agent_leave_goal_mult : float, optional
-            <= 0, by default -0.7
-        all_agents_reach_goal_proportion_per_agent : float, optional
-            _description_, by default 2.0
-        """
-        # does NOT consider fruit loading rewards since those are based on fruit levels
-
-        # this setup worked well for 3 agents
-        # did not work for 6
-        # the gap between reach and leave may not be large enough and may get blown out
-        # movement_reward=0.0,
-        # agent_reach_goal_reward=0.9,
-        # agent_leave_goal_reward=-1.0,
-        # all_agents_at_goal_reward=10.0,
-
-        self.normalize_fruit_reward = normalize_fruit_reward
-        self.failed_load_penalty: float = failed_load_penalty
-
-        # overall scaling for all rewards in the env
-        # use to prevent rewards from getting to large
-        # and producing too-large gradients for learning
-        self.base_goal_reward = 1.0
-
-        # individual agent rewards, do not multiply by n_agents
-
-        # reach goal serves as the base reward that all others are derived from
-        # using reward multipliers. This helps design a reward function that can work for
-        # different team sizes
-        self.agent_reach_goal_reward: float = (
-            self.base_goal_reward * agent_reach_goal_mult
-        )
-
-        self.agent_leave_goal_reward: float = (
-            self.base_goal_reward * agent_leave_goal_mult
-        )
-
-        # reward for entire team, needs to be multiplied by number of agents
-        # to work for different team sizes
-        self.all_agents_at_goal_reward: float = (
-            self.agent_reach_goal_reward
-            * all_agents_reach_goal_proportion_per_agent
-            * num_agents
-        )
-
-        # self.movement_reward: float = self.base_reward * move_mult
-
-        # max_dense_reward needs to be set small enough so agents can't just
-        # wander around to get large total reward. They would do that if the
-        # discounted summed reward from the "dense" component of R(s, a)
-        # is larger than the final reward they get from the team-level goal.
-        # It also needs to be small enough so during learning, they
-        # have an incentive get the "reach individual goal" reward.
-        # self.max_dense_reward: float = (
-        #     self.agent_reach_goal_reward * max_dense_reach_goal_proportion
-        # )
-        # self.max_dense_reward_per_agent: float = self.max_dense_reward / num_agents
-
-
-class TransitionProbs:
-    def __init__(self, p_chosen_move: float, actions: LBFActions) -> None:
-        # define events that can happen (support) and their probabilities
-        # based on Gym "Frozen Lake" environment. If an agent intends to move in a direction, the env may cause them to move in that direction or in either perpendicular direction.
-        # define the base probability for each action here
-        self._p_chosen_move = p_chosen_move
-        self._slide_prob = (1 - p_chosen_move) / 2
-
-        self.trans = {
-            actions.STAY: {
-                "perturbed_action": [actions.STAY],
-                "prob": [1.0],
-            },
-            actions.LOAD: {
-                "perturbed_action": [actions.LOAD],
-                "prob": [1.0],
-            },
-            actions.LEFT: {
-                "perturbed_action": [
-                    actions.LEFT,
-                    actions.UP,
-                    actions.DOWN,
-                ],
-                "prob": [
-                    self._p_chosen_move,
-                    self._slide_prob,
-                    self._slide_prob,
-                ],
-            },
-            actions.RIGHT: {
-                "perturbed_action": [
-                    actions.RIGHT,
-                    actions.UP,
-                    actions.DOWN,
-                ],
-                "prob": [
-                    self._p_chosen_move,
-                    self._slide_prob,
-                    self._slide_prob,
-                ],
-            },
-            actions.UP: {
-                "perturbed_action": [
-                    actions.UP,
-                    actions.LEFT,
-                    actions.RIGHT,
-                ],
-                "prob": [
-                    self._p_chosen_move,
-                    self._slide_prob,
-                    self._slide_prob,
-                ],
-            },
-            actions.DOWN: {
-                "perturbed_action": [
-                    actions.DOWN,
-                    actions.LEFT,
-                    actions.RIGHT,
-                ],
-                "prob": [
-                    self._p_chosen_move,
-                    self._slide_prob,
-                    self._slide_prob,
-                ],
-            },
-        }
-
-    def get_stochastic_action(
-        self, action: int, avail_actions: dict[str, int], np_random: Generator
-    ) -> int:
-        next_state_dist = self.trans[action]
-
-        #################
-        adjusted_actions: list[int] = []
-        adjusted_probs: list[float] = []
-        redistributed_prob = 0.0
-
-        for perturbed_action, prob in zip(
-            next_state_dist["perturbed_action"], next_state_dist["prob"]
-        ):
-            is_available = bool(avail_actions.get(perturbed_action.name, 1))
-            if is_available:
-                adjusted_actions.append(perturbed_action)
-                adjusted_probs.append(float(prob))
-            else:
-                redistributed_prob += float(prob)
-
-        # if an action is not available, assign its probability to the chosen action
-        if action in adjusted_actions:
-            adjusted_probs[adjusted_actions.index(action)] += redistributed_prob
-        else:
-            adjusted_actions.append(action)
-            adjusted_probs.append(redistributed_prob)
-
-        if len(adjusted_actions) == 0:
-            return action
-
-        probs = np.array(adjusted_probs, dtype=float)
-        probs = probs / probs.sum()
-
-        if len(adjusted_actions) == 1:
-            return adjusted_actions[0].value
-
-        #################
-        sampled_idx = np_random.choice(len(adjusted_actions), p=probs)
-        return adjusted_actions[sampled_idx].value
-
-
 class LBFGameEnv(MultiGridEnv):
     """
     Environment in which the agents have to collect fruit. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
@@ -431,6 +147,194 @@ class LBFGameEnv(MultiGridEnv):
 
     world = LBFWorld
     action_set = LBFActions
+
+    class RewardConfig:
+        def __init__(
+            self,
+            num_agents: int,
+            normalize_fruit_reward: bool = True,
+            failed_load_penalty: float = 0.0,
+            agent_reach_goal_mult: float = 0.5,
+            agent_leave_goal_mult: float = -0.7,
+            all_agents_reach_goal_proportion_per_agent: float = 2.0,
+            # move_mult: float = 0.0,
+            # max_dense_reach_goal_proportion: float,
+        ) -> None:
+            """
+            all signs for rewarding events assume to be handled in their definition since we only use the "+=" operator in the code below for simplicity and easier design
+            values are <=0 for "penalties" and >= 0 for "rewards"
+
+            Parameters
+            ----------
+            num_agents : int
+            normalize_fruit_reward : bool, optional
+            failed_load_penalty : float, optional
+                value <= 0, by default 0.0
+            agent_reach_goal_mult : float, optional
+                value >= 0 for "rewards", by default 0.5
+            agent_leave_goal_mult : float, optional
+                <= 0, by default -0.7
+            all_agents_reach_goal_proportion_per_agent : float, optional
+                _description_, by default 2.0
+            """
+            # does NOT consider fruit loading rewards since those are based on fruit levels
+
+            # this setup worked well for 3 agents
+            # did not work for 6
+            # the gap between reach and leave may not be large enough and may get blown out
+            # movement_reward=0.0,
+            # agent_reach_goal_reward=0.9,
+            # agent_leave_goal_reward=-1.0,
+            # all_agents_at_goal_reward=10.0,
+
+            self.normalize_fruit_reward = normalize_fruit_reward
+            self.failed_load_penalty: float = failed_load_penalty
+
+            # overall scaling for all rewards in the env
+            # use to prevent rewards from getting to large
+            # and producing too-large gradients for learning
+            self.base_goal_reward = 1.0
+
+            # individual agent rewards, do not multiply by n_agents
+
+            # reach goal serves as the base reward that all others are derived from
+            # using reward multipliers. This helps design a reward function that can work for
+            # different team sizes
+            self.agent_reach_goal_reward: float = (
+                self.base_goal_reward * agent_reach_goal_mult
+            )
+
+            self.agent_leave_goal_reward: float = (
+                self.base_goal_reward * agent_leave_goal_mult
+            )
+
+            # reward for entire team, needs to be multiplied by number of agents
+            # to work for different team sizes
+            self.all_agents_at_goal_reward: float = (
+                self.agent_reach_goal_reward
+                * all_agents_reach_goal_proportion_per_agent
+                * num_agents
+            )
+
+            # self.movement_reward: float = self.base_reward * move_mult
+
+            # max_dense_reward needs to be set small enough so agents can't just
+            # wander around to get large total reward. They would do that if the
+            # discounted summed reward from the "dense" component of R(s, a)
+            # is larger than the final reward they get from the team-level goal.
+            # It also needs to be small enough so during learning, they
+            # have an incentive get the "reach individual goal" reward.
+            # self.max_dense_reward: float = (
+            #     self.agent_reach_goal_reward * max_dense_reach_goal_proportion
+            # )
+            # self.max_dense_reward_per_agent: float = self.max_dense_reward / num_agents
+
+    class TransitionProbs:
+        def __init__(self, p_chosen_move: float, actions: LBFActions) -> None:
+            # define events that can happen (support) and their probabilities
+            # based on Gym "Frozen Lake" environment. If an agent intends to move in a direction, the env may cause them to move in that direction or in either perpendicular direction.
+            # define the base probability for each action here
+            self._p_chosen_move = p_chosen_move
+            self._slide_prob = (1 - p_chosen_move) / 2
+
+            self.trans = {
+                actions.STAY: {
+                    "perturbed_action": [actions.STAY],
+                    "prob": [1.0],
+                },
+                actions.LOAD: {
+                    "perturbed_action": [actions.LOAD],
+                    "prob": [1.0],
+                },
+                actions.LEFT: {
+                    "perturbed_action": [
+                        actions.LEFT,
+                        actions.UP,
+                        actions.DOWN,
+                    ],
+                    "prob": [
+                        self._p_chosen_move,
+                        self._slide_prob,
+                        self._slide_prob,
+                    ],
+                },
+                actions.RIGHT: {
+                    "perturbed_action": [
+                        actions.RIGHT,
+                        actions.UP,
+                        actions.DOWN,
+                    ],
+                    "prob": [
+                        self._p_chosen_move,
+                        self._slide_prob,
+                        self._slide_prob,
+                    ],
+                },
+                actions.UP: {
+                    "perturbed_action": [
+                        actions.UP,
+                        actions.LEFT,
+                        actions.RIGHT,
+                    ],
+                    "prob": [
+                        self._p_chosen_move,
+                        self._slide_prob,
+                        self._slide_prob,
+                    ],
+                },
+                actions.DOWN: {
+                    "perturbed_action": [
+                        actions.DOWN,
+                        actions.LEFT,
+                        actions.RIGHT,
+                    ],
+                    "prob": [
+                        self._p_chosen_move,
+                        self._slide_prob,
+                        self._slide_prob,
+                    ],
+                },
+            }
+
+        def get_stochastic_action(
+            self, action: int, avail_actions: dict[str, int], np_random: Generator
+        ) -> int:
+            next_state_dist = self.trans[action]
+
+            #################
+            adjusted_actions: list[int] = []
+            adjusted_probs: list[float] = []
+            redistributed_prob = 0.0
+
+            for perturbed_action, prob in zip(
+                next_state_dist["perturbed_action"], next_state_dist["prob"]
+            ):
+                is_available = bool(avail_actions.get(perturbed_action.name, 1))
+                if is_available:
+                    adjusted_actions.append(perturbed_action)
+                    adjusted_probs.append(float(prob))
+                else:
+                    redistributed_prob += float(prob)
+
+            # if an action is not available, assign its probability to the chosen action
+            if action in adjusted_actions:
+                adjusted_probs[adjusted_actions.index(action)] += redistributed_prob
+            else:
+                adjusted_actions.append(action)
+                adjusted_probs.append(redistributed_prob)
+
+            if len(adjusted_actions) == 0:
+                return action
+
+            probs = np.array(adjusted_probs, dtype=float)
+            probs = probs / probs.sum()
+
+            if len(adjusted_actions) == 1:
+                return adjusted_actions[0].value
+
+            #################
+            sampled_idx = np_random.choice(len(adjusted_actions), p=probs)
+            return adjusted_actions[sampled_idx].value
 
     def __init__(
         self,
@@ -461,6 +365,7 @@ class LBFGameEnv(MultiGridEnv):
             "failed_load_penalty": 0.0,
             "normalize_fruit_reward": True,
         },
+        action_blocking: bool = False,
     ):
         """
         Initialize the LBFGameEnv.
@@ -487,8 +392,11 @@ class LBFGameEnv(MultiGridEnv):
         obs_type: Literal["original", "multigrid"] = "original"
             format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
         """
+        self.action_blocking = action_blocking
         self.num_agents = n_agents
-        self.reward_config = RewardConfig(num_agents=self.num_agents, **reward_config)
+        self.reward_config = self.RewardConfig(
+            num_agents=self.num_agents, **reward_config
+        )
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
@@ -599,7 +507,9 @@ class LBFGameEnv(MultiGridEnv):
         self.num_fruit_collected_per_room: dict[int, int]
 
         # stochastic transition dynamics
-        self.transition_prob = TransitionProbs(chosen_move_prob, actions=self.actions)
+        self.transition_prob = self.TransitionProbs(
+            chosen_move_prob, actions=self.actions
+        )
 
     # grid generation
     def _load_field_map(self, map_name: str) -> pd.DataFrame:
@@ -883,7 +793,7 @@ class LBFGameEnv(MultiGridEnv):
                         self.np_random.integers(y_min, y_max),
                     )
 
-                    if self._valid_next_cell(self.grid.get(*pos)):
+                    if self._valid_agent_pos(pos):
                         level = self.np_random.integers(
                             min_agent_level, max_agent_level + 1
                         )
@@ -992,7 +902,7 @@ class LBFGameEnv(MultiGridEnv):
         self._pre_step_actions = [None] * self.num_agents
         self._t_render = None
 
-        self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = {}
+        self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = defaultdict(list)
 
         # reset fruit tracking
         self.num_fruit_per_room: dict[int, int] = defaultdict(int)
@@ -1094,10 +1004,10 @@ class LBFGameEnv(MultiGridEnv):
         )
 
     def _move_agents(self, moving_agents: dict[Position, list]) -> None:
-        # if two or more players try to move to the same location they all fail
+        # if two or more agents try to move to the same position they all fail and stay at their current position
         for next_pos, agents in moving_agents.items():
-            # make sure no more than one agent will arrive at location
-            if len(agents) == 1 and self._valid_next_cell(self.grid.get(*next_pos)):
+            # make sure only one agent will arrive at the cell
+            if len(agents) == 1 and self._valid_agent_pos(next_pos):
                 # do movements for non colliding players
                 agent = agents[0]
 
@@ -1455,38 +1365,48 @@ class LBFGameEnv(MultiGridEnv):
 
         # choose which agent gets to see the fruit based on order of observation
         # key = (fruit_pos, agent), val = visibility bool
-        decisions: dict[tuple[int, tuple[int, int]], bool] = {}
+        # decisions: dict[tuple[int, tuple[int, int]], bool] = {}
         for fruit_pos, agents in fruit_agents.items():
-            if self._fruit_obs_state.get(fruit_pos, None) is None:
-                self._fruit_obs_state[fruit_pos] = {"first_seen_agent": None}
-
-            # define the first agent that sees each fruit in an episode
-            if self._fruit_obs_state[fruit_pos]["first_seen_agent"] is None:
+            # pick the first agent that sees each fruit in an episode
+            if len(self._fruit_obs_state[fruit_pos]) == 0:
                 if len(agents) == 1:
-                    first_seen_agent = agents[0]
+                    self._fruit_obs_state[fruit_pos] += agents
                 else:
                     # if multiple agents see it at the same time, pick a random agent to be the one that sees it
-                    first_seen_agent = agents[int(self.np_random.integers(len(agents)))]
+                    self._fruit_obs_state[fruit_pos].append(
+                        agents[self.np_random.integers(low=0, high=len(agents))]
+                    )
 
-                self._fruit_obs_state[fruit_pos]["first_seen_agent"] = first_seen_agent
-
-            # assign fruit obs based on probability
+            # assign fruit obs to the rest of the agents that are within obs range of the fruit based on probability
             for agent in agents:
-                # use the fruit position in the agent's frame due to how encode_for_agents works
+                if (
+                    agent not in self._fruit_obs_state[fruit_pos]
+                    and self.np_random.random() < self.fruit_obs_prob
+                ):
+                    self._fruit_obs_state[fruit_pos].append(agent)
+
+                # # use the fruit position in the agent's frame due to how encode_for_agents works
+                # fruit_pos_in_agent_frame = agent.get_view_coords(
+                #     *fruit_pos, obs_type=self.obs_type
+                # )
+                # if agent == self._fruit_obs_state[fruit_pos]["first_seen_agent"]:
+                #     decisions[(agent, fruit_pos_in_agent_frame)] = True
+                # else:
+                #     # prob for other agents beyond the first one to observe the fruit,
+                #     # gives asymmetric info to the agents
+                #     decisions[(agent, fruit_pos_in_agent_frame)] = (
+                #         self.np_random.random() < self.fruit_obs_prob
+                #     )
+
+        agent_fruit_obs_mask = {}
+        for fruit_pos in fruit_positions:
+            for agent in self._fruit_obs_state[fruit_pos]:
                 fruit_pos_in_agent_frame = agent.get_view_coords(
                     *fruit_pos, obs_type=self.obs_type
                 )
+                agent_fruit_obs_mask |= {(agent, fruit_pos_in_agent_frame): True}
 
-                if agent == self._fruit_obs_state[fruit_pos]["first_seen_agent"]:
-                    decisions[(agent, fruit_pos_in_agent_frame)] = True
-                else:
-                    # prob for other agents beyond the first one to observe the fruit,
-                    # gives asymmetric info to the agents
-                    decisions[(agent, fruit_pos_in_agent_frame)] = (
-                        self.np_random.random() < self.fruit_obs_prob
-                    )
-
-        return decisions
+        return agent_fruit_obs_mask
 
     def _transform_to_neighborhood_original(
         self, center: tuple[int, int], sight: int, pos: tuple[int, int]
@@ -1623,34 +1543,36 @@ class LBFGameEnv(MultiGridEnv):
         return avail_actions
 
     def _is_valid_action(self, agent: LBFAgent, action: LBFActions) -> bool:
+
         match action:
             # non-moving actions
             case self.actions.STAY:
                 return True
+
             case self.actions.LOAD:
-                return self._adjacent_fruit(agent) > 0
-            # moving actions
-            case _:
-                next_pos = self._get_next_pos(
-                    agent, action, stochastic_transitions=False
-                )
-                # ensure agents do not go beyond the env's border
-                if self._valid_next_cell(self.grid.get(*next_pos)):
-                    match action:
-                        case self.actions.UP:
-                            return agent.pos[0] > 0
+                if self.action_blocking:
+                    return self._adjacent_fruit(agent) > 0
+                return True
 
-                        case self.actions.DOWN:
-                            return agent.pos[0] < self.height - 1
+            # ensure agents do not go beyond the env's border
+            case self.actions.UP:
+                avoid_edge = agent.pos[0] > 0
 
-                        case self.actions.LEFT:
-                            return agent.pos[1] > 0
+            case self.actions.DOWN:
+                avoid_edge = agent.pos[0] < self.height - 1
 
-                        case self.actions.RIGHT:
-                            return agent.pos[1] < self.width - 1
-                else:
-                    # next cell is not a valid cell to move to
-                    return False
+            case self.actions.LEFT:
+                avoid_edge = agent.pos[1] > 0
+
+            case self.actions.RIGHT:
+                avoid_edge = agent.pos[1] < self.width - 1
+
+        if self.action_blocking:
+            # block actions that cause the agent to collide w/ an object
+            next_pos = self._get_next_pos(agent, action, stochastic_transitions=False)
+            return self._valid_agent_pos(next_pos) and avoid_edge
+
+        return avoid_edge
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
         env_agent_action_space = spaces.Discrete(len(self.actions))
@@ -1673,47 +1595,44 @@ class LBFGameEnv(MultiGridEnv):
 
         # render actions in a separate image that we then append to base env image
         # determine info image width and create a blank white image
-        info_img = 255 * np.ones((img.shape[0], 4 * self.tile_size, 3), dtype=img.dtype)
+        info_img = 255 * np.ones((img.shape[0], 5 * self.tile_size, 3), dtype=img.dtype)
+        x_text = 5
+        line_height = int(self.tile_size * 0.5)
+
+        # header with basic info
+        time_header = f"t : {self._t_render}"
+        y_text = line_height
+        putText(info_img, time_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
 
         # draw each agent's action as text stacked vertically
-        line_height = int(self.tile_size * 0.9)
-
-        # header indicating these are pre-transition actions
-        header_lines = f"Pre-transition\nactions, t={self._t_render}:"
-        header_y = int(self.tile_size * 0.5)
-        for line in header_lines.split("\n"):
-            putText(
-                info_img,
-                line,
-                (10, header_y),
-                fontFace=FontConfig.fontFace,
-                fontScale=0.4,
-                color=(0, 0, 0),
-                thickness=1,
-                lineType=FontConfig.lineType,
-            )
-            header_y += int(self.tile_size * 0.5)
+        # extra spacing between different sections of text
+        y_text += 2 * line_height
+        action_header = "Agent : Pre-step action"
+        putText(info_img, action_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
 
         # start_y set below header to avoid overlap
-        start_y = header_y + int(line_height * 0.8)
         # actions
         for i, action in enumerate(self._pre_step_actions):
             # convert from int to action name if not none
             if action is not None:
                 action = self.actions(action).name.title()
-            text = f"Agent {i}: {action}"
 
-            y = start_y + i * line_height
-            putText(
-                info_img,
-                text,
-                (10, y),
-                fontFace=FontConfig.fontFace,
-                fontScale=0.4,
-                color=(0, 0, 0),
-                thickness=1,
-                lineType=FontConfig.lineType,
-            )
+            text = f"{i} : {action}"
+            y_text += line_height
+            putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
+
+        # print visibility of the fruit by the agents
+        y_text += 2 * line_height
+        y_text += line_height
+        fruit_obs_header = "Fruit : Obs. Agents"
+        putText(info_img, fruit_obs_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
+
+        for i, (k, v) in enumerate(self._fruit_obs_state.items()):
+            agents = [a.index for a in v]
+            agents.sort()
+            text = f"{k[0].item(), k[1].item()} : {agents}"
+            y_text += line_height
+            putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
 
         # append info image to the right of env image
         img = np.concatenate([img, info_img], axis=1)
@@ -1732,6 +1651,7 @@ class LBFGameEnv(MultiGridEnv):
         )
         img = resize(img, new_dims, interpolation=INTER_CUBIC)
 
+        "example text is here, this is my example text"
         return img
 
     @property
@@ -1798,122 +1718,10 @@ class LBFGameEnv(MultiGridEnv):
 
         return any(fruit_neighbor)
 
-    def _valid_next_cell(self, cell: WorldObj | bool | None) -> bool:
+    def _valid_agent_pos(self, pos: tuple[int, int]) -> bool:
+
+        #     cell: WorldObj | bool | None, action: int | None = None
+        # ) -> bool:
+        cell = self.grid.get(*pos)
+
         return cell is None or cell.can_overlap()
-
-
-class AgentState(IntEnum):
-    MOVING_TO_WAYPOINT = 0
-    LOADING_FRUIT = 1
-    WAITING_AT_GOAL = 2
-
-
-class GreedyPredatorPolicy:
-    def __init__(
-        self,
-        fruit_list,
-        goal_list,
-        random_prob: float = 0.1,
-        action_set: Type[IntEnum] = LBFActions,
-        dir_to_vec: list[NDArray[np.int_]] = DIR_TO_VEC,
-        random_generator: np.random.Generator | None = None,
-    ) -> None:
-        self.fruit_list = fruit_list
-        self.fruit_idx: int = 0
-        self.goal_list = goal_list
-        self.goal_idx: int = 0
-        self.random_prob: float = random_prob
-        self.action_set: Type[IntEnum] = action_set
-        self.dir_to_vec: list[NDArray[np.int_]] = dir_to_vec
-        self.random_generator: np.random.Generator = (
-            random_generator
-            if random_generator is not None
-            else np.random.default_rng()
-        )
-        self.state = AgentState.MOVING_TO_WAYPOINT
-
-    def vec2dir(self, vec: NDArray[np.int_]) -> int:
-        """
-        Convert a vector to a direction.
-
-        Parameters
-        ----------
-        vec : NDArray[np.int_]
-            The vector to convert.
-
-        Returns
-        -------
-        dir : int
-            The direction corresponding to the vector.
-        """
-        for direc, dir_vec in enumerate(self.dir_to_vec):
-            if np.array_equal(dir_vec, vec):
-                return direc
-        raise ValueError(f"Invalid vector: {vec}")
-
-    def act(self, current_pos, current_room, grid) -> int:
-        # If we have entered a new room, update the goal and reset fruit index
-        if self.goal_idx != current_room:
-            self.goal_idx = current_room
-            self.fruit_idx = 0
-
-        # Finished all fruits in current room
-        if self.fruit_idx >= len(self.fruit_list[self.goal_idx]):
-            target_pos = self.goal_list[self.goal_idx]
-            self.state = AgentState.MOVING_TO_WAYPOINT
-        else:  # Still fruits to pick up in current room
-            target_pos = self.fruit_list[self.goal_idx][self.fruit_idx]
-
-        if self.state == AgentState.LOADING_FRUIT:
-            # Check if the fruit we were loading still exists
-            fruit_nearby = self._fruit_adjacent(current_pos, grid)
-            if fruit_nearby:
-                # Keep attempting LOAD until fruit disappears
-                return self.action_set.LOAD
-            else:
-                # Fruit collected
-                self.fruit_idx += 1
-                if self.fruit_idx >= len(self.fruit_list[self.goal_idx]):
-                    target_pos = self.goal_list[self.goal_idx]
-                else:
-                    target_pos = self.fruit_list[self.goal_idx][self.fruit_idx]
-                self.state = AgentState.MOVING_TO_WAYPOINT
-
-        if current_pos == target_pos:
-            if target_pos == self.goal_list[self.goal_idx]:
-                self.state = AgentState.WAITING_AT_GOAL
-                return self.action_set.STAY
-            elif self._fruit_adjacent(current_pos, grid):
-                self.state = AgentState.LOADING_FRUIT
-                return self.action_set.LOAD
-            else:
-                self.fruit_idx += 1
-                return self.action_set.STAY
-
-        act_randomly: bool = (
-            False
-            if target_pos is not None
-            and self.random_generator.random() >= self.random_prob
-            else True
-        )
-
-        action: int
-
-        match act_randomly:
-            case True:
-                action = self.random_generator.integers(0, len(self.action_set))
-            case False:
-                path: list[tuple[int, int]] = a_star(current_pos, target_pos, grid)
-                next_pos: tuple[int, int] = path[1] if len(path) > 1 else current_pos
-                dir_vec: NDArray[np.int_] = np.array(next_pos) - np.array(current_pos)
-                action = self.vec2dir(dir_vec)
-
-        return action
-
-    def _fruit_adjacent(self, pos: tuple[int, int], grid) -> bool:
-        """Return True if any fruit is orthogonally adjacent to pos."""
-        r, c = pos
-        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            if grid.get(r + dr, c + dc) and isinstance(grid.get(r + dr, c + dc), Fruit):
-                return True
-        return False

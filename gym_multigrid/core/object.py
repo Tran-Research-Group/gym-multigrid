@@ -1,21 +1,19 @@
 from typing import Any, Final, Literal, overload
 
 import numpy as np
-from numpy.typing import NDArray
 from cv2 import putText
-
-
 from gym_multigrid.core.constants import STATE_IDX_TO_COLOR_WILDFIRE, TILE_PIXELS
 from gym_multigrid.core.world import World
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
+    FontConfig,
     fill_coords,
     point_in_circle,
     point_in_line,
     point_in_rect,
     point_in_star,
-    FontConfig,
 )
+from numpy.typing import NDArray
 
 
 class WorldObj:

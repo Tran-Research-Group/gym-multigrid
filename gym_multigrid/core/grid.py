@@ -530,7 +530,7 @@ class Grid:
                     elif (
                         v.type == "fruit"
                         and fruit_obs_mask is not None
-                        and not fruit_obs_mask[(agent, (i, j))]
+                        and fruit_obs_mask.get((agent, (i, j)), False)
                     ):
                         # fruit obs mask may prevent the agent from observing the fruit
                         array[i, j, :] = self.empty_encoding

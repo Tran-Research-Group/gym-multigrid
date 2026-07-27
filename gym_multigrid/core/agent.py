@@ -1,6 +1,6 @@
 import enum
 import math
-from typing import Any, Literal, Type, TypeAlias, TypeVar
+from typing import Any, Literal, Optional, Type, TypeAlias, TypeVar
 
 import numpy as np
 from gym_multigrid.core.constants import DIR_TO_VEC
@@ -9,7 +9,12 @@ from gym_multigrid.core.object import WorldObj
 from gym_multigrid.core.world import World
 from gym_multigrid.policy.base import AgentPolicy
 from gym_multigrid.typing_utils import Position
-from gym_multigrid.utils.rendering import fill_coords, point_in_triangle, rotate_fn
+from gym_multigrid.utils.rendering import (
+    fill_coords,
+    point_in_rect,
+    point_in_triangle,
+    rotate_fn,
+)
 from numpy import ndarray
 from numpy.typing import NDArray
 
@@ -517,6 +522,108 @@ class Agent(WorldObj):
                 return i
 
         raise ValueError("Invalid direction vector")
+
+
+class LBFAgent(Agent):
+    def __init__(
+        self,
+        world: World,
+        index: int,
+        color: str = "red",
+        view_size: Optional[int] = None,
+        init_pos: Optional[tuple[int, int]] = None,
+        init_grid: Optional[Grid] = None,
+        level: Optional[int] = None,
+    ) -> None:
+
+        self.init_pos = init_pos
+        self.init_grid = init_grid
+        self.level = level
+
+        self.reward: float = 0.0
+        self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
+            [[-1, 0], [1, 0], [0, -1], [0, 1]]
+        )
+        self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
+
+        # an agent may have multiple current goal states
+        self.room_goals: dict[int, NDArray] = {}
+
+        super().__init__(
+            world=world,
+            index=index,
+            actions=LBFActions,
+            color=color,
+            type="agent",
+            view_size=view_size,
+            dir_to_vec=DIR_TO_VEC,
+        )
+
+    @property
+    def pos(self) -> Position:
+        return (self._pos[0], self._pos[1])
+
+    @pos.setter
+    def pos(self, pos: Position) -> None:
+        self._pos = pos
+        if pos is not None:
+            self.neighbor_pos = pos + self.neighbor_pos_offsets
+
+    def add_goal_pos(self, pos: Position, room_idx: int) -> None:
+        pos = np.array([pos])
+
+        if room_idx not in self.room_goals:
+            self.room_goals[room_idx] = pos
+
+        elif not np.any(np.all(pos == self.room_goals[room_idx], axis=1)):
+            self.room_goals[room_idx] = np.vstack((self.room_goals[room_idx], pos))
+
+    def in_goal_set(self, current_room: int, pos: Position = None) -> bool:
+        if pos is None:
+            pos = self.pos
+
+        if np.any(np.all(pos == self.room_goals[current_room], axis=1)):
+            return True
+        else:
+            return False
+
+    def reset(self, level: int, init_pos: tuple[int, int]) -> None:
+        super().reset()
+        if self.pos is not None:
+            self.neighbor_pos = self.pos + self.neighbor_pos_offsets
+        else:
+            self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
+
+        self.level = level
+        self.init_pos = init_pos
+        self.reward: float = 0.0
+
+    def encode(self, current_agent: bool = False) -> tuple[int]:
+        """Encode a description of this object as a 3-tuple of integers
+
+        Parameters
+        ----------
+        current_agent : bool, optional
+            whether the agent is the current agent, by default False
+        """
+        if self.world.encode_dim == 3:
+            return (
+                self.world.OBJECT_TO_IDX[self.type],
+                self.world.COLOR_TO_IDX[self.color],
+                self.level,
+            )
+
+    def render(self, img: NDArray[np.uint8]) -> None:
+        fill_coords(
+            img,
+            point_in_rect(0.15, 0.85, 0.15, 0.85),
+            color=self.world.COLORS[self.color],
+            bg_color=self.bg_color,
+        )
+
+        # TODO add a feature to render if the agent can view the fruit or not
+
+        self._render_object_info(img, info=("index", "level"))
 
 
 class PolicyAgent(Agent):
