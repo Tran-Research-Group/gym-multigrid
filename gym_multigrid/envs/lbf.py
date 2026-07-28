@@ -356,7 +356,7 @@ class LBFGameEnv(MultiGridEnv):
         chosen_move_prob: float = 1.0,
         highlight_visible_cells: bool = False,
         asymmetric_fruit_obs: Literal["smacv2", "different_sensors"] | None = None,
-        fruit_obs_prob: float = 1.0,
+        smacv2_fruit_obs_prob: float = 1.0,
         reward_config: dict[str, float | bool] = {
             "agent_reach_goal_mult": 0.5,
             "agent_leave_goal_mult": -0.7,
@@ -459,8 +459,8 @@ class LBFGameEnv(MultiGridEnv):
         self.observe_agent_levels = observe_agent_levels
 
         self.asymmetric_fruit_obs = asymmetric_fruit_obs
-        self.fruit_obs_prob = float(fruit_obs_prob)
-        if not 0.0 <= self.fruit_obs_prob <= 1.0:
+        self.smacv2_fruit_obs_prob = float(smacv2_fruit_obs_prob)
+        if not 0.0 <= self.smacv2_fruit_obs_prob <= 1.0:
             raise ValueError("fruit_obs_prob must lie in [0, 1]")
 
         self.force_coop = force_coop
@@ -1390,7 +1390,7 @@ class LBFGameEnv(MultiGridEnv):
             for agent in agents:
                 if (
                     agent not in self._fruit_obs_state[fruit_pos]
-                    and self.np_random.random() < self.fruit_obs_prob
+                    and self.np_random.random() < self.smacv2_fruit_obs_prob
                 ):
                     self._fruit_obs_state[fruit_pos].append(agent)
 
@@ -1405,15 +1405,8 @@ class LBFGameEnv(MultiGridEnv):
         return agent_fruit_obs_mask
 
     def _fruit_obs_different_sensors(self):
-        # given self.num_agents_fruit_obs and self.num_agents
-        # choose N agents at random and give them the ability to see the fruits
+        # for each fruit, choose N agents at random and give them the ability to see the fruits
         # the other agents cannot see the fruits, but might be able to interact with them in other ways
-        indices = self.np_random.choice(
-            self.num_agents, size=self.num_agents_fruit_obs, replace=False
-        )
-        obs_agents = [self.agents[i] for i in indices]
-
-        # loop over all fruit, get their positions and stuff so these agents can see them
         fruit_positions = [
             obj.pos
             for obj in self.grid.grid
@@ -1422,6 +1415,11 @@ class LBFGameEnv(MultiGridEnv):
 
         agent_fruit_obs_mask = {}
         for fruit_pos in fruit_positions:
+            indices = self.np_random.choice(
+                self.num_agents, size=self.num_agents_fruit_obs, replace=False
+            )
+            obs_agents = [self.agents[i] for i in indices]
+
             for agent in obs_agents:
                 if len(self._fruit_obs_state[fruit_pos]) < self.num_agents_fruit_obs:
                     self._fruit_obs_state[fruit_pos].append(agent)
