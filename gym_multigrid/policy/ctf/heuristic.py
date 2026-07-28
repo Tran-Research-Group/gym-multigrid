@@ -510,7 +510,7 @@ class PatrolPolicy(DestinationPolicy):
             for dir in directions:
                 new_loc: Position = (loc[0] + dir[0], loc[1] + dir[1])
                 if position_in_positions(new_loc, opponent_territory + obstacle):
-                    border.append(new_loc)
+                    border.append(loc)
                     break
                 else:
                     pass
