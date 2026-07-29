@@ -1415,9 +1415,13 @@ class LBFGameEnv(MultiGridEnv):
 
         agent_fruit_obs_mask = {}
         for fruit_pos in fruit_positions:
-            indices = self.np_random.choice(
-                self.num_agents, size=self.num_agents_fruit_obs, replace=False
-            )
+            if self.num_agents_fruit_obs > 0:
+                indices = self.np_random.choice(
+                    self.num_agents, size=self.num_agents_fruit_obs, replace=False
+                )
+            else:
+                indices = []
+
             obs_agents = [self.agents[i] for i in indices]
 
             for agent in obs_agents:
