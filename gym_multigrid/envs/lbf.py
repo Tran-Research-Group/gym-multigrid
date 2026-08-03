@@ -401,7 +401,7 @@ class LBFGameEnv(MultiGridEnv):
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
-        self.agent_spawn_room = 0
+        self.current_task = 0
         self.room_coords: dict[int, tuple]
         self.num_rooms: int
         self.room_has_goals: dict[int, bool] = {0: False}
@@ -566,7 +566,7 @@ class LBFGameEnv(MultiGridEnv):
 
         return field_map
 
-    def _gen_grid(self, width: int, height: int, start_room: int = 0) -> None:
+    def _gen_grid(self, width: int, height: int, start_task: int = 0) -> None:
         # Create a blank grid for this episode
         self.grid = Grid(width, height, self.world)
 
@@ -600,10 +600,10 @@ class LBFGameEnv(MultiGridEnv):
             max_levels=max_fruit_level * np.ones(self.max_num_fruit),
         )
 
-        # If a start_room was provided prior to grid generation, apply adjustments
+        # If a start_task was provided prior to grid generation, apply adjustments
         # via helper that encapsulates the logic for starting mid-episode.
-        if start_room > 0:
-            self._apply_start_room_adjustments(start_room)
+        if start_task > 0:
+            self._apply_start_task_adjustments(start_task)
 
     def _parse_field_map(self, obj_place: Optional[list] = None) -> dict:
         """
@@ -693,24 +693,24 @@ class LBFGameEnv(MultiGridEnv):
 
         return num_spawned_objects
 
-    def _apply_start_room_adjustments(self, start_room: int) -> None:
+    def _apply_start_task_adjustments(self, start_task: int) -> None:
         """Apply adjustments to the grid and agents so the environment appears
         as if earlier rooms were already completed.
         """
         # Despawn fruits and update counters for previous rooms
-        self._despawn_previous_room_fruits_and_objects(start_room)
+        self._despawn_previous_room_fruits_and_objects(start_task)
 
         # Place agents on the goals/waypoints of the most recent completed room
-        self._place_agents_for_start_room(start_room)
+        self._place_agents_for_start_task(start_task)
 
-    def _despawn_previous_room_fruits_and_objects(self, start_room: int) -> None:
+    def _despawn_previous_room_fruits_and_objects(self, start_task: int) -> None:
         grid_enc = self.grid.encode()
         fruit_idx = self.world.OBJECT_TO_IDX["fruit"]
         for i in range(grid_enc.shape[0]):
             for j in range(grid_enc.shape[1]):
                 if grid_enc[i, j, 0] == fruit_idx:
                     room_idx = self._get_object_room((i, j))
-                    if room_idx < start_room:
+                    if room_idx < start_task:
                         obj = self.grid.get(i, j)
                         if obj is not None:
                             self.despawn_object(obj)
@@ -722,24 +722,24 @@ class LBFGameEnv(MultiGridEnv):
                             self.all_room_fruit_collected[room_idx] = True
 
         # Also despawn room-specific objects (doors, waypoints)
-        for room_idx in range(start_room):
+        for room_idx in range(start_task):
             for obj in list(self.room_despawn_objects.get(room_idx, [])):
                 try:
                     self.despawn_object(obj)
                 except Exception:
                     pass
 
-    def _place_agents_for_start_room(self, start_room: int) -> None:
+    def _place_agents_for_start_task(self, start_task: int) -> None:
         # Choose most-recent completed room with goals
         completed_rooms = [
             r
             for r in range(self.num_rooms)
-            if (r < start_room and self.room_has_goals.get(r, False))
+            if (r < start_task and self.room_has_goals.get(r, False))
         ]
         if len(completed_rooms) > 0:
             prev_room = max(completed_rooms)
         else:
-            prev_room = start_room - 1
+            prev_room = start_task - 1
 
         for agent in self.agents:
             if prev_room in agent.room_goals and len(agent.room_goals[prev_room]) > 0:
@@ -786,8 +786,8 @@ class LBFGameEnv(MultiGridEnv):
                 attempts = 0
                 while attempts < self._spawn_attempts:
                     # make sure the agents spawn in the first room
-                    x_min, x_max = self.room_coords[self.agent_spawn_room]["x_limits"]
-                    y_min, y_max = self.room_coords[self.agent_spawn_room]["y_limits"]
+                    x_min, x_max = self.room_coords[self.current_task]["x_limits"]
+                    y_min, y_max = self.room_coords[self.current_task]["y_limits"]
 
                     pos = (
                         self.np_random.integers(x_min, x_max),
@@ -913,16 +913,14 @@ class LBFGameEnv(MultiGridEnv):
         self.all_room_fruit_collected = [False] * self.num_rooms
 
         # current room / task
-        start_room = 0
-        if options is not None and "start_room" in options:
-            start_room = options["start_room"]
+        if options is not None and "hl_start_state" in options:
+            self.current_task = options["hl_start_state"]
 
-        self.current_room: int = start_room
-        for room_idx in range(start_room):
+        for room_idx in range(self.current_task):
             self.all_room_fruit_collected[room_idx] = True
 
         # generate new env layout
-        self._gen_grid(self.width, self.height, start_room=start_room)
+        self._gen_grid(self.width, self.height, start_task=self.current_task)
 
         obs: NDArray[np.int_] = self.obs
         info: dict[str, Any] = self._get_info()
@@ -1021,18 +1019,18 @@ class LBFGameEnv(MultiGridEnv):
     def _goal_reward_logic(self, agent, next_pos) -> None:
         # only enable goal rewards + penalties if all fruit has been collected in the room
         if (
-            self.room_has_goals[self.current_room]
-            and self.all_room_fruit_collected[self.current_room]
+            self.room_has_goals[self.current_task]
+            and self.all_room_fruit_collected[self.current_task]
         ):
             # if not at goal and reach goal, get a reward
-            if (not agent.in_goal_set(self.current_room)) and agent.in_goal_set(
-                self.current_room, pos=next_pos
+            if (not agent.in_goal_set(self.current_task)) and agent.in_goal_set(
+                self.current_task, pos=next_pos
             ):
                 agent.reward += self.reward_config.agent_reach_goal_reward
 
             # if agent at goal and next pos is not a goal, get penalty
-            if agent.in_goal_set(self.current_room) and not agent.in_goal_set(
-                self.current_room, pos=next_pos
+            if agent.in_goal_set(self.current_task) and not agent.in_goal_set(
+                self.current_task, pos=next_pos
             ):
                 agent.reward += self.reward_config.agent_leave_goal_reward
 
@@ -1040,32 +1038,32 @@ class LBFGameEnv(MultiGridEnv):
         room_completed = False
 
         # if there are goals in the room, reaching goals after collecting all fruit completes this room
-        if self.room_has_goals[self.current_room]:
+        if self.room_has_goals[self.current_task]:
             reached_room_goal: list[bool] = [
-                agent.in_goal_set(self.current_room) for agent in self.agents
+                agent.in_goal_set(self.current_task) for agent in self.agents
             ]
 
             if (
                 all(reached_room_goal)
-                and self.all_room_fruit_collected[self.current_room]
+                and self.all_room_fruit_collected[self.current_task]
             ):
                 # print(
-                #     f"All agents reached goals for room {self.current_room}. Moving to next room."
+                #     f"All agents reached goals for room {self.current_task}. Moving to next room."
                 # )
-                for obj in self.room_despawn_objects[self.current_room]:
+                for obj in self.room_despawn_objects[self.current_task]:
                     self.despawn_object(obj)
 
                 # move on to the next room
-                self.current_room += 1
+                self.current_task += 1
                 room_completed = True
 
         # otherwise collecting all fruit completes this room
-        elif self.all_room_fruit_collected[self.current_room]:
-            for obj in self.room_despawn_objects[self.current_room]:
+        elif self.all_room_fruit_collected[self.current_task]:
+            for obj in self.room_despawn_objects[self.current_task]:
                 self.despawn_object(obj)
 
             # move on to the next room
-            self.current_room += 1
+            self.current_task += 1
             room_completed = True
 
         return room_completed
@@ -1096,7 +1094,7 @@ class LBFGameEnv(MultiGridEnv):
                         # despawn the fruit from the env
                         self.grid.set(*cell.pos, None)
                         cell.pos = np.array([-1, -1])
-                        self.num_fruit_collected_per_room[self.current_room] += 1
+                        self.num_fruit_collected_per_room[self.current_task] += 1
 
                     else:
                         for a in curr_fruit_loading_agents:
@@ -1110,10 +1108,10 @@ class LBFGameEnv(MultiGridEnv):
                     # )
 
         if (
-            self.num_fruit_collected_per_room[self.current_room]
-            == self.num_fruit_per_room[self.current_room]
+            self.num_fruit_collected_per_room[self.current_task]
+            == self.num_fruit_per_room[self.current_task]
         ):
-            self.all_room_fruit_collected[self.current_room] = True
+            self.all_room_fruit_collected[self.current_task] = True
 
     def _get_next_pos(
         self, agent: LBFAgent, action: int, stochastic_transitions: bool = True
@@ -1156,7 +1154,7 @@ class LBFGameEnv(MultiGridEnv):
 
         # project is completed when you reach the end of the final room
         # TODO needs to be updated to handle non-sequential rooms
-        terminated = self.current_room == self.num_rooms
+        terminated = self.current_task == self.num_rooms
 
         return terminated
 
