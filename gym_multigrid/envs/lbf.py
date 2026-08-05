@@ -785,7 +785,7 @@ class LBFGameEnv(MultiGridEnv):
             ):
                 attempts = 0
                 while attempts < self._spawn_attempts:
-                    # make sure the agents spawn in the first room
+                    # make sure the agents spawn in the room associated w/ the current task
                     x_min, x_max = self.room_coords[self.current_task]["x_limits"]
                     y_min, y_max = self.room_coords[self.current_task]["y_limits"]
 
@@ -794,7 +794,7 @@ class LBFGameEnv(MultiGridEnv):
                         self.np_random.integers(y_min, y_max),
                     )
 
-                    if self._valid_agent_pos(pos):
+                    if self._valid_agent_pos(pos, spawn=True):
                         level = self.np_random.integers(
                             min_agent_level, max_agent_level + 1
                         )
@@ -900,7 +900,7 @@ class LBFGameEnv(MultiGridEnv):
         self._reset_gym(seed=seed)
 
         # used to render actions
-        self._pre_step_actions = [None] * self.num_agents
+        self._pre_step_actions: NDArray = np.full(self.num_agents, None)
         self._t_render = "Start"
 
         self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = defaultdict(list)
@@ -1637,8 +1637,11 @@ class LBFGameEnv(MultiGridEnv):
         action_header = "Agent : Pre-step action"
         putText(info_img, action_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
 
+        # ensure pre_step_actions is a 1D array
+        if len(self._pre_step_actions.shape) > 1:
+            self._pre_step_actions = self._pre_step_actions.flatten()
+
         # start_y set below header to avoid overlap
-        # actions
         for i, action in enumerate(self._pre_step_actions):
             # convert from int to action name if not none
             if action is not None:
@@ -1745,10 +1748,12 @@ class LBFGameEnv(MultiGridEnv):
 
         return any(fruit_neighbor)
 
-    def _valid_agent_pos(self, pos: tuple[int, int]) -> bool:
+    def _valid_agent_pos(self, pos: tuple[int, int], spawn: bool = False) -> bool:
 
-        #     cell: WorldObj | bool | None, action: int | None = None
-        # ) -> bool:
         cell = self.grid.get(*pos)
+        if not spawn:
+            return cell is None or cell.can_overlap()
 
-        return cell is None or cell.can_overlap()
+        else:
+            # do not allow agents to spawn on top of other objects, can cause those objects to permanently despawn
+            return cell is None
