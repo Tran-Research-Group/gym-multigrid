@@ -239,15 +239,15 @@ class LBFGameEnv(MultiGridEnv):
 
             self.trans = {
                 actions.STAY: {
-                    "perturbed_action": [actions.STAY],
+                    "possible_action": [actions.STAY],
                     "prob": [1.0],
                 },
                 actions.LOAD: {
-                    "perturbed_action": [actions.LOAD],
+                    "possible_action": [actions.LOAD],
                     "prob": [1.0],
                 },
                 actions.LEFT: {
-                    "perturbed_action": [
+                    "possible_action": [
                         actions.LEFT,
                         actions.UP,
                         actions.DOWN,
@@ -259,7 +259,7 @@ class LBFGameEnv(MultiGridEnv):
                     ],
                 },
                 actions.RIGHT: {
-                    "perturbed_action": [
+                    "possible_action": [
                         actions.RIGHT,
                         actions.UP,
                         actions.DOWN,
@@ -271,7 +271,7 @@ class LBFGameEnv(MultiGridEnv):
                     ],
                 },
                 actions.UP: {
-                    "perturbed_action": [
+                    "possible_action": [
                         actions.UP,
                         actions.LEFT,
                         actions.RIGHT,
@@ -283,7 +283,7 @@ class LBFGameEnv(MultiGridEnv):
                     ],
                 },
                 actions.DOWN: {
-                    "perturbed_action": [
+                    "possible_action": [
                         actions.DOWN,
                         actions.LEFT,
                         actions.RIGHT,
@@ -296,44 +296,16 @@ class LBFGameEnv(MultiGridEnv):
                 },
             }
 
-        def get_stochastic_action(
-            self, action: int, avail_actions: dict[str, int], np_random: Generator
-        ) -> int:
-            next_state_dist = self.trans[action]
-
-            #################
-            adjusted_actions: list[int] = []
-            adjusted_probs: list[float] = []
-            redistributed_prob = 0.0
-
-            for perturbed_action, prob in zip(
-                next_state_dist["perturbed_action"], next_state_dist["prob"]
-            ):
-                is_available = bool(avail_actions.get(perturbed_action.name, 1))
-                if is_available:
-                    adjusted_actions.append(perturbed_action.value)
-                    adjusted_probs.append(float(prob))
-                else:
-                    redistributed_prob += float(prob)
-
-            # if an action is not available, assign its probability to the chosen action
-            if action in adjusted_actions:
-                adjusted_probs[adjusted_actions.index(action)] += redistributed_prob
-            else:
-                adjusted_actions.append(action)
-                adjusted_probs.append(redistributed_prob)
-
-            if len(adjusted_actions) == 0:
-                return action
-
-            probs = np.array(adjusted_probs, dtype=float)
-            probs = probs / probs.sum()
-
-            if len(adjusted_actions) == 1:
-                return adjusted_actions[0]
-
-            sampled_idx = np_random.choice(len(adjusted_actions), p=probs)
-            return adjusted_actions[sampled_idx]
+        def get_stochastic_action(self, action: int, np_random: Generator) -> int:
+            # handles environment randomness as it affects the agent's actual movement
+            # for internal env use only
+            # EX: agent takes "UP", but slips so ends up moving "RIGHT"
+            # in this case, we replace "UP" with "RIGHT" when doing move_agent() and other internal step() methods
+            return int(
+                np_random.choice(
+                    self.trans[action]["possible_action"], p=self.trans[action]["prob"]
+                )
+            )
 
     def __init__(
         self,
@@ -364,7 +336,6 @@ class LBFGameEnv(MultiGridEnv):
             "failed_load_penalty": 0.0,
             "normalize_fruit_reward": True,
         },
-        action_blocking: bool = True,
         num_agents_fruit_obs: int | None = None,
     ):
         """
@@ -392,7 +363,6 @@ class LBFGameEnv(MultiGridEnv):
         obs_type: Literal["original", "multigrid"] = "original"
             format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
         """
-        self.action_blocking = action_blocking
         self.num_agents = n_agents
         self.reward_config = self.RewardConfig(
             num_agents=self.num_agents, **reward_config
@@ -496,6 +466,12 @@ class LBFGameEnv(MultiGridEnv):
             agent_view_size=agent_view_size,
             highlight_visible_cells=highlight_visible_cells,
         )
+
+        # from the learning agent's perspective, all actions are always available
+        avail_actions_dict = {action.name: True for action in self.actions}
+        self._avail_actions = [
+            list(avail_actions_dict.values()) for agent in self.agents
+        ]
 
         # optional env config, allows deterministic design of env with a config file, does not support random spawning of objects
         self.waypoint_pos: list[Position]
@@ -794,7 +770,7 @@ class LBFGameEnv(MultiGridEnv):
                         self.np_random.integers(y_min, y_max),
                     )
 
-                    if self._valid_agent_pos(pos, spawn=True):
+                    if self._check_valid_pos(pos, spawn=True):
                         level = self.np_random.integers(
                             min_agent_level, max_agent_level + 1
                         )
@@ -954,23 +930,38 @@ class LBFGameEnv(MultiGridEnv):
             Additional information about the environment.
         """
         terminated: bool = False
-
-        actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
-
         for a in self.agents:
             a.reward = 0.0
 
+        # check if actions are valid, replace with STAY if not valid
+        actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
+
+        # TODO the logic here will have to change b/c I'm gonna be modifying the action inside _get_next_pos based onwhether agents are next to the edge of the world, etc.
         moving_agents = defaultdict(list)
         loading_agents = set()
 
         for agent, action in zip(self.agents, actions):
-            next_pos: tuple[int, int] = self._get_next_pos(agent, action)
-            next_cell: None | WorldObj = self.grid.get(*next_pos)
-            if isinstance(next_cell, Wall):
-                pass
-            elif action == self.actions.LOAD:
+            # get stochastic action
+            action = self.transition_prob.get_stochastic_action(
+                action,
+                self.np_random,
+            )
+
+            # check if the action is valid
+            valid_actions = self._get_valid_actions(agent)
+            if action not in valid_actions:
+                action = self.actions.STAY
+
+            # setup for env transition
+            if action == self.actions.LOAD:
                 loading_agents.add(agent)
-            else:
+            elif action in [
+                self.actions.UP,
+                self.actions.DOWN,
+                self.actions.LEFT,
+                self.actions.RIGHT,
+            ]:
+                next_pos: tuple[int, int] = self._get_next_pos(agent, action)
                 moving_agents[next_pos].append(agent)
 
         # move agents
@@ -1006,7 +997,7 @@ class LBFGameEnv(MultiGridEnv):
         # if two or more agents try to move to the same position they all fail and stay at their current position
         for next_pos, agents in moving_agents.items():
             # make sure only one agent will arrive at the cell
-            if len(agents) == 1 and self._valid_agent_pos(next_pos):
+            if len(agents) == 1 and self._check_valid_pos(next_pos):
                 # do movements for non colliding players
                 agent = agents[0]
 
@@ -1113,17 +1104,7 @@ class LBFGameEnv(MultiGridEnv):
         ):
             self.all_room_fruit_collected[self.current_task] = True
 
-    def _get_next_pos(
-        self, agent: LBFAgent, action: int, stochastic_transitions: bool = True
-    ) -> tuple[int, int]:
-        # handle stochastic transition dynamics
-        if stochastic_transitions:
-            action = self.transition_prob.get_stochastic_action(
-                action,
-                self._get_avail_agent_actions(agent, return_dict=True),
-                self.np_random,
-            )
-
+    def _get_next_pos(self, agent: LBFAgent, action: int) -> tuple[int, int]:
         match action:
             case self.actions.STAY | self.actions.LOAD:
                 next_pos = agent.pos
@@ -1143,7 +1124,7 @@ class LBFGameEnv(MultiGridEnv):
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
-        # convert from np ints to ints if needed
+        # convert from np ints to ints
         if isinstance(next_pos[0], np.int_):
             next_pos = tuple(map(int, next_pos))
         return next_pos
@@ -1546,60 +1527,42 @@ class LBFGameEnv(MultiGridEnv):
         # available actions
         # based on the MAIC paper's implementation of LBF with some minor cleanup
         # https://github.com/mansicer/MAIC/blob/main/src/envs/lbforaging/foraging.py
+        return self._avail_actions
 
-        return [self._get_avail_agent_actions(agent) for agent in self.agents]
+    def _get_valid_actions(self, agent: LBFAgent) -> list[int]:
+        # handle actions that cause the agent to collide w/ a non-overlappable objects
+        valid = []
+        for action in self.actions:
+            next_pos = self._get_next_pos(agent, action.value)
+            if self._check_valid_action(agent, action) and self._check_valid_pos(
+                next_pos
+            ):
+                valid.append(action.value)
 
-    def _get_avail_agent_actions(
-        self, agent: LBFAgent, return_dict: bool = False
-    ) -> list[int] | dict[str, int]:
-        valid_actions = [
-            action for action in self.actions if self._is_valid_action(agent, action)
-        ]
+        return valid
 
-        avail_actions_dict = {
-            action.name: int(action in valid_actions) for action in self.actions
-        }
-
-        if return_dict:
-            return avail_actions_dict
-
-        # convert to binary list with same order as self.actions
-        avail_actions = list(avail_actions_dict.values())
-        return avail_actions
-
-    def _is_valid_action(self, agent: LBFAgent, action: LBFActions) -> bool:
-
+    def _check_valid_action(self, agent: LBFAgent, action: LBFActions) -> bool:
         match action:
             # non-moving actions
             case self.actions.STAY:
                 return True
 
             case self.actions.LOAD:
-                if self.action_blocking:
-                    return self._adjacent_fruit(agent) > 0
-                return True
+                return self._adjacent_fruit(agent) > 0
 
             # ensure agents do not go beyond the env's border
+            # only matters if there is no wall around the border
             case self.actions.UP:
-                avoid_edge = agent.pos[0] > 0
+                return agent.pos[0] > 0
 
             case self.actions.DOWN:
-                avoid_edge = agent.pos[0] < self.height - 1
+                return agent.pos[0] < self.height - 1
 
             case self.actions.LEFT:
-                avoid_edge = agent.pos[1] > 0
+                return agent.pos[1] > 0
 
             case self.actions.RIGHT:
-                avoid_edge = agent.pos[1] < self.width - 1
-
-        if self.action_blocking:
-            # block actions that cause the agent to collide w/ an object
-            next_pos = self._get_next_pos(
-                agent, action.value, stochastic_transitions=False
-            )
-            return self._valid_agent_pos(next_pos) and avoid_edge
-
-        return avoid_edge
+                return agent.pos[1] < self.width - 1
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
         env_agent_action_space = spaces.Discrete(len(self.actions))
@@ -1748,7 +1711,7 @@ class LBFGameEnv(MultiGridEnv):
 
         return any(fruit_neighbor)
 
-    def _valid_agent_pos(self, pos: tuple[int, int], spawn: bool = False) -> bool:
+    def _check_valid_pos(self, pos: tuple[int, int], spawn: bool = False) -> bool:
 
         cell = self.grid.get(*pos)
         if not spawn:
