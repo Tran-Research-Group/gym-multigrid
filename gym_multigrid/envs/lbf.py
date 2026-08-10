@@ -1630,8 +1630,6 @@ class LBFGameEnv(MultiGridEnv):
         for i, (k, v) in enumerate(self._fruit_obs_state.items()):
             agents = [a.index for a in v]
             agents.sort()
-            print("Breakpoint ")
-            __import__("ipdb").set_trace(context=5)
             text = f"{int(k[0]), int(k[1])} : {agents}"
 
             y_text += line_height
