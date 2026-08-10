@@ -955,6 +955,7 @@ class LBFGameEnv(MultiGridEnv):
             # setup for env transition
             if action == self.actions.LOAD:
                 loading_agents.add(agent)
+
             elif action in [
                 self.actions.UP,
                 self.actions.DOWN,
@@ -1533,11 +1534,17 @@ class LBFGameEnv(MultiGridEnv):
         # handle actions that cause the agent to collide w/ a non-overlappable objects
         valid = []
         for action in self.actions:
+            # non-moving actions are automatically valid
             next_pos = self._get_next_pos(agent, action.value)
-            if self._check_valid_action(agent, action) and self._check_valid_pos(
-                next_pos
-            ):
-                valid.append(action.value)
+
+            if self._check_valid_action(agent, action):
+                if action.name in [
+                    "STAY",
+                    "LOAD",
+                ]:
+                    valid.append(action.value)
+                elif self._check_valid_pos(next_pos):
+                    valid.append(action.value)
 
         return valid
 
@@ -1623,7 +1630,10 @@ class LBFGameEnv(MultiGridEnv):
         for i, (k, v) in enumerate(self._fruit_obs_state.items()):
             agents = [a.index for a in v]
             agents.sort()
-            text = f"{k[0].item(), k[1].item()} : {agents}"
+            print("Breakpoint ")
+            __import__("ipdb").set_trace(context=5)
+            text = f"{int(k[0]), int(k[1])} : {agents}"
+
             y_text += line_height
             putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
 
