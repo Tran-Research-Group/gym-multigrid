@@ -1,14 +1,14 @@
 import itertools as it
-import pandas as pd
 from typing import Literal, Optional
-import networkx as nx
+
 import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+import pandas as pd
+from gymnasium import Env, spaces
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-
-import numpy as np
 from numpy.typing import NDArray
-from gymnasium import spaces, Env
 
 from gym_multigrid.core.constants import COLORS
 
@@ -297,7 +297,7 @@ class ProjectMDP(Env):
                 & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
                 & (df_trans.next_state == row.hl_task[1]),
                 "prob",
-            ] = 1.0 - row.test_project_failed_mean
+            ] = 1.0 - row.test_task_completed_mean
 
             # fail rate
             df_trans.loc[
@@ -305,7 +305,7 @@ class ProjectMDP(Env):
                 & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
                 & (df_trans.next_state != row.hl_task[1]),
                 "prob",
-            ] = row.test_project_failed_mean
+            ] = row.test_task_completed_mean
 
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""
