@@ -10,11 +10,10 @@ import pandas as pd
 import yaml
 from cv2 import INTER_CUBIC, putText, resize
 from gymnasium import spaces
-from numpy import ndarray
 from numpy.random._generator import Generator
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import LBFActions, LBFAgent
+from gym_multigrid.core.agent import LBFActions, LBFAgent, NavigationActions
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
 from gym_multigrid.core.world import LBFWorld, World
@@ -146,7 +145,10 @@ class LBFGameEnv(MultiGridEnv):
     }
 
     world = LBFWorld
-    action_set = LBFActions
+    avail_action_sets = {
+        "LBFActions": LBFActions,
+        "NavigationActions": NavigationActions,
+    }
 
     class RewardConfig:
         def __init__(
@@ -230,7 +232,9 @@ class LBFGameEnv(MultiGridEnv):
             # self.max_dense_reward_per_agent: float = self.max_dense_reward / num_agents
 
     class TransitionProbs:
-        def __init__(self, p_chosen_move: float, actions: LBFActions) -> None:
+        def __init__(
+            self, p_chosen_move: float, actions: LBFActions | NavigationActions
+        ) -> None:
             # define events that can happen (support) and their probabilities
             # based on Gym "Frozen Lake" environment. If an agent intends to move in a direction, the env may cause them to move in that direction or in either perpendicular direction.
             # define the base probability for each action here
@@ -240,10 +244,6 @@ class LBFGameEnv(MultiGridEnv):
             self.trans = {
                 actions.STAY: {
                     "possible_action": [actions.STAY],
-                    "prob": [1.0],
-                },
-                actions.LOAD: {
-                    "possible_action": [actions.LOAD],
                     "prob": [1.0],
                 },
                 actions.LEFT: {
@@ -295,6 +295,11 @@ class LBFGameEnv(MultiGridEnv):
                     ],
                 },
             }
+            if actions == LBFActions:
+                self.trans[actions.LOAD] = {
+                    "possible_action": [actions.LOAD],
+                    "prob": [1.0],
+                }
 
         def get_stochastic_action(self, action: int, np_random: Generator) -> int:
             # handles environment randomness as it affects the agent's actual movement
@@ -324,6 +329,7 @@ class LBFGameEnv(MultiGridEnv):
         observe_agent_levels: bool = True,
         state_type: Literal["original", "multigrid_flattened"] = "original",
         obs_type: Literal["original", "multigrid_flattened"] = "original",
+        goal_type: Literal["simultaneous_arrival"] | None = None,
         observe_other_agents: bool = True,
         chosen_move_prob: float = 1.0,
         highlight_visible_cells: bool = False,
@@ -337,7 +343,8 @@ class LBFGameEnv(MultiGridEnv):
             "normalize_fruit_reward": True,
         },
         num_agents_fruit_obs: int | None = None,
-    ):
+        action_set: Literal["LBFActions", "NavigationActions"] = "LBFActions",
+    ) -> None:
         """
         Initialize the LBFGameEnv.
 
@@ -363,11 +370,13 @@ class LBFGameEnv(MultiGridEnv):
         obs_type: Literal["original", "multigrid"] = "original"
             format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
         """
+
         self.num_agents = n_agents
         self.reward_config = self.RewardConfig(
             num_agents=self.num_agents, **reward_config
         )
         self.num_agents_fruit_obs = num_agents_fruit_obs
+        self.goal_type = goal_type
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
@@ -460,13 +469,14 @@ class LBFGameEnv(MultiGridEnv):
             world=self.world,
             see_through_walls=False,
             agents=agents,
-            actions_set=self.action_set,
+            actions_set=self.avail_action_sets[action_set],
             render_mode="rgb_array",
             obs_type="symmetrical",
             agent_view_size=agent_view_size,
             highlight_visible_cells=highlight_visible_cells,
         )
 
+        # use same approach as the gymma wrapper in EPYMARL
         # from the learning agent's perspective, all actions are always available
         avail_actions_dict = {action.name: True for action in self.actions}
         self._avail_actions = [
@@ -953,7 +963,7 @@ class LBFGameEnv(MultiGridEnv):
                 action = self.actions.STAY
 
             # setup for env transition
-            if action == self.actions.LOAD:
+            if actions == LBFActions and action == self.actions.LOAD:
                 loading_agents.add(agent)
 
             elif action in [
@@ -1008,7 +1018,7 @@ class LBFGameEnv(MultiGridEnv):
                 # Move agent
                 agent.move(next_pos=next_pos, grid=self.grid, init_grid=self.init_grid)
 
-    def _goal_reward_logic(self, agent, next_pos) -> None:
+    def _goal_reward_logic(self, agent: LBFAgent, next_pos: Position) -> None:
         # only enable goal rewards + penalties if all fruit has been collected in the room
         if (
             self.room_has_goals[self.current_task]
@@ -1107,7 +1117,7 @@ class LBFGameEnv(MultiGridEnv):
 
     def _get_next_pos(self, agent: LBFAgent, action: int) -> tuple[int, int]:
         match action:
-            case self.actions.STAY | self.actions.LOAD:
+            case self.actions.STAY:
                 next_pos = agent.pos
 
             case self.actions.LEFT:
@@ -1122,8 +1132,12 @@ class LBFGameEnv(MultiGridEnv):
             case self.actions.DOWN:
                 next_pos = agent.south_pos(in_tuple=True)
 
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+            # make sure this is checked last to support LBFActions and NavigationActions
+            case self.actions.LOAD:
+                next_pos = agent.pos
+
+            # case _:
+            #     raise ValueError(f"Invalid action: {action}")
 
         # convert from np ints to ints
         if isinstance(next_pos[0], np.int_):
@@ -1548,14 +1562,12 @@ class LBFGameEnv(MultiGridEnv):
 
         return valid
 
-    def _check_valid_action(self, agent: LBFAgent, action: LBFActions) -> bool:
+    def _check_valid_action(
+        self, agent: LBFAgent, action: LBFActions | NavigationActions
+    ) -> bool:
         match action:
-            # non-moving actions
             case self.actions.STAY:
                 return True
-
-            case self.actions.LOAD:
-                return self._adjacent_fruit(agent) > 0
 
             # ensure agents do not go beyond the env's border
             # only matters if there is no wall around the border
@@ -1570,6 +1582,10 @@ class LBFGameEnv(MultiGridEnv):
 
             case self.actions.RIGHT:
                 return agent.pos[1] < self.width - 1
+
+            # make sure this is checked last to support LBFActions and NavigationActions
+            case self.actions.LOAD:
+                return self._adjacent_fruit(agent) > 0
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
         env_agent_action_space = spaces.Discrete(len(self.actions))
@@ -1656,7 +1672,7 @@ class LBFGameEnv(MultiGridEnv):
         return img
 
     @property
-    def t_render(self):
+    def t_render(self) -> str:
         return self._t_render
 
     @t_render.setter
@@ -1671,7 +1687,7 @@ class LBFGameEnv(MultiGridEnv):
         radius: int = 1,
         ignore_diag: bool = False,
         return_object_type: Literal["fruit", "agent"] | None = None,
-    ):
+    ) -> list[WorldObj] | NDArray:
         # neighborhood not same thing as adjacent, it's more general
         # get global coords to use
         x_min, x_max = max(row - radius, 0), min(row + radius + 1, self.width)
