@@ -120,6 +120,15 @@ class LBFActions(enum.IntEnum):
     LOAD = 5
 
 
+class LBFNavigationActions(enum.IntEnum):
+    # matches the order from original LBF action set
+    STAY = 0
+    UP = 1
+    DOWN = 2
+    LEFT = 3
+    RIGHT = 4
+
+
 class Agent(WorldObj):
     """Defines the class for an agent in the environment"""
 
@@ -541,6 +550,7 @@ class LBFAgent(Agent):
         self.level = level
 
         self.reward: float = 0.0
+        self.t_first_goal_hit: int = -1
         self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
             [[-1, 0], [1, 0], [0, -1], [0, 1]]
         )
@@ -558,6 +568,32 @@ class LBFAgent(Agent):
             view_size=view_size,
             dir_to_vec=DIR_TO_VEC,
         )
+
+    def move(
+        self,
+        next_pos: Position,
+        grid: Grid,
+        init_grid: Grid | None = None,
+        dummy_move: bool = False,
+        bg_color: str | None = None,
+        current_task: int | None = None,
+        t: int | None = None,
+    ):
+        super().move(
+            next_pos,
+            grid,
+            init_grid,
+            dummy_move,
+            bg_color,
+        )
+
+        if (
+            self.t_first_goal_hit == -1
+            and current_task is not None
+            and t is not None
+            and self.in_goal_set(current_task)
+        ):
+            self.t_first_goal_hit = t
 
     @property
     def pos(self) -> Position:
@@ -582,10 +618,15 @@ class LBFAgent(Agent):
         if pos is None:
             pos = self.pos
 
-        if np.any(np.all(pos == self.room_goals[current_room], axis=1)):
-            return True
-        else:
+        # print("Breakpoint ")
+        # __import__("ipdb").set_trace(context=5)
+
+        goal_positions = self.room_goals.get(current_room, None)
+
+        if goal_positions is None:
             return False
+        else:
+            return np.any(np.all(pos == goal_positions, axis=1))
 
     def reset(self, level: int, init_pos: tuple[int, int]) -> None:
         super().reset()
@@ -597,6 +638,7 @@ class LBFAgent(Agent):
         self.level = level
         self.init_pos = init_pos
         self.reward: float = 0.0
+        self.t_first_goal_hit = -1
 
     def encode(self, current_agent: bool = False) -> tuple[int]:
         """Encode a description of this object as a 3-tuple of integers
