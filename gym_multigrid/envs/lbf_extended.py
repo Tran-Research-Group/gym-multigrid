@@ -138,9 +138,11 @@ class Fruit(WorldObj):
             )
 
 
-class LBFGameEnv(MultiGridEnv):
+class LBFExtendedEnv(MultiGridEnv):
     """
-    Environment in which the agents have to collect fruit. Extends original LBF by supporting multiple rooms and a hierarchical representation of "tasks" in the environment. Also includes comms allocation decisions in the hierarchical version.
+    Environment in which the agents have to collect fruit. Extends original LBF by supporting:
+        - multiple rooms and a hierarchical representation of "tasks" in the environment
+        - pure navigation and mixed navigation + fruit collection tasks
     """
 
     metadata = {

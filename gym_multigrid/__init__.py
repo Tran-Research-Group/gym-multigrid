@@ -343,8 +343,8 @@ register(
 # LBF environment
 # ----------------------------------------
 register(
-    id="multigrid-lbf-v0",
-    entry_point="gym_multigrid.envs:LBFGameEnv",
+    id="multigrid-lbf-extended-v0",
+    entry_point="gym_multigrid.envs:LBFExtendedEnv",
 )
 
 register(
