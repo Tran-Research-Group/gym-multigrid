@@ -1,16 +1,18 @@
 from ast import literal_eval
 from collections import defaultdict
 from copy import copy
-from itertools import combinations
+from itertools import combinations, product
 from math import prod
 from os.path import dirname, join
 from typing import Any, Literal, Optional
 from warnings import warn
 
+import gurobipy as gp
 import numpy as np
 import pandas as pd
 import yaml
 from cv2 import INTER_CUBIC, putText, resize
+from gurobipy import GRB
 from gymnasium import spaces
 from numpy.random._generator import Generator
 from numpy.typing import NDArray
@@ -385,9 +387,17 @@ class LBFGameEnv(MultiGridEnv):
         self.num_agents_fruit_obs = num_agents_fruit_obs
         self.goal_type = goal_type
 
-        # only use for internal class logic,
+        # only use episode_limit for internal class logic,
         # do NOT use for episode truncation (use standard gymnasium wrapper for that)
         self._episode_limit = episode_limit
+
+        if self.goal_type == "simultaneous_arrival":
+            # solve for the reward scaling to ensure it is in [0, 1]
+            # TODO check scratch.py for a n example implementation of this scaling
+            # you need to solve an optimization problem to find it, which is funny :P
+            self.max_reward_simultaneous_arrival = (
+                self._get_max_reward_simultaneous_arrival()
+            )
 
         # multi-room support
         self.field_map: pd.DataFrame | None = None
@@ -508,6 +518,69 @@ class LBFGameEnv(MultiGridEnv):
         self.transition_prob = self.TransitionProbs(
             chosen_move_prob, actions=self.actions
         )
+
+    def _get_max_reward_simultaneous_arrival(self):
+        # there might be an analytical formula for this,
+        # but I don't feel like solving the problem manually to get it
+        # max_{t_i} \sum_{(i, j) \in E (pairs of agents)} |t_i - t_j|
+        # s.t. 0 \leq t_i < T_{max}
+        # this should have a binary solution where floor(n_agents / 2) agents reach at t=0 and the rest reach at T_max, but there might be edge cases where that isn't the case
+        agents = np.arange(0, self.num_agents)
+        agent_combos = list(combinations(agents, r=2))
+
+        # init the model
+        env = gp.Env()
+        env.setParam("OutputFlag", 0)
+        model = gp.Model(env=env)
+
+        # build decision vars
+        hit_times = defaultdict(int)
+
+        # absolute value is non-linear, so need to linearize with aux variables
+        # for gurobi to work
+        expr_vars = defaultdict(int)
+        # aux variable for the absolute value itself
+        abs_vars = defaultdict(int)
+
+        for i in range(self.num_agents):
+            hit_times[i] = model.addVar(
+                vtype=GRB.INTEGER,
+                lb=0,
+                ub=self._episode_limit - 1,
+                name=f"hit_time_{i}",
+            )
+
+        for i, combo in enumerate(agent_combos):
+            expr_vars[combo] = model.addVar(lb=-GRB.INFINITY, name=f"expr_var_{i}")
+            abs_vars[i] = model.addVar(name=f"abs_var_{i}")
+        model.update()
+
+        # build constraints
+        for i, combo in enumerate(agent_combos):
+            model.addConstr(
+                expr_vars[combo] == (hit_times[combo[0]] - hit_times[combo[1]])
+            )
+            model.addConstr(abs_vars[i] == gp.abs_(expr_vars[combo]))
+        model.update()
+
+        # build objective
+        obj = 0
+        for i, combo in enumerate(agent_combos):
+            obj += abs_vars[i]
+            # print(combo[0], combo[1])
+        model.setObjective(obj, GRB.MAXIMIZE)
+        model.update()
+
+        # solve
+        model.optimize()
+
+        # print("optimal objective value")
+        # print(model.ObjVal)
+        # print("largest-spread hit times")
+        # for i, time in hit_times.items():
+        #     print(i, time.X)
+
+        return model.ObjVal
 
     # grid generation
     def _load_field_map(self, map_name: str) -> pd.DataFrame:
@@ -996,79 +1069,21 @@ class LBFGameEnv(MultiGridEnv):
         room_completed = self._update_room()
 
         # check if entire project is complete
-        terminated = self._terminated
+        terminated = self._terminated(room_completed)
 
         # truncated handled by TimeLimit wrapper
         truncated = False
 
         obs: NDArray[np.int_] = self.obs
 
-        #########################
-        # do simultaneous arrival reward stuff
+        # add up cumulative rewards for this step
         reward: float = 0.0
-        # simultaneous goal arrival reward logic
+
         if self.goal_type == "simultaneous_arrival":
-            # track these separately from indivudual agent rewards, may double count some stuff by accident
-            print(self._t)
-            # terminal reward logic
-            # in addition to time, also have to
-            if self.reward_config.simultaneous_goal_reward_type == "terminal" and (
-                (self._t == self._episode_limit - 1) or terminated
-            ):
-                # reward for the agents that arrived at their goals
-                # penalty for arriving at different times
-                hit_reward = 0
-                agents_hit = set([a for a in self.agents if a.t_first_goal_hit != -1])
-                if len(agents_hit) > 0:
-                    # get all unique pairs of agents, then sum over them
-                    for agent_pair in combinations(agents_hit, r=2):
-                        # use self._episode_limit - 1 b/c agents cannot spawn on top of their goals
-                        hit_reward += (
-                            (
-                                agent_pair[0].t_first_goal_hit
-                                - agent_pair[1].t_first_goal_hit
-                            )
-                            ** 2
-                        ) / ((self._episode_limit - 1) ** 2)
+            reward += self._simultaneous_arrival_reward(terminated)
 
-                    # scale by size of agents_hit
-                    hit_reward /= len(agents_hit)
-
-                # penalty for agents that did not arrive
-                agents_not_hit = set(self.agents) - agents_hit
-                not_hit_reward = len(agents_not_hit) / len(self.agents)
-
-                # and then subtract this off the reward for this time step or whatever
-                reward = reward - (0.5 * hit_reward + 0.5 * not_hit_reward)
-
-            elif self.reward_config.simultaneous_goal_reward_type == "during_episode":
-                agents_hit = set([a for a in self.agents if a.t_first_goal_hit != -1])
-                hit_reward = 0
-                if len(agents_hit) > 0:
-                    # get the team first hit time
-                    t_team_first_goal_hit = np.min(
-                        [a.t_first_goal_hit for a in agents_hit]
-                    )
-                    # reward for agents that just hit their goal for the first time
-                    for a in self.agents:
-                        if a.t_first_goal_hit == self._t:
-                            # use self._episode_limit - 1 b/c agents cannot spawn on top of their goals
-                            hit_reward += (
-                                (a.t_first_goal_hit - t_team_first_goal_hit) ** 2
-                            ) / ((self._episode_limit - 1) ** 2)
-
-                # add the terminal penalty
-                not_hit_reward = 0
-                if self._t == self._episode_limit - 1:
-                    agents_not_hit = set(self.agents) - agents_hit
-                    not_hit_reward = len(agents_not_hit) / len(self.agents)
-
-                reward = reward - (0.5 * hit_reward + 0.5 * not_hit_reward)
-
-        #########################
-
-        # add any rewards tracked by the agent classes
         agent_rewards = float(np.sum([a.reward for a in self.agents]))
+        print("agent_rewards", agent_rewards)
         reward += agent_rewards
 
         info = self._get_info(terminated=terminated, room_completed=room_completed)
@@ -1082,6 +1097,59 @@ class LBFGameEnv(MultiGridEnv):
             truncated,
             info,
         )
+
+    def _simultaneous_arrival_reward(self, terminated: bool):
+        # get reward / penalty for simultaneous arrival
+        hit_reward: float = 0.0
+        not_hit_reward: float = 0.0
+
+        if self.reward_config.simultaneous_goal_reward_type == "terminal" and (
+            (self._t == self._episode_limit - 1) or terminated
+        ):
+            # reward for the agents that arrived at their goals
+            # penalty for arriving at different times
+            agents_hit = set([a for a in self.agents if a.t_first_goal_hit != -1])
+            if len(agents_hit) > 0:
+                # get all unique pairs of agents, then sum over them
+                agent_combos = list(combinations(agents_hit, r=2))
+                for combo in agent_combos:
+                    # use self._episode_limit - 1 b/c agents cannot spawn on top of their goals
+                    hit_reward += np.abs(
+                        combo[0].t_first_goal_hit - combo[1].t_first_goal_hit
+                    )
+
+                hit_reward /= self.max_reward_simultaneous_arrival
+
+            # terminal penalty for agents that did not arrive
+            agents_not_hit = set(self.agents) - agents_hit
+            not_hit_reward = len(agents_not_hit) / len(self.agents)
+
+        elif self.reward_config.simultaneous_goal_reward_type == "during_episode":
+            agents_hit_goal_prev = set(
+                [a for a in self.agents if 0 <= a.t_first_goal_hit < self._t]
+            )
+            agents_hit_goal_curr = set(
+                [a for a in self.agents if a.t_first_goal_hit == self._t]
+            )
+
+            # compute rewards
+            if len(agents_hit_goal_prev) > 0 and len(agents_hit_goal_curr) > 0:
+                agent_combos = list(product(agents_hit_goal_prev, agents_hit_goal_curr))
+                for combo in agent_combos:
+                    hit_reward += np.abs(
+                        combo[0].t_first_goal_hit - combo[1].t_first_goal_hit
+                    )
+            hit_reward /= self.max_reward_simultaneous_arrival
+
+            # add the terminal penalty for agents that don't hit the goals
+            agents_hit_goal_prev |= agents_hit_goal_curr
+            if self._t == self._episode_limit - 1:
+                agents_not_hit = set(self.agents) - agents_hit_goal_prev
+                not_hit_reward = len(agents_not_hit) / len(self.agents)
+
+        reward = -1 * (0.5 * hit_reward + 0.5 * not_hit_reward)
+
+        return reward
 
     def _move_agents(self, moving_agents: dict[Position, list]) -> None:
         # if two or more agents try to move to the same position they all fail and stay at their current position
@@ -1105,9 +1173,9 @@ class LBFGameEnv(MultiGridEnv):
 
     def _single_goal_reward_logic(self, agent: LBFAgent, next_pos: Position) -> None:
         # only enable goal rewards + penalties if all fruit has been collected in the room
-        if (
-            self.room_has_goals[self.current_task]
-            and self.all_room_fruit_collected[self.current_task]
+
+        if self.room_has_goals[self.current_task] and (
+            self.max_num_fruit == 0 or self.all_room_fruit_collected[self.current_task]
         ):
             # if not at goal and reach goal, get a reward
             if (not agent.in_goal_set(self.current_task)) and agent.in_goal_set(
@@ -1129,7 +1197,6 @@ class LBFGameEnv(MultiGridEnv):
             reached_room_goal: list[bool] = [
                 agent.in_goal_set(self.current_task) for agent in self.agents
             ]
-
             if (
                 all(reached_room_goal)
                 and self.all_room_fruit_collected[self.current_task]
@@ -1231,16 +1298,14 @@ class LBFGameEnv(MultiGridEnv):
             next_pos = tuple(map(int, next_pos))
         return next_pos
 
-    @property
-    def _terminated(self) -> bool:
+    def _terminated(self, room_completed: bool) -> bool:
         # Terminate the episode if all rooms have been completed
-        terminated = False
-
         # project is completed when you reach the end of the final room
         # TODO needs to be updated to handle non-sequential rooms
-        terminated = self.current_task == self.num_rooms
-
-        return terminated
+        if self.num_rooms > 1:
+            return self.current_task == self.num_rooms
+        else:
+            return room_completed
 
     def _get_info(self, terminated: bool = False, room_completed: bool = False) -> dict:
         # step info
@@ -1690,16 +1755,16 @@ class LBFGameEnv(MultiGridEnv):
             # ensure agents do not go beyond the env's border
             # only matters if there is no wall around the border
             case self.actions.UP:
-                return agent.pos[0] > 0
-
-            case self.actions.DOWN:
-                return agent.pos[0] < self.height - 1
-
-            case self.actions.LEFT:
                 return agent.pos[1] > 0
 
+            case self.actions.DOWN:
+                return agent.pos[1] < self.height - 1
+
+            case self.actions.LEFT:
+                return agent.pos[0] > 0
+
             case self.actions.RIGHT:
-                return agent.pos[1] < self.width - 1
+                return agent.pos[0] < self.width - 1
 
             # make sure this is checked last to support LBFActions and LBFNavigationActions
             case self.actions.LOAD:
