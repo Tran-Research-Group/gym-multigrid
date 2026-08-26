@@ -1083,7 +1083,7 @@ class LBFGameEnv(MultiGridEnv):
             reward += self._simultaneous_arrival_reward(terminated)
 
         agent_rewards = float(np.sum([a.reward for a in self.agents]))
-        print("agent_rewards", agent_rewards)
+        # print("agent_rewards", agent_rewards)
         reward += agent_rewards
 
         info = self._get_info(terminated=terminated, room_completed=room_completed)
