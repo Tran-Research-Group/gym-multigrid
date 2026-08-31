@@ -340,7 +340,7 @@ register(
     },
 )
 
-# LBF environment
+# communication environments
 # ----------------------------------------
 register(
     id="multigrid-lbf-extended-v0",
@@ -351,4 +351,9 @@ register(
     id="multigrid-comms-sequence-v0",
     entry_point="gym_multigrid.envs:CommsSequenceEnv",
     max_episode_steps=50,
+)
+
+register(
+    id="multigrid-team-navigation-v0",
+    entry_point="gym_multigrid.envs:TeamNavigationEnv",
 )

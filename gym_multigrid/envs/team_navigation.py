@@ -20,13 +20,11 @@ from numpy.typing import NDArray
 from gym_multigrid.core.agent import AlternativeNavigationActions, LBFActions, LBFAgent
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Goal, Wall, WorldObj
-from gym_multigrid.core.world import LBFWorld, World
+from gym_multigrid.core.world import TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
     FontConfig,
-    fill_coords,
-    point_in_circle,
 )
 
 RENDER_TEXT_CONFIG = {
@@ -40,109 +38,11 @@ RENDER_TEXT_CONFIG = {
 HEADER_TEXT_CONFIG = RENDER_TEXT_CONFIG | {"thickness": 2}
 
 
-class Fruit(WorldObj):
-    def __init__(
-        self,
-        world: World,
-        level: int,
-        color: str = "green",
-    ) -> None:
-        self.level = level
-
-        self.neighbor_pos_offsets: NDArray[np.int_] = np.array(
-            [[-1, 0], [1, 0], [0, -1], [0, 1]]
-        )
-        self.neighbor_pos: NDArray[np.int_] = np.zeros((4, 2), dtype=np.int_)
-
-        super().__init__(
-            world=world,
-            color=color,
-            type="fruit",
-        )
-
-    @property
-    def pos(self) -> Position:
-        return (self._pos[0], self._pos[1])
-
-    @pos.setter
-    def pos(self, pos: Position) -> None:
-        self._pos = pos
-        if pos is not None:
-            self.neighbor_pos = pos + self.neighbor_pos_offsets
-
-    def can_pickup(self) -> bool:
-        return True
-
-    def check_load_condition(self, grid: Grid, loading_agents: list[LBFAgent]) -> bool:
-        """
-        Check if the fruit was collected by its surrounding agents.
-
-        Parameters
-        ----------
-        grid : Grid
-            The grid of the environment.
-        loading_agents : list[LBFAgent]
-            list of all agents taking the load action in the env
-
-        Returns
-        -------
-        curr_fruit_loading_agents: list[LBFAgent]
-            agents that attempted to load this fruit
-        load_success : bool
-            True if the fruit was loaded by the agents in curr_fruit_loading_agents
-        tot_agent_levels: int
-            total level of the agents that contributed to loading this fruit
-        """
-        tot_agent_levels: int = 0
-        curr_fruit_loading_agents: list[LBFAgent] = []
-
-        for neighbor_pos in self.neighbor_pos:
-            cell = grid.get(*neighbor_pos)
-            if isinstance(cell, LBFAgent) and cell in loading_agents:
-                tot_agent_levels += cell.level
-                curr_fruit_loading_agents.append(cell)
-            else:
-                pass
-
-        load_success: bool = tot_agent_levels >= self.level
-
-        return curr_fruit_loading_agents, load_success, tot_agent_levels
-
-    def render(self, img) -> None:
-        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), self.world.COLORS[self.color])
-        self._render_object_info(img, info=("level",))
-
-    def reset(self) -> None:
-        super().reset()
-        if self.pos is not None:
-            self.neighbor_pos = self.pos + self.neighbor_pos_offsets
-        else:
-            self.neighbor_pos = np.zeros((4, 2), dtype=np.int_)
-
-    def encode(self, current_agent: bool = False) -> tuple[int, ...]:
-        """Encode the a description of this object as a 3-tuple of integers"""
-        if self.world.encode_dim == 3:
-            return (
-                self.world.OBJECT_TO_IDX[self.type],
-                self.world.COLOR_TO_IDX[self.color],
-                self.level,
-            )
-        else:
-            return (
-                self.world.OBJECT_TO_IDX[self.type],
-                self.world.COLOR_TO_IDX[self.color],
-                self.level,
-                0,
-                0,
-                0,
-            )
-
-
-class LBFExtendedEnv(MultiGridEnv):
+class TeamNavigationEnv(MultiGridEnv):
     """
-    Environment in which the agents have to collect fruit. Extends original LBF by supporting:
+    Environment in which the agents have to reach goals. Supports::
         - multiple rooms and a hierarchical representation of "tasks" in the environment
-        - pure navigation and mixed navigation + fruit collection tasks
+        - pure navigation tasks with assigned and non-assigned goals
     """
 
     metadata = {
@@ -150,25 +50,14 @@ class LBFExtendedEnv(MultiGridEnv):
         "render_fps": 4,
     }
 
-    world = LBFWorld
-    avail_action_sets = {
-        "LBFActions": LBFActions,
-        "LBFNavigationActions": AlternativeNavigationActions,
-    }
+    world = TeamNavigationWorld
+    action_set = AlternativeNavigationActions
 
     class RewardConfig:
         def __init__(
             self,
-            num_agents: int,
-            normalize_fruit_reward: bool = True,
-            failed_load_penalty: float = 0.0,
-            agent_reach_goal_mult: float = 0.5,
-            agent_leave_goal_mult: float = -0.7,
-            all_agents_reach_goal_proportion_per_agent: float = 2.0,
             simultaneous_goal_reward_type: Literal["terminal", "during_episode"]
             | None = None,
-            # move_mult: float = 0.0,
-            # max_dense_reach_goal_proportion: float,
         ) -> None:
             """
             all signs for rewarding events assume to be handled in their definition since we only use the "+=" operator in the code below for simplicity and easier design
@@ -177,69 +66,12 @@ class LBFExtendedEnv(MultiGridEnv):
             Parameters
             ----------
             num_agents : int
-            normalize_fruit_reward : bool, optional
-            failed_load_penalty : float, optional
-                value <= 0, by default 0.0
-            agent_reach_goal_mult : float, optional
-                value >= 0 for "rewards", by default 0.5
-            agent_leave_goal_mult : float, optional
-                <= 0, by default -0.7
             all_agents_reach_goal_proportion_per_agent : float, optional
                 _description_, by default 2.0
             """
-            # does NOT consider fruit loading rewards since those are based on fruit levels
-
-            # this setup worked well for 3 agents
-            # did not work for 6
-            # the gap between reach and leave may not be large enough and may get blown out
-            # movement_reward=0.0,
-            # agent_reach_goal_reward=0.9,
-            # agent_leave_goal_reward=-1.0,
-            # all_agents_at_goal_reward=10.0,
-
             self.simultaneous_goal_reward_type = simultaneous_goal_reward_type
 
-            self.normalize_fruit_reward = normalize_fruit_reward
-            self.failed_load_penalty: float = failed_load_penalty
-
-            # overall scaling for all rewards in the env
-            # use to prevent rewards from getting to large
-            # and producing too-large gradients for learning
-            self.base_goal_reward = 1.0
-
-            # individual agent rewards, do not multiply by n_agents
-
-            # reach goal serves as the base reward that all others are derived from
-            # using reward multipliers. This helps design a reward function that can work for
-            # different team sizes
-            self.agent_reach_goal_reward: float = (
-                self.base_goal_reward * agent_reach_goal_mult
-            )
-
-            self.agent_leave_goal_reward: float = (
-                self.base_goal_reward * agent_leave_goal_mult
-            )
-
-            # reward for entire team, needs to be multiplied by number of agents
-            # to work for different team sizes
-            self.all_agents_at_goal_reward: float = (
-                self.agent_reach_goal_reward
-                * all_agents_reach_goal_proportion_per_agent
-                * num_agents
-            )
-
-            # self.movement_reward: float = self.base_reward * move_mult
-
-            # max_dense_reward needs to be set small enough so agents can't just
-            # wander around to get large total reward. They would do that if the
-            # discounted summed reward from the "dense" component of R(s, a)
-            # is larger than the final reward they get from the team-level goal.
-            # It also needs to be small enough so during learning, they
-            # have an incentive get the "reach individual goal" reward.
-            # self.max_dense_reward: float = (
-            #     self.agent_reach_goal_reward * max_dense_reach_goal_proportion
-            # )
-            # self.max_dense_reward_per_agent: float = self.max_dense_reward / num_agents
+            self.base_hit_reward = 1.0
 
     class TransitionProbs:
         def __init__(
@@ -331,64 +163,22 @@ class LBFExtendedEnv(MultiGridEnv):
         height: Optional[int] = 10,
         n_agents: int = 4,
         sight: int = 2,
-        min_agent_level: int = 1,
-        max_agent_level: int = 2,
-        max_num_fruit: int = 2,
-        max_num_fruit_per_room: Optional[int] = None,
-        min_fruit_level: int = 1,
-        max_fruit_level: Optional[int] = None,
-        force_coop: bool = False,
-        observe_agent_levels: bool = True,
-        state_type: Literal["original", "multigrid_flattened"] = "original",
-        obs_type: Literal["original", "multigrid_flattened"] = "original",
+        state_type: Literal["multigrid_flattened"] = "multigrid_flattened",
+        obs_type: Literal["multigrid_flattened"] = "multigrid_flattened",
         goal_type: Literal["simultaneous_arrival"] | None = None,
         observe_other_agents: bool = True,
         chosen_move_prob: float = 1.0,
         highlight_visible_cells: bool = False,
-        asymmetric_fruit_obs: Literal["smacv2", "different_sensors"] | None = None,
-        smacv2_fruit_obs_prob: float = 1.0,
         reward_config: dict[str, float | bool] = {
-            "agent_reach_goal_mult": 0.5,
-            "agent_leave_goal_mult": -0.7,
-            "all_agents_reach_goal_proportion_per_agent": 2.0,
-            "failed_load_penalty": 0.0,
-            "normalize_fruit_reward": True,
             "simultaneous_goal_reward_type": None,
         },
-        num_agents_fruit_obs: int | None = None,
-        action_set: Literal["LBFActions", "LBFNavigationActions"] = "LBFActions",
         episode_limit: int | None = None,
     ) -> None:
         """
-        Initialize the LBFGameEnv.
-
-        Parameters
-        ----------
-        map_name:
-            name of the map to load (yaml file)
-            if None, just 1 room w/ some width and height
-
-        size : int
-            Size of grid if square. Default 19
-        num_fruit : list[int]
-            Number of fruit of each type present in environment.
-        agents_index : list[int]
-            Colour index for each agent.
-        fruits_index : list[int]
-            Colour index for each fruit type.
-        fruits_reward : list[float]
-            Reward given for collecting each fruit type.
-        use_mdp: bool, whether to use the project MDP or not
-        state_type: Literal["original", "multigrid_flattened"] = "original"
-            format for the state, orignal breaks when using Goal objects since they were not in the original LBF env
-        obs_type: Literal["original", "multigrid"] = "original"
-            format for the observation, orignal breaks when using Goal objects since they were not in the original LBF env
+        Initialize the env.
         """
         self.num_agents = n_agents
-        self.reward_config = self.RewardConfig(
-            num_agents=self.num_agents, **reward_config
-        )
-        self.num_agents_fruit_obs = num_agents_fruit_obs
+        self.reward_config = self.RewardConfig(**reward_config)
         self.goal_type = goal_type
 
         # only use episode_limit for internal class logic,
@@ -431,48 +221,17 @@ class LBFExtendedEnv(MultiGridEnv):
                 }
             }
 
-        # hierarchical model of environment project the tasks that comprise it
-        self.max_num_fruit_per_room = max_num_fruit_per_room
-
-        # initialize per-room fruit counters
-        self.num_fruit_per_room: dict[int, int] = defaultdict(int)
-
-        # determine max number of fruit to spawn overall. If a per-room limit
-        # is provided, use it to cap the total possible fruits across all rooms.
-        if max_num_fruit_per_room is not None:
-            # ensure integer multiplication
-            self.max_num_fruit = int(max_num_fruit_per_room) * int(self.num_rooms)
-        else:
-            self.max_num_fruit = max_num_fruit
-
-        self._num_fruit_spawned: int = 0
-
         # obs options for this specific env
         self.state_type = state_type
         self.env_obs_type = obs_type
         match self.env_obs_type:
             # in both cases, sight is like the "radius" of the square obs centered on the agent
             # this is here b/c multigrid and the original LBF obs handle it a little differently
-            case "original":
-                agent_view_size = sight
             case "multigrid_flattened":
                 agent_view_size = 2 * sight + 1
 
         # if observe_other_agents=False, agents cannot see the other agents and those cells replaced with empty spaces
         self.observe_other_agents = observe_other_agents
-        self.observe_agent_levels = observe_agent_levels
-
-        self.asymmetric_fruit_obs = asymmetric_fruit_obs
-        self.smacv2_fruit_obs_prob = float(smacv2_fruit_obs_prob)
-        if not 0.0 <= self.smacv2_fruit_obs_prob <= 1.0:
-            raise ValueError("fruit_obs_prob must lie in [0, 1]")
-
-        self.force_coop = force_coop
-        self.min_agent_levels = np.array([min_agent_level] * self.num_agents)
-        self.max_agent_levels = np.array([max_agent_level] * self.num_agents)
-
-        self.min_fruit_level = min_fruit_level
-        self.max_fruit_level = max_fruit_level
         self._spawn_attempts: int = 1000
 
         # initial encoding for objects in the observation
@@ -494,29 +253,22 @@ class LBFExtendedEnv(MultiGridEnv):
             world=self.world,
             see_through_walls=False,
             agents=agents,
-            actions_set=self.avail_action_sets[action_set],
+            actions_set=self.action_set,
             render_mode="rgb_array",
             obs_type="symmetrical",
             agent_view_size=agent_view_size,
             highlight_visible_cells=highlight_visible_cells,
         )
 
-        # use same approach as the gymma wrapper in EPYMARL
-        # from the learning agent's perspective, all actions are always available
-        avail_actions_dict = {action.name: True for action in self.actions}
-        self._avail_actions = [
-            list(avail_actions_dict.values()) for agent in self.agents
-        ]
+        # # use same approach as the gymma wrapper in EPYMARL
+        # # from the learning agent's perspective, all actions are always available
+        # avail_actions_dict = {action.name: True for action in self.actions}
+        # self._avail_actions = [
+        #     list(avail_actions_dict.values()) for agent in self.agents
+        # ]
 
-        # optional env config, allows deterministic design of env with a config file, does not support random spawning of objects
-        self.waypoint_pos: list[Position]
-
-        # objects that disappear when each room is completed
+        # objects that disappear when a given room is completed
         self.room_despawn_objects: dict[int, list]
-
-        # fruit tracking
-        self.num_fruit_per_room: dict[int, int]
-        self.num_fruit_collected_per_room: dict[int, int]
 
         # stochastic transition dynamics
         self.transition_prob = self.TransitionProbs(
@@ -589,7 +341,7 @@ class LBFExtendedEnv(MultiGridEnv):
     # grid generation
     def _load_field_map(self, map_name: str) -> pd.DataFrame:
         # read the room layout yaml file to compose the rooms into a cohesive env
-        map_dir = join(dirname(__file__), "maps", "lbf_extended", map_name)
+        map_dir = join(dirname(__file__), "maps", "team_navigation", map_name)
         config_path = join(map_dir, "config.yaml")
         with open(config_path) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -659,20 +411,7 @@ class LBFExtendedEnv(MultiGridEnv):
         self.init_grid: Grid = self.grid.copy()
 
         # spawn agents
-        self._spawn_agents(self.min_agent_levels, self.max_agent_levels)
-
-        # spawn fruit
-        if self.max_fruit_level is not None:
-            max_fruit_level = self.max_fruit_level * np.ones(self.max_num_fruit)
-        else:
-            # sum of 3 highest-level agents
-            agent_levels = sorted([agent.level for agent in self.agents])
-            max_fruit_level = sum(agent_levels[:3])
-
-        self._num_fruit_spawned = self._spawn_fruit(
-            min_levels=self.min_fruit_level * np.ones(self.max_num_fruit),
-            max_levels=max_fruit_level * np.ones(self.max_num_fruit),
-        )
+        self._spawn_agents()
 
         # If a start_task was provided prior to grid generation, apply adjustments
         # via helper that encapsulates the logic for starting mid-episode.
@@ -698,32 +437,20 @@ class LBFExtendedEnv(MultiGridEnv):
                     obj_type, *obj_args = cell
 
                     # spawn goals, doors, and walls first so they're in init_grid
-                    # do agents and fruit after init_grid is defined
+                    # do agents after init_grid is defined
                     if obj_type in obj_place:
                         match obj_type.lower():
                             case "a":
                                 # place agents
-                                level, agent_idx = obj_args[0], obj_args[1]
+                                agent_idx = obj_args[0]
                                 for agent in self.agents:
                                     if agent.index == agent_idx:
-                                        agent.reset(init_pos=(x, y), level=level)
+                                        agent.reset(init_pos=(x, y))
                                         self.place_agent(
                                             agent, pos=(x, y), init_grid=self.init_grid
                                         )
                                         num_spawned_objects["a"] += 1
                                         break
-
-                            case "f":
-                                # place fruit
-                                level = obj_args[0]
-
-                                obj = Fruit(
-                                    world=self.world,
-                                    level=level,
-                                )
-                                self.place_object(obj, pos=(x, y))
-                                self.num_fruit_per_room[room_idx] += 1
-                                num_spawned_objects["f"] += 1
 
                             case "g":
                                 # place goals + assign to agents
@@ -771,30 +498,13 @@ class LBFExtendedEnv(MultiGridEnv):
         """Apply adjustments to the grid and agents so the environment appears
         as if earlier rooms were already completed.
         """
-        # Despawn fruits and update counters for previous rooms
-        self._despawn_previous_room_fruits_and_objects(start_task)
+        # Despawn objects, update counters for previous rooms
+        self._despawn_previous_room_objects(start_task)
 
         # Place agents on the goals/waypoints of the most recent completed room
         self._place_agents_for_start_task(start_task)
 
-    def _despawn_previous_room_fruits_and_objects(self, start_task: int) -> None:
-        grid_enc = self.grid.encode()
-        fruit_idx = self.world.OBJECT_TO_IDX["fruit"]
-        for i in range(grid_enc.shape[0]):
-            for j in range(grid_enc.shape[1]):
-                if grid_enc[i, j, 0] == fruit_idx:
-                    room_idx = self._get_object_room((i, j))
-                    if room_idx < start_task:
-                        obj = self.grid.get(i, j)
-                        if obj is not None:
-                            self.despawn_object(obj)
-                            if self.num_fruit_per_room.get(room_idx, 0) > 0:
-                                self.num_fruit_per_room[room_idx] -= 1
-                            self.num_fruit_collected_per_room[room_idx] = (
-                                self.num_fruit_per_room.get(room_idx, 0)
-                            )
-                            self.all_room_fruit_collected[room_idx] = True
-
+    def _despawn_previous_room_objects(self, start_task: int) -> None:
         # Also despawn room-specific objects (doors, waypoints)
         for room_idx in range(start_task):
             for obj in list(self.room_despawn_objects.get(room_idx, [])):
@@ -824,7 +534,7 @@ class LBFExtendedEnv(MultiGridEnv):
                 except Exception:
                     pass
 
-                agent.reset(init_pos=goal_pos, level=agent.level)
+                agent.reset(init_pos=goal_pos)
                 self.place_agent(agent, pos=goal_pos, init_grid=self.init_grid)
 
     def _get_object_room(self, pos: Position) -> int:
@@ -838,8 +548,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
     def _spawn_agents(
         self,
-        min_agent_levels: NDArray,
-        max_agent_levels: NDArray,
     ) -> None:
 
         num_spawned_agents = 0
@@ -849,14 +557,7 @@ class LBFExtendedEnv(MultiGridEnv):
             num_spawned_agents = self._parse_field_map(obj_place=["a"])["a"]
 
         if num_spawned_agents < self.num_agents:
-            # permute agent levels
-            agent_permutation = self.np_random.permutation(self.num_agents)
-            min_agent_levels = min_agent_levels[agent_permutation]
-            max_agent_levels = max_agent_levels[agent_permutation]
-
-            for agent, min_agent_level, max_agent_level in zip(
-                self.agents, min_agent_levels, max_agent_levels
-            ):
+            for agent in self.agents:
                 attempts = 0
                 while attempts < self._spawn_attempts:
                     # make sure the agents spawn in the room associated w/ the current task
@@ -869,108 +570,16 @@ class LBFExtendedEnv(MultiGridEnv):
                     )
 
                     if self._check_valid_pos(pos, spawn=True):
-                        level = self.np_random.integers(
-                            min_agent_level, max_agent_level + 1
-                        )
-                        agent.reset(init_pos=pos, level=level)
+                        agent.reset(init_pos=pos)
                         self.place_agent(agent, pos=pos, init_grid=self.init_grid)
                         break
 
                     attempts += 1
 
-    def _spawn_fruit(
-        self,
-        min_levels: NDArray,
-        max_levels: NDArray,
-    ) -> int:
-        """
-        Returns
-        -------
-        int
-            number of fruit spawned in the environment, may be less than max_num_fruit
-        """
-        num_spawned_fruit = 0
-
-        if self.field_map is not None:
-            # parse field map to spawn any agents defined there
-            num_manually_placed_fruit = self._parse_field_map(obj_place=["f"])["f"]
-
-            # if any manually placed fruit, skip rest of random fruit placement logic
-            if num_manually_placed_fruit > 0:
-                num_spawned_fruit = num_manually_placed_fruit
-                self.max_num_fruit = num_manually_placed_fruit
-                return num_spawned_fruit
-
-        if num_spawned_fruit < self.max_num_fruit:
-            attempts = 0
-            min_levels = max_levels if self.force_coop else min_levels
-
-            # permute fruit levels
-            fruit_permutation = self.np_random.permutation(self.max_num_fruit)
-            min_levels = min_levels[fruit_permutation]
-            max_levels = max_levels[fruit_permutation]
-
-            while (
-                num_spawned_fruit < self.max_num_fruit
-                and attempts < self._spawn_attempts
-            ):
-                attempts += 1
-
-                # offset by 2 here to avoid avoid spawning a high-level fruit along the wall or in the corner
-                # where there may not be enough available sides for the agents to surround and load it
-                pos = (
-                    self.np_random.integers(1, self.width - 1),
-                    self.np_random.integers(1, self.height - 1),
-                )
-
-                # check if any fruit in the neighborhood
-                radius_obs = self._get_neighborhood(*pos, radius=1)[:, :, 0]
-                plus_obs = self._get_neighborhood(*pos, radius=2, ignore_diag=True)[
-                    :, 0
-                ]
-
-                # ensure the per-room fruit limit is not exceeded (if specified)
-                room_idx = self._get_object_room(pos)
-                if (self.max_num_fruit_per_room is not None) and (
-                    self.num_fruit_per_room.get(room_idx, 0)
-                    >= self.max_num_fruit_per_room
-                ):
-                    continue
-
-                # fruit cannot spawn if:
-                # next to a wall (helps prevent generation of un-solvable tasks, e.g. level 4 fruit w/ 2 sides blocked by a wall and only level 1 agents available)
-                # next to or near another fruit (helps prevent generation of un-solvable tasks, helps space out the fruit)
-                # on a space another object already occupies (prevent spawning on goals, walls, agents, etc.)
-                grid_enc = self.grid.encode()
-                if (
-                    np.any(radius_obs == self.world.OBJECT_TO_IDX["wall"])
-                    or np.any(radius_obs == self.world.OBJECT_TO_IDX["fruit"])
-                    or np.any(plus_obs == self.world.OBJECT_TO_IDX["fruit"])
-                    or (grid_enc[*pos, 0] != self.world.OBJECT_TO_IDX["empty"])
-                ):
-                    continue
-
-                self.place_object(
-                    Fruit(
-                        world=self.world,
-                        level=self.np_random.integers(
-                            min_levels[num_spawned_fruit],
-                            max_levels[num_spawned_fruit] + 1,
-                        ),
-                    ),
-                    pos=pos,
-                )
-
-                # update room counters
-                self.num_fruit_per_room[room_idx] += 1
-                num_spawned_fruit += 1
-
-            return num_spawned_fruit
-
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
     ) -> tuple[NDArray[np.int_], dict[str, Any]]:
-        # despawn any agents or fruit from the previous episode
+        # despawn any agents from the previous episode
         self._reset_gym(seed=seed)
 
         # used to render actions
@@ -979,21 +588,9 @@ class LBFExtendedEnv(MultiGridEnv):
 
         self._t = 0
 
-        self._fruit_obs_state: dict[tuple[int, int], dict[str, Any]] = defaultdict(list)
-
-        # reset fruit tracking
-        self.num_fruit_per_room: dict[int, int] = defaultdict(int)
-        self.num_fruit_collected_per_room = {
-            room_idx: 0 for room_idx in range(self.num_rooms)
-        }
-        self.all_room_fruit_collected = [False] * self.num_rooms
-
         # current room / task
         if options is not None and "hl_start_state" in options:
             self.current_task = options["hl_start_state"]
-
-        for room_idx in range(self.current_task):
-            self.all_room_fruit_collected[room_idx] = True
 
         # generate new env layout
         self._gen_grid(self.width, self.height, start_task=self.current_task)
@@ -1035,7 +632,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
         actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
         moving_agents = defaultdict(list)
-        loading_agents = set()
 
         # check if actions are valid, replace with STAY if not valid
         for agent, action in zip(self.agents, actions):
@@ -1050,10 +646,6 @@ class LBFExtendedEnv(MultiGridEnv):
             if action not in valid_actions:
                 action = self.actions.STAY
 
-            # setup for env transition
-            if actions == LBFActions and action == self.actions.LOAD:
-                loading_agents.add(agent)
-
             elif action in [
                 self.actions.UP,
                 self.actions.DOWN,
@@ -1065,9 +657,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
         # move agents
         self._move_agents(moving_agents)
-
-        # process the loadings
-        self._load_fruit(loading_agents)
 
         # update waypoints
         room_completed = self._update_room()
@@ -1163,9 +752,6 @@ class LBFExtendedEnv(MultiGridEnv):
                 # do movements for non colliding players
                 agent = agents[0]
 
-                # run goal logic if there are goals in the current room
-                self._single_goal_reward_logic(agent, next_pos)
-
                 # Move agent
                 agent.move(
                     next_pos=next_pos,
@@ -1175,49 +761,22 @@ class LBFExtendedEnv(MultiGridEnv):
                     t=copy(self._t),
                 )
 
-    def _single_goal_reward_logic(self, agent: LBFAgent, next_pos: Position) -> None:
-        # only enable goal rewards + penalties if all fruit has been collected in the room
-
-        if self.room_has_goals[self.current_task] and (
-            self.max_num_fruit == 0 or self.all_room_fruit_collected[self.current_task]
-        ):
-            # if not at goal and reach goal, get a reward
-            if (not agent.in_goal_set(self.current_task)) and agent.in_goal_set(
-                self.current_task, pos=next_pos
-            ):
-                agent.reward += self.reward_config.agent_reach_goal_reward
-
-            # if agent at goal and next pos is not a goal, get penalty
-            if agent.in_goal_set(self.current_task) and not agent.in_goal_set(
-                self.current_task, pos=next_pos
-            ):
-                agent.reward += self.reward_config.agent_leave_goal_reward
+        # get a reward if all agents hit at the current time (the "real" task we want them to solve)
+        if all([a.t_first_goal_hit == self._t for a in self.agents]):
+            for agent in self.agents:
+                agent.reward += self.reward_config.base_hit_reward / self.num_agents
 
     def _update_room(self) -> bool:
         room_completed = False
 
-        # if there are goals in the room, reaching goals after collecting all fruit completes this room
-        if self.room_has_goals[self.current_task]:
-            reached_room_goal: list[bool] = [
-                agent.in_goal_set(self.current_task) for agent in self.agents
-            ]
-            if (
-                all(reached_room_goal)
-                and self.all_room_fruit_collected[self.current_task]
-            ):
-                # print(
-                #     f"All agents reached goals for room {self.current_task}. Moving to next room."
-                # )
-                for obj in self.room_despawn_objects[self.current_task]:
-                    self.despawn_object(obj)
-
-                # move on to the next room if it exists
-                room_completed = True
-                if self.num_rooms > 1:
-                    self.current_task += 1
-
-        # otherwise collecting all fruit completes this room
-        elif self.all_room_fruit_collected[self.current_task]:
+        # if there are goals in the room, reaching goals completes this room
+        reached_room_goal: list[bool] = [
+            agent.in_goal_set(self.current_task) for agent in self.agents
+        ]
+        if all(reached_room_goal):
+            # print(
+            #     f"All agents reached goals for room {self.current_task}. Moving to next room."
+            # )
             for obj in self.room_despawn_objects[self.current_task]:
                 self.despawn_object(obj)
 
@@ -1227,51 +786,6 @@ class LBFExtendedEnv(MultiGridEnv):
                 self.current_task += 1
 
         return room_completed
-
-    def _load_fruit(self, loading_agents: set) -> None:
-        loading_agents_tmp = loading_agents.copy()
-
-        while loading_agents_tmp:
-            agent = loading_agents_tmp.pop()
-            for neighbor_pos in agent.neighbor_pos:
-                cell = self.grid.get(*neighbor_pos)
-                if isinstance(cell, Fruit):
-                    curr_fruit_loading_agents, load_success, tot_agent_levels = (
-                        cell.check_load_condition(self.grid, list(loading_agents))
-                    )
-
-                    if load_success:
-                        fruit_level = cell.level
-                        # the fruit was loaded and each player that helped load scores points
-                        for a in curr_fruit_loading_agents:
-                            a.reward += float(a.level * fruit_level)
-
-                            if self.reward_config.normalize_fruit_reward:
-                                a.reward = a.reward / float(
-                                    tot_agent_levels * self._num_fruit_spawned
-                                )
-
-                        # despawn the fruit from the env
-                        self.grid.set(*cell.pos, None)
-                        cell.pos = np.array([-1, -1])
-                        self.num_fruit_collected_per_room[self.current_task] += 1
-
-                    else:
-                        for a in curr_fruit_loading_agents:
-                            a.reward += self.reward_config.failed_load_penalty
-
-                    # remove these agents so they are not checked again
-                    loading_agents_tmp -= set(curr_fruit_loading_agents)
-
-                    # print(
-                    #     f"Agents {[agent.index for agent in adj_agents]} with levels {adj_agent_levels} collected fruit at {fruit_pos} with level {fruit_level}"
-                    # )
-
-        if (
-            self.num_fruit_collected_per_room[self.current_task]
-            == self.num_fruit_per_room[self.current_task]
-        ):
-            self.all_room_fruit_collected[self.current_task] = True
 
     def _get_next_pos(self, agent: LBFAgent, action: int) -> tuple[int, int]:
         match action:
@@ -1289,10 +803,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
             case self.actions.DOWN:
                 next_pos = agent.south_pos(in_tuple=True)
-
-            # make sure this is checked last to support LBFActions and LBFNavigationActions
-            case self.actions.LOAD:
-                next_pos = agent.pos
 
             # case _:
             #     raise ValueError(f"Invalid action: {action}")
@@ -1331,13 +841,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
         # use multigrid's basic state for now, come back to this later
         match self.state_type:
-            case "original":
-                # reproduce the original LBF "state" by concatenating all agent obs into a long vector
-                # NOTE: technically not a "state" from an RL theory perspective since
-                # there may be info not observed by any agent given their limited obs range
-                obs = self.obs
-                state = np.concatenate(obs)
-
             case "multigrid_flattened":
                 # NOTE: compared to original, currently does NOT have the coordinates of other objects in the ego agent's frame, so that could reduce training performance
                 state = self.grid.encode()
@@ -1361,9 +864,6 @@ class LBFExtendedEnv(MultiGridEnv):
         """standard function to interface with EPyMARL training loop,
         returns the flattened size of the global state."""
         match self.state_type:
-            case "original":
-                state_size: int = self._get_obs_size() * self.num_agents
-
             case "multigrid_flattened":
                 state_size = prod(self.state.shape)
 
@@ -1386,17 +886,9 @@ class LBFExtendedEnv(MultiGridEnv):
         # return an obs of size (num_agents, num_obs_features)
         # use multigrid's basic obs for now, come back to this later
         match self.env_obs_type:
-            case "original":
-                # same as _make_gym_obs from original LBF
-                obs = self._get_original_obs()
-
             case "multigrid_flattened":
-                # dict where each key is (agent_idx, fruit_pos) and value is bool
-                fruit_obs_mask = self._compute_fruit_obs_decisions()
-
                 obs_list = self.gen_obs(
                     observe_other_agents=self.observe_other_agents,
-                    fruit_obs_mask=fruit_obs_mask,
                 )
 
                 for i, obs in enumerate(obs_list):
@@ -1415,205 +907,7 @@ class LBFExtendedEnv(MultiGridEnv):
 
         return obs
 
-    # original lbf's obs
-    def _get_original_obs(self) -> NDArray:
-        joint_obs = np.vstack(
-            [self._get_original_agent_obs(agent) for agent in self.agents]
-        )
-
-        """
-            # not using this, low priority to implement
-            # if self._grid_observation:
-            #     layers = self._make_global_grid_arrays()
-            #     agents_bounds = [
-            #         self._get_agent_grid_bounds(*player.position) for player in self.players
-            #     ]
-            #     nobs = tuple(
-            #         [
-            #             layers[:, start_x:end_x, start_y:end_y]
-            #             for start_x, end_x, start_y, end_y in agents_bounds
-            #         ]
-            #     )
-            # else:
-            #   nobs = tuple([self._make_obs_array(obs) for obs in observations])
-        """
-
-        return joint_obs
-
-    def _get_original_agent_obs(
-        self,
-        agent: LBFAgent,
-    ) -> NDArray:
-        # get the agent's local obs
-        radius_obs = self._get_neighborhood(*agent.pos, radius=self.agent_view_size)
-
-        fruit_positions = np.vstack(
-            np.where(radius_obs[:, :, 0] == self.world.OBJECT_TO_IDX["fruit"])
-        ).T
-        fruit_mask = np.ones(len(fruit_positions), dtype=bool)
-
-        fruit_obs = self._get_original_object_obs(
-            agent_radius_obs=radius_obs,
-            obj_type="fruit",
-            num_objects=self.max_num_fruit,
-            include_mask=fruit_mask,
-        )
-
-        agent_obs = self._get_original_object_obs(
-            agent_radius_obs=radius_obs,
-            obj_type="agent",
-            num_objects=self.num_agents,
-            ego_agent=agent,
-        )
-
-        obs = np.concatenate((fruit_obs, agent_obs)).flatten()
-
-        return obs
-
-    def _get_original_object_obs(
-        self,
-        agent_radius_obs: NDArray,
-        obj_type: Literal["agent", "fruit"],
-        num_objects: int,
-        ego_agent: Optional[LBFAgent] = None,
-        include_mask: Optional[NDArray[np.bool_]] = None,
-    ) -> NDArray:
-        obj_obs = np.repeat(self.init_object_obs, repeats=num_objects, axis=0)
-
-        obj_positions = np.vstack(
-            np.where(agent_radius_obs[:, :, 0] == self.world.OBJECT_TO_IDX[obj_type])
-        ).T
-
-        # ego agent is first in its observations of the agents
-        if ego_agent is not None:
-            # ego agent's position in its local frame
-            y, x = self._transform_to_neighborhood_original(
-                origin=ego_agent.pos, sight=self.agent_view_size, pos=ego_agent.pos
-            )
-            obj_obs[0, :] = np.array([y, x, ego_agent.level])
-
-            # remove ego_agent to avoid double counting
-            rows_remove = np.argwhere(np.all(obj_positions == np.array([y, x]), axis=1))
-            obj_positions = np.delete(obj_positions, rows_remove, axis=0)
-
-        if include_mask is None:
-            include_mask = np.ones(len(obj_positions), dtype=bool)
-
-        for i, (y, x) in enumerate(obj_positions):
-            if not include_mask[i]:
-                continue
-            level = agent_radius_obs[y, x, 2]
-            obj_obs[i, :] = np.array([y, x, level])
-
-        # remove agent levels from the obs
-        if (not self.observe_agent_levels) and (obj_type == "agent"):
-            obj_obs = obj_obs[:, 0:2]
-
-        return obj_obs
-
-    # updated obs
-    def _compute_fruit_obs_decisions(
-        self,
-    ) -> dict[tuple[int, tuple[int, int]], bool] | None:
-        match self.asymmetric_fruit_obs:
-            case None:
-                return None
-            case "smacv2":
-                return self._fruit_obs_smacv2()
-            case "different_sensors":
-                return self._fruit_obs_different_sensors()
-
-    def _fruit_obs_smacv2(
-        self,
-    ):
-        # loop over the fruit positions and check if each agent can view it
-        fruit_positions = [
-            obj.pos
-            for obj in self.grid.grid
-            if hasattr(obj, "type") and obj.type == "fruit"
-        ]
-
-        fruit_agents: dict[tuple[int, int], list[LBFAgent]] = defaultdict(list)
-        for pos in fruit_positions:
-            for agent in self.agents:
-                if agent.can_view(*pos, obs_type=self.obs_type):
-                    fruit_agents[pos].append(agent)
-
-        # choose which agent gets to see the fruit based on order of observation
-        # key = (fruit_pos, agent), val = visibility bool
-        # decisions: dict[tuple[int, tuple[int, int]], bool] = {}
-        for fruit_pos, agents in fruit_agents.items():
-            # pick the first agent that sees each fruit in an episode
-            if len(self._fruit_obs_state[fruit_pos]) == 0:
-                if len(agents) == 1:
-                    self._fruit_obs_state[fruit_pos] += agents
-                else:
-                    # if multiple agents see it at the same time, pick a random agent to be the one that sees it
-                    self._fruit_obs_state[fruit_pos].append(
-                        agents[self.np_random.integers(low=0, high=len(agents))]
-                    )
-
-            # assign fruit obs to the rest of the agents that are within obs range of the fruit based on probability
-            for agent in agents:
-                if (
-                    agent not in self._fruit_obs_state[fruit_pos]
-                    and self.np_random.random() < self.smacv2_fruit_obs_prob
-                ):
-                    self._fruit_obs_state[fruit_pos].append(agent)
-
-        agent_fruit_obs_mask = {}
-        for fruit_pos in fruit_positions:
-            for agent in self._fruit_obs_state[fruit_pos]:
-                fruit_pos_in_agent_frame = agent.get_view_coords(
-                    *fruit_pos, obs_type=self.obs_type
-                )
-                agent_fruit_obs_mask |= {(agent, fruit_pos_in_agent_frame): True}
-
-        return agent_fruit_obs_mask
-
-    def _fruit_obs_different_sensors(self):
-        # for each fruit, choose N agents at random and give them the ability to see the fruits
-        # the other agents cannot see the fruits, but might be able to interact with them in other ways
-        fruit_positions = [
-            obj.pos
-            for obj in self.grid.grid
-            if hasattr(obj, "type") and obj.type == "fruit"
-        ]
-
-        agent_fruit_obs_mask = {}
-        for fruit_pos in fruit_positions:
-            if self.num_agents_fruit_obs > 0:
-                indices = self.np_random.choice(
-                    self.num_agents, size=self.num_agents_fruit_obs, replace=False
-                )
-            else:
-                indices = []
-
-            obs_agents = [self.agents[i] for i in indices]
-
-            for agent in obs_agents:
-                if len(self._fruit_obs_state[fruit_pos]) < self.num_agents_fruit_obs:
-                    self._fruit_obs_state[fruit_pos].append(agent)
-
-                fruit_pos_in_agent_frame = agent.get_view_coords(
-                    *fruit_pos, obs_type=self.obs_type
-                )
-                agent_fruit_obs_mask |= {(agent, fruit_pos_in_agent_frame): True}
-
-        return agent_fruit_obs_mask
-
-    def _transform_to_neighborhood_original(
-        self, center: tuple[int, int], sight: int, pos: tuple[int, int]
-    ) -> tuple[int, int]:
-        """
-        # this matches the original lbf's implementation, but
-        # I don't get the min(sight, center) thing
-        """
-        return (
-            pos[0] - center[0] + min(sight, center[0]),
-            pos[1] - center[1] + min(sight, center[1]),
-        )
-
+    # obs helpers
     def _get_first_hit_time_obs(self, agent_idx: int):
         if self.agents[agent_idx].t_first_goal_hit > -1:
             first_hit_time_obs = np.array(
@@ -1627,8 +921,6 @@ class LBFExtendedEnv(MultiGridEnv):
     def _get_obs_size(self) -> int:
         """standard function to interface with EPyMARL training loop, returns the flattened size of a single agent's observation."""
         match self.env_obs_type:
-            case "original":
-                obs_size: int = self.observation_space.shape[1]
             case "multigrid_flattened":
                 obs_size: int = self.observation_space.shape[1]
 
@@ -1643,65 +935,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
     def _set_observation_space(self) -> spaces.Space:
         match self.env_obs_type:
-            case "original":
-                # get obs space for a single agent
-                agent_levels = sorted(self.max_agent_levels)
-                max_fruit_level = (
-                    self.max_fruit_level
-                    if self.max_fruit_level is not None
-                    else sum(agent_levels[:3])
-                )
-                max_pos = (self.height - 1, self.width - 1)
-
-                # fruit obs bounds
-                max_fruit_obs_single = np.array([[*max_pos, max_fruit_level]])
-
-                min_fruit_obs = np.repeat(
-                    self.init_object_obs, repeats=self.max_num_fruit, axis=0
-                ).flatten()
-                max_fruit_obs = np.repeat(
-                    max_fruit_obs_single,
-                    repeats=self.max_num_fruit,
-                    axis=0,
-                ).flatten()
-
-                # agent obs bounds
-                min_agent_obs_single = self.init_object_obs
-                max_agent_obs_single = np.array([[*max_pos, max(agent_levels)]])
-
-                if not self.observe_agent_levels:
-                    min_agent_obs_single = min_agent_obs_single[:, 0:2]
-                    max_agent_obs_single = max_agent_obs_single[:, 0:2]
-
-                min_agent_obs = np.repeat(
-                    min_agent_obs_single, repeats=self.num_agents, axis=0
-                ).flatten()
-                max_agent_obs = np.repeat(
-                    max_agent_obs_single,
-                    repeats=self.num_agents,
-                    axis=0,
-                ).flatten()
-
-                # min and max total obs (single agent)
-                min_obs_single = np.concat([min_fruit_obs, min_agent_obs]).reshape(
-                    1, -1
-                )
-                max_obs_single = np.concat([max_fruit_obs, max_agent_obs]).reshape(
-                    1, -1
-                )
-
-                # following original env
-                # team_obs_space = spaces.Tuple(
-                #     tuple([obs_space] * len(self.agents))
-                # )
-
-                # get joint obs space for the team
-                team_obs_space = spaces.Box(
-                    low=np.repeat(min_obs_single, repeats=self.num_agents, axis=0),
-                    high=np.repeat(max_obs_single, repeats=self.num_agents, axis=0),
-                    dtype=np.int_,
-                )
-
             case "multigrid_flattened":
                 # agent obs is a square with radius of self.view_size centered on the agent
                 team_obs_space = spaces.Box(
@@ -1729,7 +962,25 @@ class LBFExtendedEnv(MultiGridEnv):
         # available actions
         # based on the MAIC paper's implementation of LBF with some minor cleanup
         # https://github.com/mansicer/MAIC/blob/main/src/envs/lbforaging/foraging.py
-        return self._avail_actions
+        _avail_actions_team = []
+        for agent in self.agents:
+            # prevent agents from moving if they are in their goal state
+            if agent.in_goal_set(self.current_task):
+                avail_actions_dict = {
+                    action.name: False
+                    for action in self.actions
+                    if action.name != ["STAY"]
+                }
+                avail_actions_dict["STAY"] = True
+            else:
+                # otherwise agents can take any action
+                avail_actions_dict = {action.name: True for action in self.actions}
+
+            _avail_actions_team.append(list(avail_actions_dict.values()))
+        print(_avail_actions_team)
+        print("Breakpoint ")
+        __import__("ipdb").set_trace(context=5)
+        return _avail_actions_team
 
     def _get_valid_actions(self, agent: LBFAgent) -> list[int]:
         # handle actions that cause the agent to collide w/ a non-overlappable objects
@@ -1739,10 +990,7 @@ class LBFExtendedEnv(MultiGridEnv):
             next_pos = self._get_next_pos(agent, action.value)
 
             if self._check_valid_action(agent, action):
-                if action.name in [
-                    "STAY",
-                    "LOAD",
-                ]:
+                if action.name in ["STAY"]:
                     valid.append(action.value)
                 elif self._check_valid_pos(next_pos):
                     valid.append(action.value)
@@ -1769,10 +1017,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
             case self.actions.RIGHT:
                 return agent.pos[0] < self.width - 1
-
-            # make sure this is checked last to support LBFActions and LBFNavigationActions
-            case self.actions.LOAD:
-                return self._adjacent_fruit(agent) > 0
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
         env_agent_action_space = spaces.Discrete(len(self.actions))
@@ -1824,20 +1068,6 @@ class LBFExtendedEnv(MultiGridEnv):
             y_text += line_height
             putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
 
-        # print visibility of the fruit by the agents
-        y_text += line_height
-        y_text += line_height
-        fruit_obs_header = "Fruit : Obs. Agents"
-        putText(info_img, fruit_obs_header, (x_text, y_text), **HEADER_TEXT_CONFIG)
-
-        for i, (k, v) in enumerate(self._fruit_obs_state.items()):
-            agents = [a.index for a in v]
-            agents.sort()
-            text = f"{int(k[0]), int(k[1])} : {agents}"
-
-            y_text += line_height
-            putText(info_img, text, (x_text, y_text), **RENDER_TEXT_CONFIG)
-
         # append info image to the right of env image
         img = np.concatenate([img, info_img], axis=1)
 
@@ -1873,7 +1103,7 @@ class LBFExtendedEnv(MultiGridEnv):
         col: int,
         radius: int = 1,
         ignore_diag: bool = False,
-        return_object_type: Literal["fruit", "agent"] | None = None,
+        return_object_type: Literal["agent"] | None = None,
     ) -> list[WorldObj] | NDArray:
         # neighborhood not same thing as adjacent, it's more general
         # get global coords to use
@@ -1902,25 +1132,6 @@ class LBFExtendedEnv(MultiGridEnv):
 
         # get object encodings in a square centered on (row, col)
         return grid[x_min:x_max, y_min:y_max, :]
-
-    def _adjacent_fruit(self, agent: LBFAgent) -> bool:
-        """
-        original logic for adjacent_fruit takes (x, y) as input and tells you the sum around it. Fruit encoded as a 1 in original lbf, so the logic below equivalent to "if any positions around me have a fruit in them, I can take the load action"
-
-        Parameters
-        ----------
-        agent : LBFAgent
-
-        Returns
-        -------
-        bool: true if agent is next to a piece of fruit
-        """
-        fruit_neighbor: list[bool] = [False] * len(agent.neighbor_pos)
-        for i, neighbor_pos in enumerate(agent.neighbor_pos):
-            if isinstance(self.grid.get(*neighbor_pos), Fruit):
-                fruit_neighbor[i] = True
-
-        return any(fruit_neighbor)
 
     def _check_valid_pos(self, pos: tuple[int, int], spawn: bool = False) -> bool:
 

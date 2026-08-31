@@ -1,13 +1,12 @@
 import numpy as np
-from numpy.typing import NDArray
-from pydantic import Field, dataclasses
-
 from gym_multigrid.core.constants import (
     ACCESSIBLE_COLORS,
     COLORS,
     CTF_COLORS,
     LABYRINTH_COLORS,
 )
+from numpy.typing import NDArray
+from pydantic import Field, dataclasses
 
 
 @dataclasses.dataclass(config={"arbitrary_types_allowed": True})
@@ -86,6 +85,20 @@ LBFWorld = World(
         "agent": 4,
     },
 )
+
+
+TeamNavigationWorld = World(
+    encode_dim=3,
+    normalize_obs=1,
+    COLORS=ACCESSIBLE_COLORS,
+    OBJECT_TO_IDX={
+        "empty": 0,
+        "wall": 1,
+        "goal": 2,
+        "agent": 3,
+    },
+)
+
 
 CollectWorld = World(
     encode_dim=3,

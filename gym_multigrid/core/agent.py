@@ -120,7 +120,7 @@ class LBFActions(enum.IntEnum):
     LOAD = 5
 
 
-class LBFNavigationActions(enum.IntEnum):
+class AlternativeNavigationActions(enum.IntEnum):
     # matches the order from original LBF action set
     STAY = 0
     UP = 1
@@ -542,7 +542,7 @@ class LBFAgent(Agent):
         view_size: Optional[int] = None,
         init_pos: Optional[tuple[int, int]] = None,
         init_grid: Optional[Grid] = None,
-        level: Optional[int] = None,
+        level: int = 1,
     ) -> None:
 
         self.init_pos = init_pos
@@ -618,9 +618,6 @@ class LBFAgent(Agent):
         if pos is None:
             pos = self.pos
 
-        # print("Breakpoint ")
-        # __import__("ipdb").set_trace(context=5)
-
         goal_positions = self.room_goals.get(current_room, None)
 
         if goal_positions is None:
@@ -628,7 +625,7 @@ class LBFAgent(Agent):
         else:
             return np.any(np.all(pos == goal_positions, axis=1))
 
-    def reset(self, level: int, init_pos: tuple[int, int]) -> None:
+    def reset(self, init_pos: tuple[int, int], level: int = 1) -> None:
         super().reset()
         if self.pos is not None:
             self.neighbor_pos = self.pos + self.neighbor_pos_offsets
@@ -662,8 +659,6 @@ class LBFAgent(Agent):
             color=self.world.COLORS[self.color],
             bg_color=self.bg_color,
         )
-
-        # TODO add a feature to render if the agent can view the fruit or not
 
         self._render_object_info(img, info=("index", "level"))
 
