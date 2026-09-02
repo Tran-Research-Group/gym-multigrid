@@ -766,3 +766,89 @@ class SimpleDoor(WorldObj):
 
         # Draw door handle
         fill_coords(img, point_in_circle(cx=0.75, cy=0.50, r=0.08), c)
+
+
+class Detector(WorldObj):
+    """A tile that can probabilistically detect agents within its assigned area."""
+
+    def __init__(
+        self,
+        world: World,
+        visual_detect_prob: float = 0.0,
+        radio_detect_prob: float = 0.0,
+        radio_detector_type: Literal["binary", "linear", "quadratic"] = "quadratic",
+        type: str = "detector",
+        color: str = "blue",
+    ) -> None:
+        super().__init__(world, type=type, color=color)
+        self.positions: set[Position] = set()
+        self.visual_detect_prob: float = visual_detect_prob
+        self.radio_detect_prob: float = radio_detect_prob
+        self.radio_detector_type = radio_detector_type
+
+    def can_overlap(self) -> bool:
+        return True
+
+    def render(self, img: NDArray[np.uint8]) -> None:
+        fill_coords(img, point_in_rect(0, 1, 0, 1), self.world.COLORS[self.color])
+
+    def detect_agent(
+        self,
+        comms_val: float,
+        random_generator: np.random.Generator,
+    ) -> bool:
+        visual_detect: bool = random_generator.uniform() < self.visual_detect_prob
+        radio_detect: bool
+
+        if self.radio_detector_type == "binary":
+            if comms_val > 0:
+                radio_detect = random_generator.uniform() < self.radio_detect_prob
+            else:
+                radio_detect = False
+
+        elif self.radio_detector_type == "linear":
+            radio_detect_prob_tmp = self.radio_detect_prob * comms_val
+            radio_detect = random_generator.uniform() < radio_detect_prob_tmp
+
+        elif self.radio_detector_type == "quadratic":
+            radio_detect_prob_tmp = self.radio_detect_prob * comms_val**2
+            radio_detect = random_generator.uniform() < radio_detect_prob_tmp
+
+        else:
+            raise ValueError(
+                f"Unsupported radio detector type: {self.radio_detector_type}"
+            )
+
+        return visual_detect or radio_detect
+
+
+class DetectorGroup:
+    """A collection of detector tiles that checks all of them together."""
+
+    def __init__(self, detectors: list[Detector] | None = None) -> None:
+        self.detectors: list[Detector] = detectors or []
+        self.positions = [detector.pos for detector in self.detectors]
+
+    def detect_agents(
+        self,
+        agents: list,
+        comms_val: float,
+        random_generator: np.random.Generator,
+    ) -> list:
+
+        detected_agents = []
+
+        for agent in agents:
+            if agent.pos in self.positions:
+                if agent.pos is None:
+                    continue
+
+                elif (int(agent.pos[0]), int(agent.pos[1])) not in self.positions:
+                    continue
+
+                elif self.detectors[0].detect_agent(comms_val, random_generator):
+                    # run agent detection logic
+                    # we don't care about which detector detects the agent
+                    detected_agents.append(agent)
+
+        return detected_agents

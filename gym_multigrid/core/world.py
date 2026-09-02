@@ -96,6 +96,7 @@ TeamNavigationWorld = World(
         "wall": 1,
         "goal": 2,
         "agent": 3,
+        "detector": 4,
     },
 )
 

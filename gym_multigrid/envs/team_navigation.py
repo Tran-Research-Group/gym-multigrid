@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 
 from gym_multigrid.core.agent import AlternativeNavigationActions, LBFActions, LBFAgent
 from gym_multigrid.core.grid import Grid
-from gym_multigrid.core.object import Goal, Wall, WorldObj
+from gym_multigrid.core.object import Detector, DetectorGroup, Goal, Wall, WorldObj
 from gym_multigrid.core.world import TeamNavigationWorld
 from gym_multigrid.multigrid import MultiGridEnv
 from gym_multigrid.typing_utils import Position
@@ -72,6 +72,7 @@ class TeamNavigationEnv(MultiGridEnv):
             self.simultaneous_goal_reward_type = simultaneous_goal_reward_type
 
             self.base_hit_reward = 1.0
+            self.detection_penalty = -0.025
 
     class TransitionProbs:
         def __init__(
@@ -177,6 +178,7 @@ class TeamNavigationEnv(MultiGridEnv):
         """
         Initialize the env.
         """
+        self._map_name = map_name
         self.num_agents = n_agents
         self.reward_config = self.RewardConfig(**reward_config)
         self.goal_type = goal_type
@@ -398,10 +400,11 @@ class TeamNavigationEnv(MultiGridEnv):
 
         # remove all objects in room_despawn_objects[room_idx] when that room is completed
         self.room_despawn_objects: dict[int, list] = defaultdict(list)
+        self.detector_groups: dict[int, set[Position]] = {}
 
         # place objects from field_map
         if self.field_map is not None:
-            self._parse_field_map(obj_place=["w", "g", "d"])
+            self._parse_field_map(obj_place=["w", "g", "d", "D"])
         else:
             # add outer wall to stop agents from going off the edge of the env
             self.grid.wall_rect(x=0, y=0, w=self.width, h=self.height)
@@ -424,6 +427,8 @@ class TeamNavigationEnv(MultiGridEnv):
         """
         num_spawned_objects = defaultdict(int)
 
+        detector_groups: dict[int, list] = defaultdict(list)
+
         for y, row in self.field_map.iterrows():
             for x in row.index:
                 cell = row[x]
@@ -439,7 +444,7 @@ class TeamNavigationEnv(MultiGridEnv):
                     # spawn goals, doors, and walls first so they're in init_grid
                     # do agents after init_grid is defined
                     if obj_type in obj_place:
-                        match obj_type.lower():
+                        match obj_type:
                             case "a":
                                 # place agents
                                 agent_idx = obj_args[0]
@@ -467,9 +472,13 @@ class TeamNavigationEnv(MultiGridEnv):
                                 self.room_has_goals[room_idx] = True
                                 self.room_despawn_objects[room_idx].append(obj)
 
+                            case "D":
+                                detector_group_idx = obj_args[0]
+                                pos = (x, y)
+                                detector_groups[detector_group_idx].append(pos)
+
                 elif isinstance(cell, str):
-                    obj_type = cell
-                    match obj_type.lower():
+                    match cell:
                         case "g":
                             obj = Goal(self.world)
                             self.place_object(obj, pos=(x, y))
@@ -480,19 +489,61 @@ class TeamNavigationEnv(MultiGridEnv):
                             self.room_has_goals[room_idx] = True
                             self.room_despawn_objects[room_idx].append(obj)
 
-                        case "w":
+                        case "w" | "d":
                             obj = Wall(self.world, type="wall", color="grey")
                             self.place_object(obj, pos=(x, y))
 
-                        case "d":
-                            obj = Wall(self.world, type="wall", color="grey")
-                            self.place_object(obj, pos=(x, y))
-                            self.room_despawn_objects[room_idx].append(obj)
+                            # door to be opened when the room is finished
+                            if cell == "d":
+                                self.room_despawn_objects[room_idx].append(obj)
 
                 else:
                     raise NotImplementedError("invalid object in field map config file")
 
+        self._place_detectors(detector_groups)
+
         return num_spawned_objects
+
+    def _place_detectors(self, detector_groups: dict[int, list[Position]]) -> None:
+        """Create detectors for each configured group of sensor tiles.
+
+        Each detector covers the set of positions assigned to its group and fires
+        probabilistically when an agent occupies any of those cells. This keeps the
+        detector logic lightweight while still matching the stochastic detection
+        pattern used elsewhere in the multigrid codebase.
+        """
+
+        for group_idx, positions in sorted(detector_groups.items()):
+            unique_positions = set(tuple(pos) for pos in positions)
+            detector_color = "blue" if group_idx == 0 else "purple"
+
+            # TODO set the detection probs correctly
+            detectors = []
+
+            for pos in unique_positions:
+                obj = Detector(
+                    world=self.world,
+                    visual_detect_prob=1.0,
+                    radio_detect_prob=1.0,
+                    color=detector_color,
+                )
+                self.place_object(obj, pos=pos)
+                detectors.append(obj)
+
+            self.detector_groups[group_idx] = DetectorGroup(detectors)
+
+    def _get_detected_agents(self):
+        """Return True if any configured detector probabilistically detects an agent."""
+        detected_agents = []
+
+        for _, group in self.detector_groups.items():
+            detected_agents += group.detect_agents(
+                agents=self.agents,
+                comms_val=1.0,
+                random_generator=self.np_random,
+            )
+
+        return detected_agents
 
     def _apply_start_task_adjustments(self, start_task: int) -> None:
         """Apply adjustments to the grid and agents so the environment appears
@@ -514,7 +565,7 @@ class TeamNavigationEnv(MultiGridEnv):
                     pass
 
     def _place_agents_for_start_task(self, start_task: int) -> None:
-        # Choose most-recent completed room with goals
+        # Choose most-recent completed room
         completed_rooms = [
             r
             for r in range(self.num_rooms)
@@ -562,7 +613,16 @@ class TeamNavigationEnv(MultiGridEnv):
                 while attempts < self._spawn_attempts:
                     # make sure the agents spawn in the room associated w/ the current task
                     x_min, x_max = self.room_coords[self.current_task]["x_limits"]
-                    y_min, y_max = self.room_coords[self.current_task]["y_limits"]
+
+                    if "_hall" in self._map_name:
+                        # hardcode each agent's starting y position to place it in the right hallway
+                        # this doesn't quite work if you want to have rooms above and below each other, but
+                        # it works if you just have rooms to the left and right of each other
+                        y_min = 2 * agent.index + 1
+                        # do + 1 here since np random excludes the high value from its choice
+                        y_max = y_min + 1
+                    else:
+                        y_min, y_max = self.room_coords[self.current_task]["y_limits"]
 
                     pos = (
                         self.np_random.integers(x_min, x_max),
@@ -765,6 +825,16 @@ class TeamNavigationEnv(MultiGridEnv):
         if all([a.t_first_goal_hit == self._t for a in self.agents]):
             for agent in self.agents:
                 agent.reward += self.reward_config.base_hit_reward / self.num_agents
+
+        # check if agents are detected, update rewards if they are
+        # have it only be assigned to the agent that is
+        ## doesn't really matter b/c it's summed at the end over all agents, but helps w/ scaling
+        detected_agents = self._get_detected_agents()
+        print(detected_agents)
+        print("Breakpoint ")
+        __import__("ipdb").set_trace(context=5)
+        for agent in detected_agents:
+            agent.reward += self.reward_config.detection_penalty
 
     def _update_room(self) -> bool:
         room_completed = False
@@ -977,9 +1047,6 @@ class TeamNavigationEnv(MultiGridEnv):
                 avail_actions_dict = {action.name: True for action in self.actions}
 
             _avail_actions_team.append(list(avail_actions_dict.values()))
-        print(_avail_actions_team)
-        print("Breakpoint ")
-        __import__("ipdb").set_trace(context=5)
         return _avail_actions_team
 
     def _get_valid_actions(self, agent: LBFAgent) -> list[int]:

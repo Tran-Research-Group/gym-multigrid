@@ -163,6 +163,7 @@ OBJECT_TO_STR = {
     "lava": "V",
     "agent": "a",
     "tree": "T",
+    "detector": "D",
 }
 
 # Short string for opened door

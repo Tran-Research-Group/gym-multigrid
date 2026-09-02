@@ -438,6 +438,7 @@ class Grid:
                     )
                 else:
                     # render the tile without selfish region boundary
+
                     tile_img = Grid.render_tile(
                         self.world,
                         cell,
@@ -542,7 +543,7 @@ class Grid:
                         # agent cannot observe other agents
                         array[i, j, :] = self.empty_encoding
                     else:
-                        # agent can observe itself
+                        # agent can observe itself and other objects
                         array[i, j, :] = v.encode(
                             current_agent=np.array_equal(agent_pos, (i, j))
                         )
