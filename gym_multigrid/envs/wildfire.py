@@ -849,7 +849,7 @@ class WildfireEnv(MultiGridEnv):
             agent_rewards = np.zeros(self.num_agents)
             if self.cooperative_reward:
                 agent_rewards -= 0.5 * len(trees_to_fire_state)
-            else:
+            if not self.cooperative_reward:
                 for a in self.agents:
                     own_fires = num_trees_to_fire_state_sr.get(f"{a.index}", 0)
                     agent_rewards[a.index] -= 0.5 * (
