@@ -783,6 +783,8 @@ class WildfireEnv(MultiGridEnv):
         # propagate wildfire dynamics by one time step
         # initialize lists to store trees transitioning to on fire and burnt state in the current time step
         trees_to_fire_state = []
+        # ensure num_trees_to_fire_state_sr is always defined to avoid UnboundLocalError in reward computation
+        num_trees_to_fire_state_sr = {}
         if self.log_selfish_region_metrics:
             num_trees_to_fire_state_sr = {
                 f"{i}": 0 for i, _ in enumerate(self.selfish_xmin)
@@ -847,15 +849,12 @@ class WildfireEnv(MultiGridEnv):
             agent_rewards = np.zeros(self.num_agents)
             if self.cooperative_reward:
                 agent_rewards -= 0.5 * len(trees_to_fire_state)
-            else:
+            if not self.cooperative_reward:
                 for a in self.agents:
+                    own_fires = num_trees_to_fire_state_sr.get(f"{a.index}", 0)
                     agent_rewards[a.index] -= 0.5 * (
-                        num_trees_to_fire_state_sr[f"{a.index}"]
-                        + self.altruism_weight
-                        * (
-                            len(trees_to_fire_state)
-                            - num_trees_to_fire_state_sr[f"{a.index}"]
-                        )
+                        own_fires
+                        + self.altruism_weight * (len(trees_to_fire_state) - own_fires)
                     )
             # agent rewards dictionary
             rewards = {f"{a.index}": agent_rewards[a.index] for a in self.agents}
