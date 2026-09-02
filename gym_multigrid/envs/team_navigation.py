@@ -17,7 +17,11 @@ from gymnasium import spaces
 from numpy.random._generator import Generator
 from numpy.typing import NDArray
 
-from gym_multigrid.core.agent import AlternativeNavigationActions, LBFActions, LBFAgent
+from gym_multigrid.core.agent import (
+    AlternativeNavigationActions,
+    LBFAgent,
+    SimpleNavigationActions,
+)
 from gym_multigrid.core.grid import Grid
 from gym_multigrid.core.object import Detector, DetectorGroup, Goal, Wall, WorldObj
 from gym_multigrid.core.world import TeamNavigationWorld
@@ -51,7 +55,10 @@ class TeamNavigationEnv(MultiGridEnv):
     }
 
     world = TeamNavigationWorld
-    action_set = AlternativeNavigationActions
+    avail_action_sets = {
+        "AlternativeNavigationActions": AlternativeNavigationActions,
+        "SimpleNavigationActions": SimpleNavigationActions,
+    }
 
     class RewardConfig:
         def __init__(
@@ -78,7 +85,7 @@ class TeamNavigationEnv(MultiGridEnv):
         def __init__(
             self,
             p_chosen_move: float,
-            actions: LBFActions | AlternativeNavigationActions,
+            actions: AlternativeNavigationActions | SimpleNavigationActions,
         ) -> None:
             # define events that can happen (support) and their probabilities
             # based on Gym "Frozen Lake" environment. If an agent intends to move in a direction, the env may cause them to move in that direction or in either perpendicular direction.
@@ -86,64 +93,83 @@ class TeamNavigationEnv(MultiGridEnv):
             self._p_chosen_move = p_chosen_move
             self._slide_prob = (1 - p_chosen_move) / 2
 
-            self.trans = {
-                actions.STAY: {
-                    "possible_action": [actions.STAY],
-                    "prob": [1.0],
-                },
-                actions.LEFT: {
-                    "possible_action": [
-                        actions.LEFT,
-                        actions.UP,
-                        actions.DOWN,
-                    ],
-                    "prob": [
-                        self._p_chosen_move,
-                        self._slide_prob,
-                        self._slide_prob,
-                    ],
-                },
-                actions.RIGHT: {
-                    "possible_action": [
-                        actions.RIGHT,
-                        actions.UP,
-                        actions.DOWN,
-                    ],
-                    "prob": [
-                        self._p_chosen_move,
-                        self._slide_prob,
-                        self._slide_prob,
-                    ],
-                },
-                actions.UP: {
-                    "possible_action": [
-                        actions.UP,
-                        actions.LEFT,
-                        actions.RIGHT,
-                    ],
-                    "prob": [
-                        self._p_chosen_move,
-                        self._slide_prob,
-                        self._slide_prob,
-                    ],
-                },
-                actions.DOWN: {
-                    "possible_action": [
-                        actions.DOWN,
-                        actions.LEFT,
-                        actions.RIGHT,
-                    ],
-                    "prob": [
-                        self._p_chosen_move,
-                        self._slide_prob,
-                        self._slide_prob,
-                    ],
-                },
-            }
-            if actions == LBFActions:
-                self.trans[actions.LOAD] = {
-                    "possible_action": [actions.LOAD],
-                    "prob": [1.0],
+            if actions == AlternativeNavigationActions:
+                self.trans = {
+                    actions.STAY: {
+                        "possible_action": [actions.STAY],
+                        "prob": [1.0],
+                    },
+                    actions.LEFT: {
+                        "possible_action": [
+                            actions.LEFT,
+                            actions.UP,
+                            actions.DOWN,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                            self._slide_prob,
+                            self._slide_prob,
+                        ],
+                    },
+                    actions.RIGHT: {
+                        "possible_action": [
+                            actions.RIGHT,
+                            actions.UP,
+                            actions.DOWN,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                            self._slide_prob,
+                            self._slide_prob,
+                        ],
+                    },
+                    actions.UP: {
+                        "possible_action": [
+                            actions.UP,
+                            actions.LEFT,
+                            actions.RIGHT,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                            self._slide_prob,
+                            self._slide_prob,
+                        ],
+                    },
+                    actions.DOWN: {
+                        "possible_action": [
+                            actions.DOWN,
+                            actions.LEFT,
+                            actions.RIGHT,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                            self._slide_prob,
+                            self._slide_prob,
+                        ],
+                    },
+                }
+            elif actions == SimpleNavigationActions:
+                self.trans = {
+                    actions.STAY: {
+                        "possible_action": [actions.STAY],
+                        "prob": [1.0],
+                    },
+                    actions.LEFT: {
+                        "possible_action": [
+                            actions.LEFT,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                        ],
+                    },
+                    actions.RIGHT: {
+                        "possible_action": [
+                            actions.RIGHT,
+                        ],
+                        "prob": [
+                            self._p_chosen_move,
+                        ],
+                    },
                 }
 
         def get_stochastic_action(self, action: int, np_random: Generator) -> int:
@@ -179,6 +205,8 @@ class TeamNavigationEnv(MultiGridEnv):
         Initialize the env.
         """
         self._map_name = map_name
+        self.hallway = "_hall" in self._map_name
+
         self.num_agents = n_agents
         self.reward_config = self.RewardConfig(**reward_config)
         self.goal_type = goal_type
@@ -255,19 +283,14 @@ class TeamNavigationEnv(MultiGridEnv):
             world=self.world,
             see_through_walls=False,
             agents=agents,
-            actions_set=self.action_set,
+            actions_set=SimpleNavigationActions
+            if self.hallway
+            else AlternativeNavigationActions,
             render_mode="rgb_array",
             obs_type="symmetrical",
             agent_view_size=agent_view_size,
             highlight_visible_cells=highlight_visible_cells,
         )
-
-        # # use same approach as the gymma wrapper in EPYMARL
-        # # from the learning agent's perspective, all actions are always available
-        # avail_actions_dict = {action.name: True for action in self.actions}
-        # self._avail_actions = [
-        #     list(avail_actions_dict.values()) for agent in self.agents
-        # ]
 
         # objects that disappear when a given room is completed
         self.room_despawn_objects: dict[int, list]
@@ -614,7 +637,7 @@ class TeamNavigationEnv(MultiGridEnv):
                     # make sure the agents spawn in the room associated w/ the current task
                     x_min, x_max = self.room_coords[self.current_task]["x_limits"]
 
-                    if "_hall" in self._map_name:
+                    if self.hallway:
                         # hardcode each agent's starting y position to place it in the right hallway
                         # this doesn't quite work if you want to have rooms above and below each other, but
                         # it works if you just have rooms to the left and right of each other
@@ -691,7 +714,7 @@ class TeamNavigationEnv(MultiGridEnv):
             a.reward = 0.0
 
         actions: list[int] = np.array(action).flatten().astype(np.int_).tolist()
-        moving_agents = defaultdict(list)
+        next_positions = defaultdict(list)
 
         # check if actions are valid, replace with STAY if not valid
         for agent, action in zip(self.agents, actions):
@@ -703,20 +726,15 @@ class TeamNavigationEnv(MultiGridEnv):
 
             # check if the action is valid
             valid_actions = self._get_valid_actions(agent)
+
             if action not in valid_actions:
                 action = self.actions.STAY
 
-            elif action in [
-                self.actions.UP,
-                self.actions.DOWN,
-                self.actions.LEFT,
-                self.actions.RIGHT,
-            ]:
-                next_pos: tuple[int, int] = self._get_next_pos(agent, action)
-                moving_agents[next_pos].append(agent)
+            next_pos: tuple[int, int] = self._get_next_pos(agent, action)
+            next_positions[next_pos].append(agent)
 
         # move agents
-        self._move_agents(moving_agents)
+        self._move_agents(next_positions)
 
         # update waypoints
         room_completed = self._update_room()
@@ -804,9 +822,9 @@ class TeamNavigationEnv(MultiGridEnv):
 
         return reward
 
-    def _move_agents(self, moving_agents: dict[Position, list]) -> None:
+    def _move_agents(self, next_positions: dict[Position, list]) -> None:
         # if two or more agents try to move to the same position they all fail and stay at their current position
-        for next_pos, agents in moving_agents.items():
+        for next_pos, agents in next_positions.items():
             # make sure only one agent will arrive at the cell
             if len(agents) == 1 and self._check_valid_pos(next_pos):
                 # do movements for non colliding players
@@ -830,9 +848,6 @@ class TeamNavigationEnv(MultiGridEnv):
         # have it only be assigned to the agent that is
         ## doesn't really matter b/c it's summed at the end over all agents, but helps w/ scaling
         detected_agents = self._get_detected_agents()
-        print(detected_agents)
-        print("Breakpoint ")
-        __import__("ipdb").set_trace(context=5)
         for agent in detected_agents:
             agent.reward += self.reward_config.detection_penalty
 
@@ -873,9 +888,6 @@ class TeamNavigationEnv(MultiGridEnv):
 
             case self.actions.DOWN:
                 next_pos = agent.south_pos(in_tuple=True)
-
-            # case _:
-            #     raise ValueError(f"Invalid action: {action}")
 
         # convert from np ints to ints
         if isinstance(next_pos[0], np.int_):
@@ -1030,8 +1042,6 @@ class TeamNavigationEnv(MultiGridEnv):
         # added this method to interface with PYMARL training loop
         # returns list of agent lists, where each agent's list has binary values representing
         # available actions
-        # based on the MAIC paper's implementation of LBF with some minor cleanup
-        # https://github.com/mansicer/MAIC/blob/main/src/envs/lbforaging/foraging.py
         _avail_actions_team = []
         for agent in self.agents:
             # prevent agents from moving if they are in their goal state
@@ -1043,47 +1053,23 @@ class TeamNavigationEnv(MultiGridEnv):
                 }
                 avail_actions_dict["STAY"] = True
             else:
-                # otherwise agents can take any action
+                # following Gymma, all actions are always available
                 avail_actions_dict = {action.name: True for action in self.actions}
 
             _avail_actions_team.append(list(avail_actions_dict.values()))
+
         return _avail_actions_team
 
     def _get_valid_actions(self, agent: LBFAgent) -> list[int]:
         # handle actions that cause the agent to collide w/ a non-overlappable objects
         valid = []
         for action in self.actions:
-            # non-moving actions are automatically valid
-            next_pos = self._get_next_pos(agent, action.value)
-
-            if self._check_valid_action(agent, action):
-                if action.name in ["STAY"]:
-                    valid.append(action.value)
-                elif self._check_valid_pos(next_pos):
-                    valid.append(action.value)
+            if action == self.actions.STAY or self._check_valid_pos(
+                self._get_next_pos(agent, action.value)
+            ):
+                valid.append(action.value)
 
         return valid
-
-    def _check_valid_action(
-        self, agent: LBFAgent, action: LBFActions | AlternativeNavigationActions
-    ) -> bool:
-        match action:
-            case self.actions.STAY:
-                return True
-
-            # ensure agents do not go beyond the env's border
-            # only matters if there is no wall around the border
-            case self.actions.UP:
-                return agent.pos[1] > 0
-
-            case self.actions.DOWN:
-                return agent.pos[1] < self.height - 1
-
-            case self.actions.LEFT:
-                return agent.pos[0] > 0
-
-            case self.actions.RIGHT:
-                return agent.pos[0] < self.width - 1
 
     def _set_action_space(self) -> tuple[spaces.Space, int]:
         env_agent_action_space = spaces.Discrete(len(self.actions))
@@ -1203,6 +1189,7 @@ class TeamNavigationEnv(MultiGridEnv):
     def _check_valid_pos(self, pos: tuple[int, int], spawn: bool = False) -> bool:
 
         cell = self.grid.get(*pos)
+
         if not spawn:
             return cell is None or cell.can_overlap()
 

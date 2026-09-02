@@ -129,6 +129,13 @@ class AlternativeNavigationActions(enum.IntEnum):
     RIGHT = 4
 
 
+class SimpleNavigationActions(enum.IntEnum):
+    # matches the order from original LBF action set
+    STAY = 0
+    LEFT = 1
+    RIGHT = 2
+
+
 class Agent(WorldObj):
     """Defines the class for an agent in the environment"""
 
