@@ -33,21 +33,19 @@ def test_wildfire() -> None:
     obs, _ = env.reset()
     frames = []
     frames.append(env.render())
-    num_episodes = 1
+    
+    while True:
+        actions = {
+            f"{a.index}": np.random.choice(list(env.unwrapped.actions))
+            for a in env.unwrapped.agents
+        }
+        obs, reward, terminated, truncated, _ = env.step(actions)
+        frames.append(env.render())
+        if terminated or truncated:
+            break
 
-    for ep in range(num_episodes):
-        while True:
-            actions = {
-                f"{a.index}": np.random.choice(list(env.unwrapped.actions))
-                for a in env.unwrapped.agents
-            }
-            obs, reward, terminated, truncated, _ = env.step(actions)
-            frames.append(env.render())
-            if terminated or truncated:
-                break
-
-        path = os.path.join("out", "animations")
-        save_frames_as_gif(frames, path=path, filename="wildfire", ep=ep, fps=1, dpi=40)
+        path = "."
+        save_frames_as_gif(frames, path=path, filename="wildfire", ep=1, fps=1, dpi=40)
 
 
 test_wildfire()
