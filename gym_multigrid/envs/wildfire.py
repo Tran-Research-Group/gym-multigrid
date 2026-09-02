@@ -304,14 +304,14 @@ class WildfireEnv(MultiGridEnv):
                 # for odd sized initial fires, choose location of center of fire region uniformly at random
                 fire_square_center = (
                     random.randint(
-                        1 + ((self.initial_fire_size - 1) / 2),
+                        1 + ((self.initial_fire_size - 1) // 2),
                         self.grid_size_without_walls
-                        - ((self.initial_fire_size - 1) / 2),
+                        - ((self.initial_fire_size - 1) // 2),
                     ),
                     random.randint(
-                        1 + ((self.initial_fire_size - 1) / 2),
+                        1 + ((self.initial_fire_size - 1) // 2),
                         self.grid_size_without_walls
-                        - ((self.initial_fire_size - 1) / 2),
+                        - ((self.initial_fire_size - 1) // 2),
                     ),
                 )
                 initial_fire = get_initial_fire_coordinates(

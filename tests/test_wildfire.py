@@ -46,7 +46,7 @@ def test_wildfire() -> None:
             if terminated or truncated:
                 break
 
-        path = os.path.join("out", "animations")
+        path = "."
         save_frames_as_gif(frames, path=path, filename="wildfire", ep=ep, fps=1, dpi=40)
 
 
