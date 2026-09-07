@@ -65,9 +65,10 @@ class TeamNavigationEnv(MultiGridEnv):
         def __init__(
             self,
             simultaneous_goal_reward_type: Literal[
-                "terminal_sparse",
-                "terminal_shaped",
-                "dense_shaped",
+                "terminal_sparse_all_simultaneous",
+                "terminal_shaped_hit_times",
+                "dense_shaped_hit_times",
+                "terminal_shaped_largest_group_arrival",
             ]
             | None = None,
         ) -> None:
@@ -881,15 +882,39 @@ class TeamNavigationEnv(MultiGridEnv):
         )
 
     def _simultaneous_arrival_reward(self, terminated: bool):
-        if self.reward_config.simultaneous_goal_reward_type == "terminal_sparse":
+        if (
+            self.reward_config.simultaneous_goal_reward_type
+            == "terminal_sparse_all_simultaneous"
+        ):
             return float(terminated)
+
+        if (
+            self.reward_config.simultaneous_goal_reward_type
+            == "terminal_shaped_largest_group_arrival"
+            and (self._t == self._episode_limit - 1 or terminated)
+        ):
+            # reward based on the number of agents in the largest "group" that arrives simultaneously
+            hit_times = [
+                agent.t_first_goal_hit
+                for agent in self.agents
+                if agent.t_first_goal_hit != -1
+            ]
+            if not hit_times:
+                return 0.0
+
+            simultaneous_reach_counts = [
+                hit_times.count(hit_time) for hit_time in set(hit_times)
+            ]
+            return max(simultaneous_reach_counts) / self.num_agents
 
         # get reward / penalty for simultaneous arrival
         hit_reward: float = 0.0
         not_hit_reward: float = 0.0
 
-        if self.reward_config.simultaneous_goal_reward_type == "terminal_shaped" and (
-            (self._t == self._episode_limit - 1) or terminated
+        if (
+            self.reward_config.simultaneous_goal_reward_type
+            == "terminal_shaped_hit_times"
+            and ((self._t == self._episode_limit - 1) or terminated)
         ):
             # reward for the agents that arrived at their goals
             # penalty for arriving at different times
@@ -909,7 +934,9 @@ class TeamNavigationEnv(MultiGridEnv):
             agents_not_hit = set(self.agents) - agents_hit
             not_hit_reward = len(agents_not_hit) / len(self.agents)
 
-        elif self.reward_config.simultaneous_goal_reward_type == "dense_shaped":
+        elif (
+            self.reward_config.simultaneous_goal_reward_type == "dense_shaped_hit_times"
+        ):
             agents_hit_goal_prev = set(
                 [a for a in self.agents if 0 <= a.t_first_goal_hit < self._t]
             )
