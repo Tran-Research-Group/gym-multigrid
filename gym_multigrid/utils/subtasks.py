@@ -82,6 +82,109 @@ class SubtaskData:
     init_state_dist: PositionDist | None = None
 
 
+@dataclass(frozen=True)
+class NavigationTaskData:
+    """Concrete navigation task selected by a high-level destination state."""
+
+    state: int
+    goal_positions: tuple[Position, ...]
+    init_state_dist: PositionDist
+
+    def __post_init__(self) -> None:
+        if len(self.goal_positions) == 0:
+            raise ValueError("A navigation task must assign at least one goal.")
+
+        if len(set(self.goal_positions)) != len(self.goal_positions):
+            raise ValueError("Navigation task goals must be unique per agent.")
+
+        if len(self.init_state_dist.states) == 0:
+            raise ValueError("A navigation task must define spawn positions.")
+
+
+class NavigationTaskCatalog:
+    """Validated mapping from high-level destination states to navigation tasks."""
+
+    def __init__(self, tasks: dict[int, NavigationTaskData]) -> None:
+        self._tasks = dict(tasks)
+
+    @classmethod
+    def from_configs(
+        cls,
+        task_configs: list[dict[str, Any]] | dict[int, dict[str, Any]],
+        num_agents: int,
+        width: int,
+        height: int,
+    ) -> "NavigationTaskCatalog":
+        configs = (
+            task_configs.values()
+            if isinstance(task_configs, dict)
+            else task_configs
+        )
+        tasks: dict[int, NavigationTaskData] = {}
+        for config in configs:
+            state = int(config["state"])
+            goal_positions = tuple(
+                tuple(position) for position in config["goal_positions"]
+            )
+            spawn_config = config["init_state_dist"]
+            spawn_states = tuple(
+                tuple(tuple(position) for position in joint_state)
+                for joint_state in spawn_config["states"]
+            )
+            task = NavigationTaskData(
+                state=state,
+                goal_positions=goal_positions,
+                init_state_dist=PositionDist(
+                    states=spawn_states,
+                    probs=tuple(spawn_config["probs"]),
+                ),
+            )
+            if len(goal_positions) != num_agents:
+                raise ValueError(
+                    f"Navigation task {state} must define one goal per agent."
+                )
+            if any(
+                len(joint_state) != num_agents for joint_state in spawn_states
+            ):
+                raise ValueError(
+                    f"Navigation task {state} must define one spawn per agent."
+                )
+            for position in goal_positions + tuple(
+                position for joint_state in spawn_states for position in joint_state
+            ):
+                x, y = position
+                if not (0 <= x < width and 0 <= y < height):
+                    raise ValueError(
+                        f"Navigation task {state} contains out-of-bounds position {position}."
+                    )
+            if state in tasks:
+                raise ValueError(f"Duplicate navigation task state: {state}")
+            tasks[state] = task
+        return cls(tasks)
+
+    def __contains__(self, state: int) -> bool:
+        return state in self._tasks
+
+    def __getitem__(self, state: int) -> NavigationTaskData:
+        return self._tasks[state]
+
+    def __bool__(self) -> bool:
+        return bool(self._tasks)
+
+    def __iter__(self):
+        return iter(self._tasks)
+
+    def first_state(self) -> int:
+        if not self._tasks:
+            raise ValueError("Navigation task catalog is empty.")
+        return min(self._tasks)
+
+    def last_state(self) -> int:
+        if not self._tasks:
+            raise ValueError("Navigation task catalog is empty.")
+        return max(self._tasks)
+
+
 @dataclass
 class StateData:
     """Manages HLMDP state data"""

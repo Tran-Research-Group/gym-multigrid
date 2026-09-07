@@ -30,6 +30,7 @@ from gym_multigrid.typing_utils import Position
 from gym_multigrid.utils.rendering import (
     FontConfig,
 )
+from gym_multigrid.utils.subtasks import NavigationTaskCatalog
 
 RENDER_TEXT_CONFIG = {
     "fontFace": FontConfig.fontFace,
@@ -63,7 +64,11 @@ class TeamNavigationEnv(MultiGridEnv):
     class RewardConfig:
         def __init__(
             self,
-            simultaneous_goal_reward_type: Literal["terminal", "during_episode"]
+            simultaneous_goal_reward_type: Literal[
+                "terminal_sparse",
+                "terminal_shaped",
+                "dense_shaped",
+            ]
             | None = None,
         ) -> None:
             """
@@ -200,6 +205,10 @@ class TeamNavigationEnv(MultiGridEnv):
             "simultaneous_goal_reward_type": None,
         },
         episode_limit: int | None = None,
+        navigation_tasks: list[dict[str, Any]]
+        | dict[int, dict[str, Any]]
+        | None = None,
+        navigation_task_catalog: NavigationTaskCatalog | None = None,
     ) -> None:
         """
         Initialize the env.
@@ -226,7 +235,7 @@ class TeamNavigationEnv(MultiGridEnv):
         # multi-room support
         self.field_map: pd.DataFrame | None = None
         self.current_task = 0
-        self.room_coords: dict[int, tuple]
+        self.room_coords: dict[int, tuple] = {}
         self.num_rooms: int
         self.room_has_goals: dict[int, bool] = {0: False}
 
@@ -299,6 +308,20 @@ class TeamNavigationEnv(MultiGridEnv):
         self.transition_prob = self.TransitionProbs(
             chosen_move_prob, actions=self.actions
         )
+
+        self.active_task_state = 0
+        if navigation_task_catalog is not None and navigation_tasks is not None:
+            raise ValueError(
+                "Pass either navigation_tasks or navigation_task_catalog, not both."
+            )
+        if navigation_tasks is not None:
+            navigation_task_catalog = NavigationTaskCatalog.from_configs(
+                navigation_tasks,
+                num_agents=self.num_agents,
+                width=self.width,
+                height=self.height,
+            )
+        self.navigation_task_catalog = navigation_task_catalog
 
     def _get_max_reward_simultaneous_arrival(self):
         # there might be an analytical formula for this,
@@ -427,22 +450,95 @@ class TeamNavigationEnv(MultiGridEnv):
 
         # place objects from field_map
         if self.field_map is not None:
-            self._parse_field_map(obj_place=["w", "g", "d", "D"])
+            obj_place = ["w", "D"] if self.navigation_task_catalog else ["w", "g", "D"]
+            self._parse_field_map(obj_place=obj_place)
         else:
             # add outer wall to stop agents from going off the edge of the env
             self.grid.wall_rect(x=0, y=0, w=self.width, h=self.height)
+
+        if self.navigation_task_catalog:
+            self._place_navigation_task_goals(start_task)
 
         # objects spawned before init_grid is initialized will respawn after an agent steps on them and leaves that cell
         # need separate logic to modify self.init_grid to despawn those objects if desired
         self.init_grid: Grid = self.grid.copy()
 
         # spawn agents
-        self._spawn_agents()
+        if self.navigation_task_catalog:
+            self._spawn_navigation_agents(start_task)
+        else:
+            self._spawn_agents()
 
         # If a start_task was provided prior to grid generation, apply adjustments
         # via helper that encapsulates the logic for starting mid-episode.
-        if start_task > 0:
+        if start_task > 0 and not self.navigation_task_catalog:
             self._apply_start_task_adjustments(start_task)
+
+    def activate_navigation_task(self, state: int) -> None:
+        """Switch the active catalog task without resetting the episode clock."""
+        if not self.navigation_task_catalog:
+            raise RuntimeError("No state-keyed navigation task catalog is configured.")
+        if state not in self.navigation_task_catalog:
+            raise ValueError(f"No navigation task configured for state {state}.")
+
+        for obj in self.room_despawn_objects.get(self.active_task_state, []):
+            self.despawn_object(obj)
+        for agent in self.agents:
+            if agent.pos is not None:
+                self.despawn_object(agent)
+            agent.t_first_goal_hit = -1
+
+        self._place_navigation_task_goals(state)
+        self._spawn_navigation_agents(state)
+
+    def _place_navigation_task_goals(self, state: int) -> None:
+        if (
+            self.navigation_task_catalog is None
+            or state not in self.navigation_task_catalog
+        ):
+            raise ValueError(f"No navigation task configured for state {state}.")
+        task = self.navigation_task_catalog[state]
+
+        self.active_task_state = state
+        self.current_task = state
+        self.room_despawn_objects[state] = []
+        for agent, goal_position in zip(self.agents, task.goal_positions):
+            goal = Goal(
+                self.world,
+                color="dark_yellow",
+                assigned_agent_index=agent.index,
+            )
+            self.place_object(goal, pos=goal_position)
+            if hasattr(self, "init_grid"):
+                self.init_grid.set(*goal_position, goal)
+            agent.room_goals = {state: np.asarray([goal_position], dtype=np.int_)}
+            self.room_despawn_objects[state].append(goal)
+
+    def _spawn_navigation_agents(self, state: int) -> None:
+        if (
+            self.navigation_task_catalog is None
+            or state not in self.navigation_task_catalog
+        ):
+            raise ValueError(f"No navigation task configured for state {state}.")
+        task = self.navigation_task_catalog[state]
+
+        joint_positions = task.init_state_dist.states[
+            self.np_random.choice(
+                len(task.init_state_dist.states), p=task.init_state_dist.probs
+            )
+        ]
+        if len(joint_positions) != self.num_agents:
+            raise ValueError(
+                f"Navigation task {state} must define one spawn position per agent."
+            )
+
+        for agent, position in zip(self.agents, joint_positions):
+            if not self._check_valid_pos(position, spawn=True):
+                raise ValueError(
+                    f"Navigation task {state} has an invalid spawn position {position}."
+                )
+            agent.reset(init_pos=position)
+            self.place_agent(agent, pos=position, init_grid=self.init_grid)
 
     def _parse_field_map(self, obj_place: Optional[list] = None) -> dict:
         """
@@ -512,13 +608,9 @@ class TeamNavigationEnv(MultiGridEnv):
                             self.room_has_goals[room_idx] = True
                             self.room_despawn_objects[room_idx].append(obj)
 
-                        case "w" | "d":
+                        case "w":
                             obj = Wall(self.world, type="wall", color="grey")
                             self.place_object(obj, pos=(x, y))
-
-                            # door to be opened when the room is finished
-                            if cell == "d":
-                                self.room_despawn_objects[room_idx].append(obj)
 
                 else:
                     raise NotImplementedError("invalid object in field map config file")
@@ -555,7 +647,8 @@ class TeamNavigationEnv(MultiGridEnv):
 
             self.detector_groups[group_idx] = DetectorGroup(detectors)
 
-    def _get_detected_agents(self):
+    @property
+    def _detected_agents(self):
         """Return True if any configured detector probabilistically detects an agent."""
         detected_agents = []
 
@@ -672,8 +765,21 @@ class TeamNavigationEnv(MultiGridEnv):
         self._t = 0
 
         # current room / task
-        if options is not None and "hl_start_state" in options:
-            self.current_task = options["hl_start_state"]
+        self.current_task = 0
+        self.active_task_state = 0
+        if options is not None and "navigation_task_state" in options:
+            self.current_task = int(options["navigation_task_state"])
+            self.active_task_state = self.current_task
+        elif options is not None and "hl_start_state" in options:
+            self.current_task = int(options["hl_start_state"])
+            self.active_task_state = self.current_task
+
+        if (
+            self.navigation_task_catalog
+            and self.current_task not in self.navigation_task_catalog
+        ):
+            self.current_task = self.navigation_task_catalog.first_state()
+            self.active_task_state = self.current_task
 
         # generate new env layout
         self._gen_grid(self.width, self.height, start_task=self.current_task)
@@ -753,8 +859,13 @@ class TeamNavigationEnv(MultiGridEnv):
         if self.goal_type == "simultaneous_arrival":
             reward += self._simultaneous_arrival_reward(terminated)
 
+        # check if agents are detected, update rewards if they are
+        # have it only be assigned to the agent that is
+        ## doesn't really matter b/c it's summed at the end over all agents, but helps w/ scaling
+        for agent in self._detected_agents:
+            agent.reward += self.reward_config.detection_penalty
+
         agent_rewards = float(np.sum([a.reward for a in self.agents]))
-        # print("agent_rewards", agent_rewards)
         reward += agent_rewards
 
         info = self._get_info(terminated=terminated, room_completed=room_completed)
@@ -770,11 +881,14 @@ class TeamNavigationEnv(MultiGridEnv):
         )
 
     def _simultaneous_arrival_reward(self, terminated: bool):
+        if self.reward_config.simultaneous_goal_reward_type == "terminal_sparse":
+            return float(terminated)
+
         # get reward / penalty for simultaneous arrival
         hit_reward: float = 0.0
         not_hit_reward: float = 0.0
 
-        if self.reward_config.simultaneous_goal_reward_type == "terminal" and (
+        if self.reward_config.simultaneous_goal_reward_type == "terminal_shaped" and (
             (self._t == self._episode_limit - 1) or terminated
         ):
             # reward for the agents that arrived at their goals
@@ -795,7 +909,7 @@ class TeamNavigationEnv(MultiGridEnv):
             agents_not_hit = set(self.agents) - agents_hit
             not_hit_reward = len(agents_not_hit) / len(self.agents)
 
-        elif self.reward_config.simultaneous_goal_reward_type == "during_episode":
+        elif self.reward_config.simultaneous_goal_reward_type == "dense_shaped":
             agents_hit_goal_prev = set(
                 [a for a in self.agents if 0 <= a.t_first_goal_hit < self._t]
             )
@@ -839,20 +953,18 @@ class TeamNavigationEnv(MultiGridEnv):
                     t=copy(self._t),
                 )
 
-        # get a reward if all agents hit at the current time (the "real" task we want them to solve)
-        if all([a.t_first_goal_hit == self._t for a in self.agents]):
-            for agent in self.agents:
-                agent.reward += self.reward_config.base_hit_reward / self.num_agents
-
-        # check if agents are detected, update rewards if they are
-        # have it only be assigned to the agent that is
-        ## doesn't really matter b/c it's summed at the end over all agents, but helps w/ scaling
-        detected_agents = self._get_detected_agents()
-        for agent in detected_agents:
-            agent.reward += self.reward_config.detection_penalty
-
     def _update_room(self) -> bool:
         room_completed = False
+
+        if self.navigation_task_catalog:
+            reached_goals = [
+                agent.in_goal_set(self.active_task_state) for agent in self.agents
+            ]
+            if all(reached_goals):
+                for obj in self.room_despawn_objects[self.active_task_state]:
+                    self.despawn_object(obj)
+                room_completed = True
+            return room_completed
 
         # if there are goals in the room, reaching goals completes this room
         reached_room_goal: list[bool] = [
@@ -895,13 +1007,24 @@ class TeamNavigationEnv(MultiGridEnv):
         return next_pos
 
     def _terminated(self, room_completed: bool) -> bool:
+        simultaneous_goal_reached = room_completed and all(
+            agent.t_first_goal_hit == self._t for agent in self.agents
+        )
+
+        # TODO for training the HL policy want the option to run each subtask in isolation
+        if self.navigation_task_catalog:
+            return (
+                simultaneous_goal_reached
+                and self.active_task_state == self.navigation_task_catalog.last_state()
+            )
+
         # Terminate the episode if all rooms have been completed
         # project is completed when you reach the end of the final room
         # TODO needs to be updated to handle non-sequential rooms
         if self.num_rooms > 1:
-            return self.current_task == self.num_rooms
+            return simultaneous_goal_reached and self.current_task == self.num_rooms
         else:
-            return room_completed
+            return simultaneous_goal_reached
 
     def _get_info(self, terminated: bool = False, room_completed: bool = False) -> dict:
         # step info
@@ -910,7 +1033,14 @@ class TeamNavigationEnv(MultiGridEnv):
         # Agents only succeed at the full "project" if terminated = True
         # info["project_completed"] = terminated
 
+        agents_hit = [agent for agent in self.agents if agent.t_first_goal_hit != -1]
+        info["sum_goal_hit_time_difference"] = sum(
+            abs(agent_a.t_first_goal_hit - agent_b.t_first_goal_hit)
+            for agent_a, agent_b in combinations(agents_hit, r=2)
+        )
+
         info["task_completed"] = room_completed
+        info["navigation_task_state"] = self.active_task_state
 
         return info
 

@@ -246,6 +246,10 @@ class ProjectMDP(Env):
         action_tuple = (chosen_next_state, message_budget)
         return action_tuple
 
+    def get_action_tuple(self, action: dict) -> tuple:
+        """Return the canonical discrete representation of an HL action."""
+        return self._get_action_tuple(action)
+
     def reset(
         self, seed: Optional[int] = None, options: dict = None
     ) -> tuple[NDArray, dict]:
