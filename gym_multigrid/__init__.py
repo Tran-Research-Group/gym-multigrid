@@ -354,6 +354,6 @@ register(
 )
 
 register(
-    id="multigrid-team-navigation-v0",
+    id="team-nav-v0",
     entry_point="gym_multigrid.envs:TeamNavigationEnv",
 )
