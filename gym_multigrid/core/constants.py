@@ -27,7 +27,7 @@ ACCESSIBLE_COLORS: dict[str, NDArray[np.uint8]] = {
     "red": np.array([213, 94, 0]),
     "orange": np.array([230, 159, 0]),
     "yellow": np.array([240, 228, 66]),
-    "dark_yellow": np.array([186, 142, 35]),
+    "dark_yellow": np.array([220, 185, 60]),
     "green": np.array([0, 158, 115]),
     "blue": np.array([0, 114, 178]),
     "sky_blue": np.array([86, 180, 233]),

@@ -71,6 +71,8 @@ class TeamNavigationEnv(MultiGridEnv):
                 "terminal_shaped_largest_group_arrival",
             ]
             | None = None,
+            time_penalty: float = -0.01,
+            partial_arrival_penalty: float = -0.05,
         ) -> None:
             """
             all signs for rewarding events assume to be handled in their definition since we only use the "+=" operator in the code below for simplicity and easier design
@@ -83,6 +85,9 @@ class TeamNavigationEnv(MultiGridEnv):
                 _description_, by default 2.0
             """
             self.simultaneous_goal_reward_type = simultaneous_goal_reward_type
+            self.time_penalty = time_penalty
+            self.partial_arrival_penalty = partial_arrival_penalty
+            self.task_completed_bonus = 1.0
 
             self.base_hit_reward = 1.0
             self.detection_penalty = -0.025
@@ -196,8 +201,12 @@ class TeamNavigationEnv(MultiGridEnv):
         height: Optional[int] = 10,
         n_agents: int = 4,
         sight: int = 2,
-        state_type: Literal["multigrid_flattened"] = "multigrid_flattened",
-        obs_type: Literal["multigrid_flattened"] = "multigrid_flattened",
+        state_type: Literal[
+            "multigrid_flattened", "simple_navigation_features"
+        ] = "simple_navigation_features",
+        obs_type: Literal[
+            "multigrid_flattened", "simple_navigation_features"
+        ] = "simple_navigation_features",
         goal_type: Literal["simultaneous_arrival"] | None = None,
         observe_other_agents: bool = True,
         chosen_move_prob: float = 1.0,
@@ -224,6 +233,7 @@ class TeamNavigationEnv(MultiGridEnv):
         # only use episode_limit for internal class logic,
         # do NOT use for episode truncation (use standard gymnasium wrapper for that)
         self._episode_limit = episode_limit
+        self._time_scale = max((self._episode_limit or 1) - 1, 1)
 
         if self.goal_type == "simultaneous_arrival":
             # solve for the reward scaling to ensure it is in [0, 1]
@@ -269,13 +279,31 @@ class TeamNavigationEnv(MultiGridEnv):
             # this is here b/c multigrid and the original LBF obs handle it a little differently
             case "multigrid_flattened":
                 agent_view_size = 2 * sight + 1
+                self.observe_other_agents = observe_other_agents
+            case "simple_navigation_features":
+                agent_view_size = None
+            case _:
+                raise NotImplementedError(
+                    f"Observation type {obs_type!r} is not implemented."
+                )
 
         # if observe_other_agents=False, agents cannot see the other agents and those cells replaced with empty spaces
-        self.observe_other_agents = observe_other_agents
         self._spawn_attempts: int = 1000
 
         # initial encoding for objects in the observation
-        self.init_object_obs = np.array([-1, -1, 0]).reshape(1, -1)
+        if navigation_task_catalog is not None and navigation_tasks is not None:
+            raise ValueError(
+                "Pass either navigation_tasks or navigation_task_catalog, not both."
+            )
+        if navigation_tasks is not None:
+            navigation_task_catalog = NavigationTaskCatalog.from_configs(
+                navigation_tasks,
+                num_agents=self.num_agents,
+                width=width,
+                height=height,
+            )
+        self.navigation_task_catalog = navigation_task_catalog
+        self._configured_goal_positions = self._get_configured_goal_positions()
 
         # init agents
         agents = [
@@ -311,18 +339,27 @@ class TeamNavigationEnv(MultiGridEnv):
         )
 
         self.active_task_state = 0
-        if navigation_task_catalog is not None and navigation_tasks is not None:
-            raise ValueError(
-                "Pass either navigation_tasks or navigation_task_catalog, not both."
-            )
-        if navigation_tasks is not None:
-            navigation_task_catalog = NavigationTaskCatalog.from_configs(
-                navigation_tasks,
-                num_agents=self.num_agents,
-                width=self.width,
-                height=self.height,
-            )
-        self.navigation_task_catalog = navigation_task_catalog
+
+    def _get_configured_goal_positions(self) -> tuple[Position, ...]:
+        if self.navigation_task_catalog:
+            positions = {
+                tuple(position)
+                for state in self.navigation_task_catalog
+                for position in self.navigation_task_catalog[state].goal_positions
+            }
+            return tuple(sorted(positions))
+
+        if self.field_map is None:
+            return ()
+
+        positions = []
+        for y, row in self.field_map.iterrows():
+            for x, cell in row.items():
+                if (isinstance(cell, str) and cell == "g") or (
+                    isinstance(cell, tuple) and cell[0] == "g"
+                ):
+                    positions.append((x, y))
+        return tuple(positions)
 
     def _get_max_reward_simultaneous_arrival(self):
         # there might be an analytical formula for this,
@@ -600,7 +637,7 @@ class TeamNavigationEnv(MultiGridEnv):
                 elif isinstance(cell, str):
                     match cell:
                         case "g":
-                            obj = Goal(self.world)
+                            obj = Goal(self.world, color="dark_yellow")
                             self.place_object(obj, pos=(x, y))
 
                             # each goal assigned to all agents
@@ -843,11 +880,11 @@ class TeamNavigationEnv(MultiGridEnv):
         # move agents
         self._move_agents(next_positions)
 
-        # update waypoints
-        room_completed = self._update_room()
+        # check if the task was completed
+        task_completed = self._update_task()
 
-        # check if entire project is complete
-        terminated = self._terminated(room_completed)
+        # check if the episode terminates for any reason
+        terminated = self._terminated(task_completed)
 
         # truncated handled by TimeLimit wrapper
         truncated = False
@@ -856,6 +893,13 @@ class TeamNavigationEnv(MultiGridEnv):
 
         # add up cumulative rewards for this step
         reward: float = 0.0
+
+        # per-step time penalty
+        reward += self.reward_config.time_penalty
+        reward += self._reward_partial_arrival()
+
+        if task_completed:
+            reward += self.reward_config.task_completed_bonus
 
         if self.goal_type == "simultaneous_arrival":
             reward += self._simultaneous_arrival_reward(terminated)
@@ -869,7 +913,7 @@ class TeamNavigationEnv(MultiGridEnv):
         agent_rewards = float(np.sum([a.reward for a in self.agents]))
         reward += agent_rewards
 
-        info = self._get_info(terminated=terminated, room_completed=room_completed)
+        info = self._get_info(task_completed=task_completed)
 
         self._t += 1
 
@@ -880,6 +924,14 @@ class TeamNavigationEnv(MultiGridEnv):
             truncated,
             info,
         )
+
+    def _reward_partial_arrival(self) -> float:
+        n_agents_at_goal = sum(agent.t_first_goal_hit != -1 for agent in self.agents)
+
+        if n_agents_at_goal > 0:
+            return self.reward_config.partial_arrival_penalty
+
+        return 0.0
 
     def _simultaneous_arrival_reward(self, terminated: bool):
         if (
@@ -980,36 +1032,24 @@ class TeamNavigationEnv(MultiGridEnv):
                     t=copy(self._t),
                 )
 
-    def _update_room(self) -> bool:
-        room_completed = False
+    def _update_task(self) -> bool:
+        # task only successfully completed if all agents reach goal at the same time
+        simultaneous_goal_reached = all(
+            agent.t_first_goal_hit == self._t for agent in self.agents
+        )
 
-        if self.navigation_task_catalog:
-            reached_goals = [
-                agent.in_goal_set(self.active_task_state) for agent in self.agents
-            ]
-            if all(reached_goals):
-                for obj in self.room_despawn_objects[self.active_task_state]:
-                    self.despawn_object(obj)
-                room_completed = True
-            return room_completed
-
-        # if there are goals in the room, reaching goals completes this room
-        reached_room_goal: list[bool] = [
-            agent.in_goal_set(self.current_task) for agent in self.agents
-        ]
-        if all(reached_room_goal):
-            # print(
-            #     f"All agents reached goals for room {self.current_task}. Moving to next room."
-            # )
-            for obj in self.room_despawn_objects[self.current_task]:
+        if simultaneous_goal_reached:
+            for obj in self.room_despawn_objects[self.active_task_state]:
                 self.despawn_object(obj)
 
-            # move on to the next room if it exists
-            room_completed = True
-            if self.num_rooms > 1:
-                self.current_task += 1
+        return simultaneous_goal_reached
 
-        return room_completed
+        # TODO figure out how you want to do this w/ possibly branching task graphs
+        ## probably don't do this update in this method, but do it as part of the env's reset method or something, pass the current task into this env class from the outer wrapper
+        # # move on to the next room if it exists
+        # room_completed = True
+        # if self.num_rooms > 1:
+        #     self.current_task += 1
 
     def _get_next_pos(self, agent: LBFAgent, action: int) -> tuple[int, int]:
         match action:
@@ -1033,32 +1073,34 @@ class TeamNavigationEnv(MultiGridEnv):
             next_pos = tuple(map(int, next_pos))
         return next_pos
 
-    def _terminated(self, room_completed: bool) -> bool:
-        simultaneous_goal_reached = room_completed and all(
-            agent.t_first_goal_hit == self._t for agent in self.agents
-        )
+    def _terminated(self, task_completed: bool) -> bool:
+        # episode can terminate for different reasons
+        # task was completed
+        # all agents reached the goals (absorbing states), so they can't do anything else and the episode is essentially over
+        if task_completed or all(
+            [agent.in_goal_set(self.current_task) for agent in self.agents]
+        ):
+            return True
 
-        # TODO for training the HL policy want the option to run each subtask in isolation
-        if self.navigation_task_catalog:
-            return (
-                simultaneous_goal_reached
-                and self.active_task_state == self.navigation_task_catalog.last_state()
-            )
+        return False
+
+        # TODO implement this for the HL stuff
+        ## for training the HL policy want the option to run each subtask in isolation
+        # if self.navigation_task_catalog:
+        #     return (
+        #         task_completed
+        #         and self.active_task_state == self.navigation_task_catalog.last_state()
+        #     )
 
         # Terminate the episode if all rooms have been completed
         # project is completed when you reach the end of the final room
         # TODO needs to be updated to handle non-sequential rooms
-        if self.num_rooms > 1:
-            return simultaneous_goal_reached and self.current_task == self.num_rooms
-        else:
-            return simultaneous_goal_reached
+        # if self.num_rooms > 1:
+        #     return task_completed and self.current_task == self.num_rooms
 
-    def _get_info(self, terminated: bool = False, room_completed: bool = False) -> dict:
+    def _get_info(self, task_completed: bool = False) -> dict:
         # step info
         info = {}
-
-        # Agents only succeed at the full "project" if terminated = True
-        # info["project_completed"] = terminated
 
         agents_hit = [agent for agent in self.agents if agent.t_first_goal_hit != -1]
         info["sum_goal_hit_time_difference"] = sum(
@@ -1066,7 +1108,8 @@ class TeamNavigationEnv(MultiGridEnv):
             for agent_a, agent_b in combinations(agents_hit, r=2)
         )
 
-        info["task_completed"] = room_completed
+        # TODO this doesn't quite work for the multi-task case, need to figure that out
+        info["task_completed"] = task_completed
         info["navigation_task_state"] = self.active_task_state
 
         return info
@@ -1094,6 +1137,21 @@ class TeamNavigationEnv(MultiGridEnv):
                     )
                     state = np.concatenate([state, first_hit_times.flatten()])
 
+            case "simple_navigation_features":
+                agent_features = np.concatenate(
+                    [
+                        self._get_navigation_agent_features(i)
+                        for i in range(self.num_agents)
+                    ]
+                )
+                state = np.concatenate(
+                    (
+                        agent_features,
+                        self._get_navigation_goal_positions().flatten(),
+                        self._get_elapsed_time_obs(),
+                    )
+                )
+
             case _:
                 raise NotImplementedError
 
@@ -1105,6 +1163,9 @@ class TeamNavigationEnv(MultiGridEnv):
         match self.state_type:
             case "multigrid_flattened":
                 state_size = prod(self.state.shape)
+
+            case "simple_navigation_features":
+                state_size = self.state.shape[0]
 
             case _:
                 raise NotImplementedError
@@ -1126,6 +1187,8 @@ class TeamNavigationEnv(MultiGridEnv):
         # use multigrid's basic obs for now, come back to this later
         match self.env_obs_type:
             case "multigrid_flattened":
+                # one issues w/ this obs is that agents can see when goals disappear (i.e., by another agent reaching it), so that leaks some information that I don't want the agents to have
+                # I need to force them to rely on comms to solve this task, and if they don't have to use comms, they won't
                 obs_list = self.gen_obs(
                     observe_other_agents=self.observe_other_agents,
                 )
@@ -1141,10 +1204,62 @@ class TeamNavigationEnv(MultiGridEnv):
 
                 obs = np.vstack(obs_list)
 
+            case "simple_navigation_features":
+                obs = np.vstack(
+                    [self._get_navigation_features(i) for i in range(self.num_agents)]
+                )
+
             case _:
                 raise NotImplementedError
-
         return obs
+
+    def _get_navigation_features(self, agent_idx: int) -> NDArray[np.float32]:
+        return np.concatenate(
+            (
+                self._get_navigation_agent_features(agent_idx),
+                self._get_navigation_goal_positions().flatten(),
+            )
+        ).astype(np.float32)
+
+    def _get_navigation_agent_features(self, agent_idx: int) -> NDArray[np.float32]:
+        coordinate_scale = self._get_navigation_coordinate_scale()
+        agent_position = np.asarray(self.agents[agent_idx].pos, dtype=np.float32)
+        agent_position = agent_position / coordinate_scale
+
+        hit_time = self.agents[agent_idx].t_first_goal_hit
+        # binary representation of whether the agent has hit a goal state yet or not
+        has_hit = float(hit_time >= 0)
+        if hit_time >= 0:
+            normalized_hit_time = np.clip(hit_time / self._time_scale, 0.0, 1.0)
+        else:
+            normalized_hit_time = 0.0
+
+        return np.concatenate(
+            (
+                agent_position,
+                np.array([has_hit, normalized_hit_time], dtype=np.float32),
+            )
+        ).astype(np.float32)
+
+    def _get_navigation_goal_positions(self) -> NDArray[np.float32]:
+        coordinate_scale = self._get_navigation_coordinate_scale()
+        goal_positions = np.asarray(
+            self._configured_goal_positions, dtype=np.float32
+        ).reshape(-1, 2)
+        if len(goal_positions) > 0:
+            goal_positions = goal_positions / coordinate_scale
+        return goal_positions
+
+    def _get_elapsed_time_obs(self) -> NDArray[np.float32]:
+        return np.array(
+            [np.clip(self._t / self._time_scale, 0.0, 1.0)], dtype=np.float32
+        )
+
+    def _get_navigation_coordinate_scale(self) -> NDArray[np.float32]:
+        """Scale coordinates against the walkable inner grid dimensions."""
+        return np.array(
+            [max(self.width - 2, 1), max(self.height - 2, 1)], dtype=np.float32
+        )
 
     # obs helpers
     def _get_first_hit_time_obs(self, agent_idx: int):
@@ -1167,6 +1282,9 @@ class TeamNavigationEnv(MultiGridEnv):
                     # for the first hitting time
                     obs_size += 1
 
+            case "simple_navigation_features":
+                obs_size = self.observation_space.shape[1]
+
             case _:
                 raise NotImplementedError
 
@@ -1186,6 +1304,17 @@ class TeamNavigationEnv(MultiGridEnv):
                         * self.agent_view_size,
                     ),
                     dtype=np.int_,
+                )
+
+            case "simple_navigation_features":
+                team_obs_space = spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(
+                        self.num_agents,
+                        4 + 2 * len(self._configured_goal_positions),
+                    ),
+                    dtype=np.float32,
                 )
 
             case _:
