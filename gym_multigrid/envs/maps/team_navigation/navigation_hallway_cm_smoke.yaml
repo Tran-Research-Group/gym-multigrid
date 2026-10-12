@@ -1,0 +1,23 @@
+# Two one-step tasks on the three-agent very-small hallway for a CM smoke run.
+mdp:
+  initial_state: 0
+  states: [0, 1, 2]
+  goal_states: [2]
+  transitions:
+    - { from_state: 0, to_state: 1 }
+    - { from_state: 1, to_state: 2 }
+
+tasks:
+  - id: 0_to_1
+    from_state: 0
+    to_state: 1
+    goal_assignment: one_to_one
+    goal_positions: [[1, 1], [1, 3], [1, 5]]
+    init_state_dist:
+      states: [[[2, 1], [2, 3], [2, 5]]]
+      probs: [1.0]
+
+  - id: 1_to_2
+    from_state: 1
+    to_state: 2
+    goal_positions: [[2, 1], [2, 3], [2, 5]]

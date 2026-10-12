@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
+import yaml
 from gym_multigrid.envs.mdp import ProjectMDP
+from gym_multigrid.envs.team_navigation import TeamNavigationEnv
 from gym_multigrid.utils.subtasks import NavigationTaskCatalog
 
 
@@ -52,6 +56,164 @@ def test_navigation_catalog_rejects_disconnected_successor_spawn():
             num_agents=3,
             width=5,
             height=5,
+        )
+
+
+def test_learned_hallway_catalog_only_configures_root_spawn():
+    config_path = (
+        Path(__file__).parents[1]
+        / "gym_multigrid"
+        / "envs"
+        / "maps"
+        / "team_navigation"
+        / "navigation_hallway_learned.yaml"
+    )
+    with config_path.open() as config_file:
+        config = yaml.safe_load(config_file)
+
+    catalog = NavigationTaskCatalog.from_configs(
+        config,
+        num_agents=3,
+        width=8,
+        height=7,
+    )
+
+    assert catalog.task_for(0, 1).init_state_dist is not None
+    assert all(
+        catalog.task_for(from_state, to_state).init_state_dist is None
+        for from_state, to_state in [(1, 2), (2, 3), (3, 4)]
+    )
+
+
+def test_successor_reset_uses_learned_spawn_distribution():
+    catalog = NavigationTaskCatalog.from_configs(
+        [
+            {
+                "id": "0_to_1",
+                "from_state": 0,
+                "to_state": 1,
+                "goal_positions": [[4, 1], [4, 3], [4, 5]],
+                "init_state_dist": {
+                    "states": [[[1, 1], [1, 3], [1, 5]]],
+                    "probs": [1.0],
+                },
+            },
+            {
+                "id": "1_to_2",
+                "from_state": 1,
+                "to_state": 2,
+                "goal_positions": [[5, 1], [5, 3], [5, 5]],
+            },
+        ],
+        num_agents=3,
+        width=8,
+        height=7,
+    )
+    env = TeamNavigationEnv(
+        width=8,
+        height=7,
+        n_agents=3,
+        navigation_task_catalog=catalog,
+        hallway=True,
+    )
+    assert env.observation_space.shape == (3, 5)
+    learned_spawn_dist = {
+        "states": [[[4, 1], [4, 3], [4, 5]]],
+        "probs": [1.0],
+    }
+
+    try:
+        _, info = env.reset(
+            options={
+                "navigation_task_transition": [1, 2],
+                "navigation_init_state_dist": learned_spawn_dist,
+            }
+        )
+        assert info["final_state"] == (
+            (4, 1),
+            (4, 3),
+            (4, 5),
+        )
+
+        with pytest.raises(ValueError, match="has no initial state distribution"):
+            env.reset(options={"navigation_task_transition": [1, 2]})
+    finally:
+        env.close()
+
+
+def test_one_to_one_goal_assignment_accepts_any_agent_permutation():
+    goal_positions = [(2, 2), (3, 2), (4, 2)]
+    catalog = NavigationTaskCatalog.from_configs(
+        [
+            {
+                "from_state": 0,
+                "to_state": 1,
+                "goal_positions": goal_positions,
+                "goal_assignment": "one_to_one",
+                "init_state_dist": {
+                    "states": [[[3, 3], [2, 3], [4, 3]]],
+                    "probs": [1.0],
+                },
+            },
+            {
+                "from_state": 1,
+                "to_state": 2,
+                "goal_positions": [(2, 3), (3, 3), (4, 3)],
+                "init_state_dist": {
+                    "states": [[[3, 2], [2, 2], [4, 2]]],
+                    "probs": [1.0],
+                },
+            },
+        ],
+        num_agents=3,
+        width=9,
+        height=9,
+    )
+    env = TeamNavigationEnv(
+        map_name="3ga_1r_small",
+        n_agents=3,
+        navigation_task_catalog=catalog,
+    )
+
+    try:
+        obs, _ = env.reset(options={"navigation_task_transition": [0, 1]})
+        assert env.observation_space.shape == (3, 9)
+        assert obs.shape == (3, 9)
+
+        _, _, terminated, _, info = env.step(np.full(3, int(env.actions.UP), dtype=int))
+
+        assert terminated
+        assert info["task_completed"]
+        assert set(info["final_state"]) == set(goal_positions)
+        assert len(set(info["final_state"])) == 3
+        assert info["final_state"] == ((3, 2), (2, 2), (4, 2))
+    finally:
+        env.close()
+
+
+def test_one_to_one_successor_spawn_must_be_a_goal_permutation():
+    with pytest.raises(ValueError, match="one-to-one assignments"):
+        NavigationTaskCatalog.from_configs(
+            [
+                {
+                    "from_state": 0,
+                    "to_state": 1,
+                    "goal_positions": [(2, 2), (3, 2), (4, 2)],
+                    "goal_assignment": "one_to_one",
+                },
+                {
+                    "from_state": 1,
+                    "to_state": 2,
+                    "goal_positions": [(2, 3), (3, 3), (4, 3)],
+                    "init_state_dist": {
+                        "states": [[[2, 2], [2, 2], [4, 2]]],
+                        "probs": [1.0],
+                    },
+                },
+            ],
+            num_agents=3,
+            width=9,
+            height=9,
         )
 
 

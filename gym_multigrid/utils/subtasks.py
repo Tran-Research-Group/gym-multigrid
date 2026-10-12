@@ -91,6 +91,7 @@ class NavigationTaskData:
     goal_positions: tuple[Position, ...]
     init_state_dist: PositionDist | None
     task_id: str | None = None
+    goal_assignment: Literal["per_agent", "one_to_one"] = "per_agent"
 
     @property
     def state(self) -> int:
@@ -102,9 +103,14 @@ class NavigationTaskData:
             raise ValueError("A navigation task must assign at least one goal.")
 
         if len(set(self.goal_positions)) != len(self.goal_positions):
-            raise ValueError("Navigation task goals must be unique per agent.")
+            raise ValueError("Navigation task goal positions must be unique.")
 
-        if len(self.init_state_dist.states) == 0:
+        if self.goal_assignment not in {"per_agent", "one_to_one"}:
+            raise ValueError(
+                "Navigation task goal_assignment must be 'per_agent' or 'one_to_one'."
+            )
+
+        if self.init_state_dist is not None and len(self.init_state_dist.states) == 0:
             raise ValueError("A navigation task must define spawn positions.")
 
 
@@ -125,11 +131,26 @@ class NavigationTaskCatalog:
             for successor in successors:
                 if successor.init_state_dist is None:
                     continue
+                if predecessor.goal_assignment == "one_to_one":
+                    valid_successor_states = all(
+                        len(state) == len(predecessor.goal_positions)
+                        and set(state) == set(predecessor.goal_positions)
+                        for state in successor.init_state_dist.states
+                    )
+                    if not valid_successor_states:
+                        raise ValueError(
+                            "Successor navigation task "
+                            f"{successor.from_state}->{successor.to_state} must "
+                            "start from one-to-one assignments of the predecessor "
+                            "task's goal positions: "
+                            f"{predecessor.from_state}->{predecessor.to_state}."
+                        )
+                    continue
+
                 expected_states = (predecessor.goal_positions,)
                 expected_probs = (1.0,)
-                if (
-                    successor.init_state_dist.states != expected_states
-                    or successor.init_state_dist.probs != expected_probs
+                if successor.init_state_dist.states != expected_states or (
+                    successor.init_state_dist.probs != expected_probs
                 ):
                     raise ValueError(
                         "Successor navigation task "
@@ -165,6 +186,7 @@ class NavigationTaskCatalog:
                 tuple(position) for position in config["goal_positions"]
             )
             spawn_config = config.get("init_state_dist")
+            spawn_states = ()
             if spawn_config is None:
                 init_state_dist = None
             else:
@@ -182,10 +204,12 @@ class NavigationTaskCatalog:
                 goal_positions=goal_positions,
                 init_state_dist=init_state_dist,
                 task_id=config.get("id"),
+                goal_assignment=config.get("goal_assignment", "per_agent"),
             )
             if len(goal_positions) != num_agents:
                 raise ValueError(
-                    f"Navigation task {from_state}->{to_state} must define one goal per agent."
+                    f"Navigation task {from_state}->{to_state} must define exactly "
+                    "one goal position per agent."
                 )
             if any(len(joint_state) != num_agents for joint_state in spawn_states):
                 raise ValueError(

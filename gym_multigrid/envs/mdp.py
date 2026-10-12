@@ -1,3 +1,4 @@
+import ast
 from typing import Literal, Optional
 
 import matplotlib.pyplot as plt
@@ -328,25 +329,147 @@ class ProjectMDP(Env):
 
     @transition_probs.setter
     def transition_probs(self, df_data: pd.DataFrame):
-        # the trans agenda is here bwahaha >:D
-        df_trans = self._transition_probs
+        """Update transition probabilities from independent low-level evaluations.
 
-        for _, row in df_data.iterrows():
-            # task success rate
-            df_trans.loc[
-                (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
-                & (df_trans.next_state == row.hl_task[1]),
-                "prob",
-            ] = 1.0 - row.test_task_completed_mean
+        The input contains evaluation history, with one row per task/capacity
+        and evaluation checkpoint. Use each run's latest checkpoint, then pool
+        its episode counts to estimate the Bernoulli subtask success rates.
+        """
+        required_columns = {
+            "hl_start_state",
+            "hl_task",
+            "msg_budget_per_agent",
+            "test_task_completed_mean",
+        }
+        missing_columns = required_columns - set(df_data.columns)
+        if missing_columns:
+            raise ValueError(
+                "Low-level evaluation data is missing required columns: "
+                f"{sorted(missing_columns)}."
+            )
+        if df_data.empty:
+            raise ValueError("Low-level evaluation data is empty.")
 
-            # fail rate
-            df_trans.loc[
-                (df_trans.state == row.hl_start_state)
-                & (df_trans.action == (row.hl_task[1], row.msg_budget_per_agent))
-                & (df_trans.next_state != row.hl_task[1]),
-                "prob",
-            ] = row.test_task_completed_mean
+        data = df_data.copy()
+        data["_task_edge"] = data["hl_task"].map(self._parse_task_edge)
+        data["_start_state"] = data["hl_start_state"].map(int)
+        data["_budget"] = data["msg_budget_per_agent"].map(float)
+        data["_success_rate"] = pd.to_numeric(
+            data["test_task_completed_mean"], errors="coerce"
+        )
+        if data["_success_rate"].isna().any() or (
+            (data["_success_rate"] < 0.0) | (data["_success_rate"] > 1.0)
+        ).any():
+            raise ValueError(
+                "Low-level task success rates must be finite probabilities in [0, 1]."
+            )
+
+        for _, row in data.iterrows():
+            if row["_task_edge"][0] != row["_start_state"]:
+                raise ValueError(
+                    f"Evaluation task {row['_task_edge']} does not start at "
+                    f"hl_start_state {row['_start_state']}."
+                )
+
+        run_column = (
+            "run_id"
+            if "run_id" in data.columns
+            else "scenario"
+            if "scenario" in data.columns
+            else None
+        )
+        latest_group_columns = [
+            column
+            for column in (
+                run_column,
+                "_start_state",
+                "_task_edge",
+                "_budget",
+            )
+            if column is not None
+        ]
+        if "t_env" in data.columns:
+            data["_t_env"] = pd.to_numeric(data["t_env"], errors="coerce")
+            data = data.sort_values("_t_env").drop_duplicates(
+                latest_group_columns, keep="last"
+            )
+        elif run_column is not None:
+            data = data.drop_duplicates(latest_group_columns, keep="last")
+
+        if "test_n_episodes" in data.columns:
+            episode_counts = pd.to_numeric(
+                data["test_n_episodes"], errors="coerce"
+            )
+            if episode_counts.isna().any() or (episode_counts <= 0).any():
+                raise ValueError(
+                    "Every low-level evaluation row must have a positive "
+                    "test_n_episodes count."
+                )
+            data["_episode_count"] = episode_counts
+        else:
+            data["_episode_count"] = 1.0
+
+        success_rates: dict[tuple[int, int, float], float] = {}
+        for (edge, budget), rows in data.groupby(
+            ["_task_edge", "_budget"], sort=False
+        ):
+            total_episodes = float(rows["_episode_count"].sum())
+            success_rates[(edge[0], edge[1], budget)] = float(
+                (rows["_success_rate"] * rows["_episode_count"]).sum()
+                / total_episodes
+            )
+
+        updated_transitions = self._transition_probs.copy(deep=True)
+        missing_rates = []
+        for row_index, row in updated_transitions.iterrows():
+            if row.state_type != "normal":
+                continue
+
+            edge = (int(row.state), int(row.action[0]))
+            budget = float(row.action[1])
+            rate_key = (edge[0], edge[1], budget)
+            success_rate = success_rates.get(rate_key)
+            if success_rate is None:
+                missing_rates.append(rate_key)
+                continue
+
+            if row.next_state == edge[1]:
+                probability = success_rate
+            elif row.next_state == self.fail_state:
+                probability = 1.0 - success_rate
+            else:
+                raise ValueError(
+                    f"Unexpected transition outcome {row.next_state} for task {edge}."
+                )
+            updated_transitions.at[row_index, "prob"] = probability
+
+        if missing_rates:
+            missing_rates = sorted(set(missing_rates))
+            raise ValueError(
+                "No low-level evaluation is available for task/capacity pairs: "
+                f"{missing_rates}."
+            )
+        self._transition_probs = updated_transitions
+
+    @staticmethod
+    def _parse_task_edge(value) -> tuple[int, int]:
+        if isinstance(value, str):
+            try:
+                value = ast.literal_eval(value)
+            except (SyntaxError, ValueError) as error:
+                raise ValueError(
+                    f"Could not parse low-level evaluation task {value!r}."
+                ) from error
+        if not isinstance(value, (tuple, list, np.ndarray)) or len(value) != 2:
+            raise ValueError(
+                "Each hl_task value must contain a [from_state, to_state] pair."
+            )
+        try:
+            return int(value[0]), int(value[1])
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Invalid low-level evaluation task {value!r}."
+            ) from error
 
     def get_env_info(self):
         """standard function to interface with EPyMARL training loop"""

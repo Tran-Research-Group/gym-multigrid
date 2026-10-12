@@ -284,6 +284,23 @@ class TeamNavigationEnv(MultiGridEnv):
                 height=height,
             )
         self.navigation_task_catalog = navigation_task_catalog
+        self._include_all_goal_positions = bool(
+            navigation_task_catalog
+            and any(
+                navigation_task_catalog[transition].goal_assignment == "one_to_one"
+                for transition in navigation_task_catalog
+            )
+        )
+        self._goal_feature_count = (
+            max(
+                len(navigation_task_catalog[transition].goal_positions)
+                for transition in navigation_task_catalog
+            )
+            if self._include_all_goal_positions
+            else 1
+        )
+        self._active_navigation_goal_positions: tuple[Position, ...] = ()
+        self._active_goal_assignment = "per_agent"
 
         # init agents
         agents = [
@@ -422,11 +439,25 @@ class TeamNavigationEnv(MultiGridEnv):
         if start_task > 0 and not self.navigation_task_catalog:
             self._apply_start_task_adjustments(start_task)
 
-    def activate_navigation_task(self, from_state: int, to_state: int) -> None:
+    def activate_navigation_task(
+        self,
+        from_state: int,
+        to_state: int,
+        init_state_dist: PositionDist | dict | None = None,
+    ) -> None:
         """Switch the active catalog task without resetting the episode clock."""
         if not self.navigation_task_catalog:
             raise RuntimeError("No state-keyed navigation task catalog is configured.")
         self.navigation_task_catalog.task_for(from_state, to_state)
+
+        if isinstance(init_state_dist, dict):
+            init_state_dist = PositionDist(
+                states=tuple(
+                    tuple(tuple(position) for position in joint_state)
+                    for joint_state in init_state_dist["states"]
+                ),
+                probs=tuple(float(prob) for prob in init_state_dist["probs"]),
+            )
 
         for obj in self.room_despawn_objects.get(self.active_task_state, []):
             self.despawn_object(obj)
@@ -436,7 +467,9 @@ class TeamNavigationEnv(MultiGridEnv):
             agent.t_first_hit_goal = -1
 
         self._place_navigation_task_goals(from_state, to_state)
-        self._spawn_navigation_agents(from_state, to_state)
+        self._spawn_navigation_agents(
+            from_state, to_state, init_state_dist=init_state_dist
+        )
 
     def _place_navigation_task_goals(self, from_state: int, to_state: int) -> None:
         if self.navigation_task_catalog is None:
@@ -446,17 +479,37 @@ class TeamNavigationEnv(MultiGridEnv):
         self.active_task_state = to_state
         self.current_task = to_state
         self.room_despawn_objects[to_state] = []
-        for agent, goal_position in zip(self.agents, task.goal_positions):
-            goal = Goal(
-                self.world,
-                color="dark_yellow",
-                assigned_agent_index=agent.index,
-            )
-            self.place_object(goal, pos=goal_position)
-            if hasattr(self, "init_grid"):
-                self.init_grid.set(*goal_position, goal)
-            agent.task_goals = {to_state: np.asarray([goal_position], dtype=np.int_)}
-            self.room_despawn_objects[to_state].append(goal)
+        self._active_navigation_goal_positions = task.goal_positions
+        self._active_goal_assignment = task.goal_assignment
+        if task.goal_assignment == "one_to_one":
+            for goal_position in task.goal_positions:
+                goal = Goal(self.world, color="dark_yellow")
+                self.place_object(goal, pos=goal_position)
+                if hasattr(self, "init_grid"):
+                    self.init_grid.set(*goal_position, goal)
+                self.room_despawn_objects[to_state].append(goal)
+            goal_array = np.asarray(task.goal_positions, dtype=np.int_)
+            for agent in self.agents:
+                agent.task_goals = {to_state: goal_array}
+        else:
+            for agent, goal_position in zip(self.agents, task.goal_positions):
+                goal = Goal(
+                    self.world,
+                    color="dark_yellow",
+                    assigned_agent_index=agent.index,
+                )
+                self.place_object(goal, pos=goal_position)
+                if hasattr(self, "init_grid"):
+                    self.init_grid.set(*goal_position, goal)
+                agent.task_goals = {
+                    to_state: np.asarray([goal_position], dtype=np.int_)
+                }
+                self.room_despawn_objects[to_state].append(goal)
+
+    def _one_to_one_goal_set_is_occupied(self) -> bool:
+        return {agent.pos for agent in self.agents} == set(
+            self._active_navigation_goal_positions
+        )
 
     def _spawn_navigation_agents(
         self,
@@ -987,6 +1040,8 @@ class TeamNavigationEnv(MultiGridEnv):
         simultaneous_goal_reached = all(
             agent.t_first_hit_goal == self._t for agent in self.agents
         )
+        if self._active_goal_assignment == "one_to_one":
+            simultaneous_goal_reached &= self._one_to_one_goal_set_is_occupied()
 
         if simultaneous_goal_reached:
             for obj in self.room_despawn_objects[self.active_task_state]:
@@ -1025,9 +1080,12 @@ class TeamNavigationEnv(MultiGridEnv):
         # episode can terminate for different reasons
         # task was completed
         # all agents reached the goals (absorbing states), so they can't do anything else and the episode is essentially over
-        if task_completed or all(
-            agent.in_goal_set(self.current_task) for agent in self.agents
-        ):
+        all_agents_in_goal_set = (
+            self._one_to_one_goal_set_is_occupied()
+            if self._active_goal_assignment == "one_to_one"
+            else all(agent.in_goal_set(self.current_task) for agent in self.agents)
+        )
+        if task_completed or all_agents_in_goal_set:
             return True
 
         return False
@@ -1115,21 +1173,30 @@ class TeamNavigationEnv(MultiGridEnv):
             obs of size (num_agents, num_obs_features
 
         """
-        obs = np.empty((self.num_agents, 5), dtype=np.float32)
+        obs = np.zeros(
+            (self.num_agents, 3 + 2 * self._goal_feature_count),
+            dtype=np.float32,
+        )
+        all_goal_features = (
+            self._get_all_navigation_goal_features()
+            if self._include_all_goal_positions
+            else None
+        )
         for i, agent in enumerate(self.agents):
             agent_x, agent_y = agent.pos
             obs[i, 0] = agent_x / self._coordinate_scale[0]
             obs[i, 1] = agent_y / self._coordinate_scale[1]
 
-            goal_positions = agent.task_goals.get(self.current_task)
-            if goal_positions is None or len(goal_positions) == 0:
-                obs[i, 2:4] = 0.0
+            if all_goal_features is not None:
+                obs[i, 2:-1] = all_goal_features
             else:
-                goal_x, goal_y = goal_positions[0]
-                obs[i, 2] = goal_x / self._coordinate_scale[0]
-                obs[i, 3] = goal_y / self._coordinate_scale[1]
+                goal_positions = agent.task_goals.get(self.current_task)
+                if goal_positions is not None and len(goal_positions) > 0:
+                    goal_x, goal_y = goal_positions[0]
+                    obs[i, 2] = goal_x / self._coordinate_scale[0]
+                    obs[i, 3] = goal_y / self._coordinate_scale[1]
 
-        obs[:, 4] = self._delayed_agents
+            obs[i, -1] = self._delayed_agents[i]
         return obs
 
     def _sample_agent_delays(self) -> None:
@@ -1148,6 +1215,9 @@ class TeamNavigationEnv(MultiGridEnv):
         )
 
     def _get_navigation_goal_positions(self, agent_idx: int) -> NDArray[np.float32]:
+        if self._include_all_goal_positions:
+            return self._get_all_navigation_goal_features()
+
         goal_positions = self.agents[agent_idx].task_goals.get(self.current_task)
         if goal_positions is None or len(goal_positions) == 0:
             return np.zeros(2, dtype=np.float32)
@@ -1160,6 +1230,15 @@ class TeamNavigationEnv(MultiGridEnv):
             dtype=np.float32,
         )
 
+    def _get_all_navigation_goal_features(self) -> NDArray[np.float32]:
+        goal_features = np.zeros((self._goal_feature_count, 2), dtype=np.float32)
+        if self._active_navigation_goal_positions:
+            goal_features[: len(self._active_navigation_goal_positions)] = (
+                np.asarray(self._active_navigation_goal_positions, dtype=np.float32)
+                / self._coordinate_scale
+            )
+        return goal_features.flatten()
+
     def _get_obs_size(self) -> int:
         """standard function to interface with EPyMARL training loop, returns the flattened size of a single agent's observation."""
         return self.observation_space.shape[1]
@@ -1168,7 +1247,7 @@ class TeamNavigationEnv(MultiGridEnv):
         return spaces.Box(
             low=0.0,
             high=1.0,
-            shape=(self.num_agents, 5),
+            shape=(self.num_agents, 3 + 2 * self._goal_feature_count),
             dtype=np.float32,
         )
 
