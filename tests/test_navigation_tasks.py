@@ -25,6 +25,45 @@ def _task(task_id, from_state, to_state, goals, init_positions=None):
     }
 
 
+def test_delay_agents_are_uniformly_sampled_for_episode():
+    env = TeamNavigationEnv(
+        width=8,
+        height=8,
+        n_agents=4,
+        n_agents_delay=2,
+        agent_delay_prob=1.0,
+    )
+
+    try:
+        selected_sets = set()
+        for seed in range(20):
+            env.reset(seed=seed)
+            selected = tuple(np.flatnonzero(env._delay_candidate_agents))
+            assert len(selected) == 2
+            assert tuple(np.flatnonzero(env._delayed_agents)) == selected
+            selected_sets.add(selected)
+            env.step(np.full(4, int(env.actions.STAY), dtype=int))
+            assert tuple(np.flatnonzero(env._delay_candidate_agents)) == selected
+
+        assert len(selected_sets) > 1
+        assert {agent for selected in selected_sets for agent in selected} == set(
+            range(4)
+        )
+    finally:
+        env.close()
+
+
+@pytest.mark.parametrize("n_agents_delay", [-1, 5])
+def test_delay_agent_count_must_fit_team_size(n_agents_delay):
+    with pytest.raises(ValueError, match="n_agents_delay"):
+        TeamNavigationEnv(
+            width=8,
+            height=8,
+            n_agents=4,
+            n_agents_delay=n_agents_delay,
+        )
+
+
 def test_navigation_catalog_distinguishes_branching_transitions():
     catalog = NavigationTaskCatalog.from_configs(
         [

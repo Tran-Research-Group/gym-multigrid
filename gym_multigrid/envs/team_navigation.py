@@ -203,7 +203,9 @@ class TeamNavigationEnv(MultiGridEnv):
         obs_type: Literal["simple_navigation_features"] = "simple_navigation_features",
         goal_type: Literal["simultaneous_arrival"] | None = None,
         chosen_move_prob: float = 1.0,
-        agent_0_delay_prob: float = 0.0,
+        agent_0_delay_prob: float | None = None,
+        n_agents_delay: int = 1,
+        agent_delay_prob: float | None = None,
         highlight_visible_cells: bool = False,
         reward_config: dict[str, float | bool] = {
             "simultaneous_goal_reward_type": None,
@@ -222,9 +224,22 @@ class TeamNavigationEnv(MultiGridEnv):
         self.hallway = "_hall" in self._map_name if hallway is None else hallway
 
         self.num_agents = n_agents
-        if not 0.0 <= agent_0_delay_prob <= 1.0:
-            raise ValueError("agent_0_delay_prob must be between 0.0 and 1.0.")
-        self.agent_0_delay_prob = agent_0_delay_prob
+        if not isinstance(n_agents_delay, (int, np.integer)):
+            raise ValueError("n_agents_delay must be an integer.")
+        if not 0 <= n_agents_delay <= self.num_agents:
+            raise ValueError("n_agents_delay must be between 0 and n_agents.")
+        if agent_delay_prob is not None and agent_0_delay_prob is not None:
+            raise ValueError(
+                "Pass only one of agent_delay_prob and agent_0_delay_prob."
+            )
+        if agent_delay_prob is None:
+            agent_delay_prob = agent_0_delay_prob or 0.0
+        if not 0.0 <= agent_delay_prob <= 1.0:
+            raise ValueError("agent_delay_prob must be between 0.0 and 1.0.")
+        self.n_agents_delay = n_agents_delay
+        self.agent_delay_prob = agent_delay_prob
+        self.agent_0_delay_prob = agent_delay_prob
+        self._delay_candidate_agents = np.zeros(self.num_agents, dtype=bool)
         self._delayed_agents = np.zeros(self.num_agents, dtype=bool)
         self.reward_config = self.RewardConfig(**reward_config)
         self.goal_type = goal_type
@@ -798,6 +813,7 @@ class TeamNavigationEnv(MultiGridEnv):
             navigation_task_transition=navigation_task_transition,
             navigation_init_state_dist=navigation_init_state_dist,
         )
+        self._sample_episode_delay_agents()
         self._sample_agent_delays()
 
         obs: NDArray[np.int_] = self.obs
@@ -1201,8 +1217,21 @@ class TeamNavigationEnv(MultiGridEnv):
 
     def _sample_agent_delays(self) -> None:
         self._delayed_agents.fill(False)
-        if self.num_agents > 1:
-            self._delayed_agents[0] = self.np_random.random() < self.agent_0_delay_prob
+        if (
+            self.n_agents_delay > 0
+            and self.np_random.random() < self.agent_delay_prob
+        ):
+            self._delayed_agents[:] = self._delay_candidate_agents
+
+    def _sample_episode_delay_agents(self) -> None:
+        self._delay_candidate_agents.fill(False)
+        if self.n_agents_delay > 0:
+            delayed_agent_indices = self.np_random.choice(
+                self.num_agents,
+                size=self.n_agents_delay,
+                replace=False,
+            )
+            self._delay_candidate_agents[delayed_agent_indices] = True
 
     def _get_navigation_agent_features(self, agent_idx: int) -> NDArray[np.float32]:
         agent_x, agent_y = self.agents[agent_idx].pos
