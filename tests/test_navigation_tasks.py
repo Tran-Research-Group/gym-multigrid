@@ -53,6 +53,27 @@ def test_delay_agents_are_uniformly_sampled_for_episode():
         env.close()
 
 
+def test_delay_states_are_sampled_independently():
+    env = TeamNavigationEnv(
+        width=8,
+        height=8,
+        n_agents=4,
+        n_agents_delay=4,
+        agent_delay_prob=0.5,
+    )
+
+    try:
+        env.reset(seed=0)
+        sampled_states = []
+        for _ in range(32):
+            env._sample_agent_delays()
+            sampled_states.append(env._delayed_agents.copy())
+
+        assert any(state.any() and not state.all() for state in sampled_states)
+    finally:
+        env.close()
+
+
 @pytest.mark.parametrize("n_agents_delay", [-1, 5])
 def test_delay_agent_count_must_fit_team_size(n_agents_delay):
     with pytest.raises(ValueError, match="n_agents_delay"):

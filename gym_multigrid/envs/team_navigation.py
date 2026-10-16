@@ -991,12 +991,12 @@ class TeamNavigationEnv(MultiGridEnv):
                 self.reward_config.simultaneous_goal_reward_type
                 == "dense_shaped_hit_times"
             ):
-                agents_hit_goal_prev = set(
-                    [a for a in self.agents if 0 <= a.t_first_hit_goal < self._t]
-                )
-                agents_hit_goal_curr = set(
-                    [a for a in self.agents if a.t_first_hit_goal == self._t]
-                )
+                agents_hit_goal_prev = set([
+                    a for a in self.agents if 0 <= a.t_first_hit_goal < self._t
+                ])
+                agents_hit_goal_curr = set([
+                    a for a in self.agents if a.t_first_hit_goal == self._t
+                ])
 
                 # compute rewards
                 if len(agents_hit_goal_prev) > 0 and len(agents_hit_goal_curr) > 0:
@@ -1147,24 +1147,18 @@ class TeamNavigationEnv(MultiGridEnv):
         # use multigrid's basic state for now, come back to this later
         match self.state_type:
             case "simple_navigation_features":
-                agent_features = np.concatenate(
-                    [
-                        self._get_navigation_agent_features(i)
+                agent_features = np.concatenate([
+                    self._get_navigation_agent_features(i)
+                    for i in range(self.num_agents)
+                ])
+                state = np.concatenate((
+                    agent_features,
+                    np.concatenate([
+                        self._get_navigation_goal_positions(i)
                         for i in range(self.num_agents)
-                    ]
-                )
-                state = np.concatenate(
-                    (
-                        agent_features,
-                        np.concatenate(
-                            [
-                                self._get_navigation_goal_positions(i)
-                                for i in range(self.num_agents)
-                            ]
-                        ),
-                        # self._get_elapsed_time_obs(),
-                    )
-                )
+                    ]),
+                    # self._get_elapsed_time_obs(),
+                ))
 
             case _:
                 raise NotImplementedError
@@ -1217,11 +1211,11 @@ class TeamNavigationEnv(MultiGridEnv):
 
     def _sample_agent_delays(self) -> None:
         self._delayed_agents.fill(False)
-        if (
-            self.n_agents_delay > 0
-            and self.np_random.random() < self.agent_delay_prob
-        ):
-            self._delayed_agents[:] = self._delay_candidate_agents
+        candidate_agents = np.flatnonzero(self._delay_candidate_agents)
+        if len(candidate_agents) > 0:
+            self._delayed_agents[candidate_agents] = (
+                self.np_random.random(len(candidate_agents)) < self.agent_delay_prob
+            )
 
     def _sample_episode_delay_agents(self) -> None:
         self._delay_candidate_agents.fill(False)
