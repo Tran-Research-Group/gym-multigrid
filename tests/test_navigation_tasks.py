@@ -74,6 +74,50 @@ def test_delay_states_are_sampled_independently():
         env.close()
 
 
+def test_team_delay_probability_targets_any_candidate_delay():
+    n_agents = 6
+    n_candidates = 4
+    team_probability = 0.1
+    env = TeamNavigationEnv(
+        width=8,
+        height=8,
+        n_agents=n_agents,
+        n_agents_delay=n_candidates,
+        team_delay_prob=team_probability,
+    )
+
+    try:
+        any_delay_probability = 1 - (1 - env.agent_delay_prob) ** n_candidates
+        assert any_delay_probability == pytest.approx(team_probability)
+
+        env.reset(seed=0)
+        assert env._delay_candidate_agents.sum() == n_candidates
+    finally:
+        env.close()
+
+
+def test_nonzero_team_delay_probability_requires_candidates():
+    with pytest.raises(ValueError, match="team_delay_prob must be 0"):
+        TeamNavigationEnv(
+            width=8,
+            height=8,
+            n_agents=4,
+            n_agents_delay=0,
+            team_delay_prob=0.1,
+        )
+
+
+def test_team_and_individual_delay_probabilities_are_mutually_exclusive():
+    with pytest.raises(ValueError, match="either team_delay_prob"):
+        TeamNavigationEnv(
+            width=8,
+            height=8,
+            n_agents=4,
+            agent_delay_prob=0.1,
+            team_delay_prob=0.1,
+        )
+
+
 @pytest.mark.parametrize("n_agents_delay", [-1, 5])
 def test_delay_agent_count_must_fit_team_size(n_agents_delay):
     with pytest.raises(ValueError, match="n_agents_delay"):

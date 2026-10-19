@@ -203,9 +203,9 @@ class TeamNavigationEnv(MultiGridEnv):
         obs_type: Literal["simple_navigation_features"] = "simple_navigation_features",
         goal_type: Literal["simultaneous_arrival"] | None = None,
         chosen_move_prob: float = 1.0,
-        agent_0_delay_prob: float | None = None,
         n_agents_delay: int = 1,
         agent_delay_prob: float | None = None,
+        team_delay_prob: float | None = None,
         highlight_visible_cells: bool = False,
         reward_config: dict[str, float | bool] = {
             "simultaneous_goal_reward_type": None,
@@ -219,6 +219,10 @@ class TeamNavigationEnv(MultiGridEnv):
     ) -> None:
         """
         Initialize the env.
+
+        ``n_agents_delay`` selects a fixed per-episode candidate set. With
+        ``team_delay_prob``, it is the probability that at least one candidate
+        is delayed on each step.
         """
         self._map_name = map_name or ""
         self.hallway = "_hall" in self._map_name if hallway is None else hallway
@@ -228,17 +232,29 @@ class TeamNavigationEnv(MultiGridEnv):
             raise ValueError("n_agents_delay must be an integer.")
         if not 0 <= n_agents_delay <= self.num_agents:
             raise ValueError("n_agents_delay must be between 0 and n_agents.")
-        if agent_delay_prob is not None and agent_0_delay_prob is not None:
+        if team_delay_prob is not None and (agent_delay_prob is not None):
             raise ValueError(
-                "Pass only one of agent_delay_prob and agent_0_delay_prob."
+                "Pass either team_delay_prob or an individual delay probability."
             )
-        if agent_delay_prob is None:
-            agent_delay_prob = agent_0_delay_prob or 0.0
+        if team_delay_prob is not None:
+            if not 0.0 <= team_delay_prob <= 1.0:
+                raise ValueError("team_delay_prob must be between 0.0 and 1.0.")
+            if n_agents_delay == 0:
+                if team_delay_prob != 0.0:
+                    raise ValueError(
+                        "team_delay_prob must be 0 when n_agents_delay is 0."
+                    )
+                agent_delay_prob = 0.0
+            else:
+                agent_delay_prob = 1.0 - (1.0 - team_delay_prob) ** (
+                    1.0 / n_agents_delay
+                )
+        elif agent_delay_prob is None:
+            agent_delay_prob = 0.0
         if not 0.0 <= agent_delay_prob <= 1.0:
             raise ValueError("agent_delay_prob must be between 0.0 and 1.0.")
         self.n_agents_delay = n_agents_delay
         self.agent_delay_prob = agent_delay_prob
-        self.agent_0_delay_prob = agent_delay_prob
         self._delay_candidate_agents = np.zeros(self.num_agents, dtype=bool)
         self._delayed_agents = np.zeros(self.num_agents, dtype=bool)
         self.reward_config = self.RewardConfig(**reward_config)
